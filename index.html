@@ -1262,6 +1262,7 @@ function categoricalColor(i){ return `hsl(${(i*53)%360},60%,45%)`; }
 
 function renderCleaning(){
   currentChartView = 'cleaning';
+  hideChartPopup();
   const valley = document.getElementById('chartValley').value;
   const zone = document.getElementById('chartZone').value;
   const station = document.getElementById('chartStation').value;
@@ -1306,6 +1307,7 @@ function renderCleaning(){
   const xScale = i => rows.length===1 ? mL+(W-mL-mR)/2 : mL + i/(rows.length-1)*(W-mL-mR);
   const yScale = pct => H-mB - pct/100*(H-mT-mB);
 
+  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   // gridlines
   for (let p=0;p<=100;p+=20){
@@ -1313,14 +1315,24 @@ function renderCleaning(){
     svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
     svg += svgEl('text',{x:mL-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#6b7569'}, p+'%');
   }
+  // axis lines drawn before the data points (not after) so a point that happens to land exactly on
+  // the axis — e.g. the very first session in time, at x=mL — still paints on top and stays clickable
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
   // points + connecting segments
   rows.forEach((r, i) => {
     const x = xScale(i), y1 = yScale(r.arrival), y2 = yScale(r.end);
     const color = colorFor(r);
     const stationPrecise = r.Location_Precision === 'rat_station';
-    svg += `<g>`;
-    svg += svgEl('title',{},`${r.Unit_Name||'(no unit)'} — ${r.Date}\n${r.Action}\n` +
-      `Stations: ${r.Rat_Stations||'—'} (${stationPrecise ? 'station-level precision' : 'management-unit level only'})\n${r.arrival}% → ${r.end}%`);
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.Date)}</div>
+      <div><b>Valley:</b> ${escapeHtml(r.Valley)}</div>
+      <div><b>Zone:</b> ${escapeHtml(r.Unit_Name || '(no unit)')}</div>
+      <div><b>Rat station(s):</b> ${escapeHtml(r.Rat_Stations || '—')} (${stationPrecise ? 'station-level precision' : 'management-unit level only'})</div>
+      <div><b>Action:</b> ${escapeHtml(r.Action || '—')}</div>
+      <div><b>Cleaning:</b> ${r.arrival}% (arrival) → ${r.end}% (end of day)</div>
+      ${r.Comment ? `<div style="margin-top:4px;"><b>Comment:</b> ${escapeHtml(r.Comment)}</div>` : ''}`) - 1;
+    svg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">`;
+    svg += svgEl('title',{},`${r.Unit_Name||'(no unit)'} — ${r.Date}\nClick for full details`);
     svg += svgEl('line',{x1:x,x2:x,y1:y1,y2:y2,stroke:color,'stroke-width':2});
     svg += svgEl('circle',{cx:x,cy:y1,r:4,fill:'white',stroke:color,'stroke-width':2});
     svg += svgEl('circle',{cx:x,cy:y2,r:5,fill:stationPrecise?color:'white',stroke:color,'stroke-width':stationPrecise?0:2,
@@ -1328,32 +1340,35 @@ function renderCleaning(){
     svg += svgEl('text',{x:x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, r.Date);
     svg += `</g>`;
   });
-  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
-  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
   svg += `</svg>`;
 
   const legend = `<div style="margin-top:8px;">
     ${categories.map((c,i)=>`<span class="legend-item"><span class="swatch" style="background:${colorMode==='valley'?VALLEY_HEX[c]:categoricalColor(i)}"></span>${c}</span>`).join('')}
-    <span class="legend-item">○ % at arrival → ● % at end of day (hover over points for details)</span>
+    <span class="legend-item">○ % at arrival → ● % at end of day</span>
     <span class="legend-item">● solid = rat-station precision &nbsp; ◌ dashed = management-unit level only</span>
+    <br><span class="muted">Hover a point for a quick peek — click to pin a popup with full session details.</span>
   </div>`;
   area.innerHTML = svg + legend;
 }
 
 function renderSpecies(){
   currentChartView = 'species';
+  hideChartPopup();
   const valley = document.getElementById('chartValley').value;
   const zone = document.getElementById('chartZone').value;
   const station = document.getElementById('chartStation').value;
-  const filteredIds = new Set(getFilteredMainRows(valley, zone, station).map(r=>r.Identifier));
+  const filteredRows = getFilteredMainRows(valley, zone, station);
+  const mainRowById = new Map(filteredRows.map(r => [r.Identifier, r]));
 
   const agg = new Map();
   for (const r of enriched.speciesRows){
-    if (!r.Species_Name || !filteredIds.has(r.Identifier)) continue;
-    if (!agg.has(r.Species_Name)) agg.set(r.Species_Name, {total:0, type:r.Species_Type});
+    const mainRow = mainRowById.get(r.Identifier);
+    if (!r.Species_Name || !mainRow) continue;
+    if (!agg.has(r.Species_Name)) agg.set(r.Species_Name, {total:0, type:r.Species_Type, actions:[]});
     const e = agg.get(r.Species_Name);
     e.total += r.Number;
     if (!e.type) e.type = r.Species_Type;
+    if (r.Number > 0) e.actions.push({date:mainRow.Date, unit:mainRow.Unit_Name||'(no unit)', valley:mainRow.Valley, number:r.Number});
   }
   const data = [...agg.entries()].map(([name,v])=>({name,...v})).sort((a,b)=>b.total-a.total);
   const area = document.getElementById('chartArea');
@@ -1364,13 +1379,22 @@ function renderSpecies(){
   const maxTotal = Math.max(...data.map(d=>d.total));
   const xScale = v => v/maxTotal*(W-mL-mR);
 
+  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   data.forEach((d,i) => {
     const y = mT + i*(barH+gap);
     const w = xScale(d.total);
     const color = TYPE_HEX[d.type] || '#7f7f7f';
+    const sortedActions = [...d.actions].sort((a,b) => b.date.localeCompare(a.date));
+    const shown = sortedActions.slice(0, 8);
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.name)}</div>
+      <div><b>Type:</b> ${escapeHtml(d.type || 'not specified')}</div>
+      <div><b>Total individuals planted:</b> ${d.total}</div>
+      <div style="margin-top:6px;"><b>${sortedActions.length > 1 ? `Most recent actions (${sortedActions.length} total)` : 'Action'}:</b></div>
+      <div style="margin-top:2px;">${shown.map(a => `${escapeHtml(a.date)} — ${escapeHtml(a.unit)} (${escapeHtml(a.valley)}): ${a.number}`).join('<br>')}</div>
+      ${sortedActions.length > shown.length ? `<div class="muted" style="margin-top:2px;">+ ${sortedActions.length - shown.length} more</div>` : ''}`) - 1;
     svg += svgEl('text',{x:mL-8,y:y+barH*0.7,'text-anchor':'end','font-size':12,fill:'#23291f'}, d.name);
-    svg += `<g>${svgEl('title',{},`${d.name} (${d.type||'type not specified'}): ${d.total} individuals`)}` +
+    svg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${d.name} (${d.type||'type not specified'}): ${d.total} individuals\nClick for full details`)}` +
            svgEl('rect',{x:mL,y:y,width:Math.max(w,2),height:barH,fill:color,rx:3}) + `</g>`;
     svg += svgEl('text',{x:mL+w+6,y:y+barH*0.7,'font-size':12,fill:'#23291f'}, d.total);
   });
@@ -1380,6 +1404,7 @@ function renderSpecies(){
     <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Native}"></span>Native</span>
     <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Introduced}"></span>Introduced</span>
     <span class="legend-item"><span class="swatch" style="background:#7f7f7f"></span>Type not specified</span>
+    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the most recent planting actions for that species.</span>
   </div>`;
   area.innerHTML = svg + legend;
 }
@@ -1428,7 +1453,14 @@ document.addEventListener('click', (e) => {
   if (box && box.style.display !== 'none' && !box.contains(e.target)) hideChartPopup();
 });
 
-let workforceChartRows = [];
+// generic click-to-pin registry shared by every chart: each render function clears this array,
+// then for every clickable mark pushes its popup HTML and gets back an index to put in onclick="pinPopup(event,i)"
+let chartPopupData = [];
+function pinPopup(evt, idx){
+  evt.stopPropagation();
+  showChartPopup(chartPopupData[idx], evt.clientX, evt.clientY);
+}
+
 let workforceDateFrom = '', workforceDateTo = '';
 function setWorkforceDateFilter(){
   workforceDateFrom = document.getElementById('workforceDateFrom').value || '';
@@ -1438,20 +1470,6 @@ function setWorkforceDateFilter(){
 function resetWorkforceDateFilter(){
   workforceDateFrom = ''; workforceDateTo = '';
   renderWorkforce();
-}
-function showWorkforcePopup(evt, idx){
-  evt.stopPropagation();
-  const r = workforceChartRows[idx];
-  const key = dayTypeKey(r);
-  const html = `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.Date)}</div>
-    <div><b>Valley:</b> ${escapeHtml(r.Valley)}</div>
-    <div><b>Zone:</b> ${escapeHtml(r.Unit_Name || '(no unit)')}</div>
-    <div><b>Rat station(s):</b> ${escapeHtml(r.Rat_Stations || '—')}</div>
-    <div><b>Type of day work:</b> ${escapeHtml(TYPE_DAY_LABEL[key] || key)}</div>
-    <div><b>People involved:</b> ${r.people}</div>
-    <div><b>Action:</b> ${escapeHtml(r.Action || '—')}</div>
-    ${r.Comment ? `<div style="margin-top:4px;"><b>Comment:</b> ${escapeHtml(r.Comment)}</div>` : ''}`;
-  showChartPopup(html, evt.clientX, evt.clientY);
 }
 
 function renderWorkforce(){
@@ -1472,7 +1490,7 @@ function renderWorkforce(){
   // filters above — min/max bounds always reflect the full range available for the current selection
   const minDate = baseRows[0].Date, maxDate = baseRows[baseRows.length-1].Date;
   const rows = baseRows.filter(r => (!workforceDateFrom || r.Date >= workforceDateFrom) && (!workforceDateTo || r.Date <= workforceDateTo));
-  workforceChartRows = rows;
+  chartPopupData = [];
 
   const dateFilterUi = `<div class="row" style="margin-bottom:10px;">
     <label class="muted">From: <input type="date" id="workforceDateFrom" value="${workforceDateFrom}" min="${minDate}" max="${maxDate}" onchange="setWorkforceDateFilter()"></label>
@@ -1503,18 +1521,28 @@ function renderWorkforce(){
     svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
     svg += svgEl('text',{x:mL-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#6b7569'}, Math.round(v));
   }
+  // axis lines drawn before the bars (not after) so a short bar sitting right on the baseline
+  // still paints on top and stays clickable
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
   rows.forEach((r,i) => {
     const x = xCenter(i), key = dayTypeKey(r), color = TYPE_DAY_HEX[key] || '#bbb';
     const y1 = yScale(0), y2 = yScale(r.people);
-    svg += `<g class="wf-bar" onclick="showWorkforcePopup(event, ${i})">`;
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.Date)}</div>
+      <div><b>Valley:</b> ${escapeHtml(r.Valley)}</div>
+      <div><b>Zone:</b> ${escapeHtml(r.Unit_Name || '(no unit)')}</div>
+      <div><b>Rat station(s):</b> ${escapeHtml(r.Rat_Stations || '—')}</div>
+      <div><b>Type of day work:</b> ${escapeHtml(TYPE_DAY_LABEL[key] || key)}</div>
+      <div><b>People involved:</b> ${r.people}</div>
+      <div><b>Action:</b> ${escapeHtml(r.Action || '—')}</div>
+      ${r.Comment ? `<div style="margin-top:4px;"><b>Comment:</b> ${escapeHtml(r.Comment)}</div>` : ''}`) - 1;
+    svg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
     svg += svgEl('title',{},`${r.Valley} — ${r.Unit_Name||'(no unit)'} — ${r.Date}\n${TYPE_DAY_LABEL[key]||key}: ${r.people} person(s)\nClick for full details`);
     svg += svgEl('rect',{x:x-barW/2,y:y2,width:barW,height:Math.max(0,y1-y2),fill:color});
     svg += svgEl('text',{x,y:y2-6,'text-anchor':'middle','font-size':10.5,fill:'#23291f'}, r.people);
     svg += svgEl('text',{x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, r.Date);
     svg += `</g>`;
   });
-  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
-  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
   svg += `</svg>`;
 
   const totalsByType = { 'Chantier bénévole':0, 'Routine':0, 'Other/unspecified':0 };
@@ -2060,7 +2088,7 @@ function renderZonePriority(valley, rows){
     number of NRDS entries` +
     (includeHist ? `, the hollow diamond (if present) is the historical baseline, and the bold outlined dot is the combined estimate (recency- and
     coverage-weighted blend of the two, the same method used on the map and in section 5)` : ` and the bold outlined dot is the current NRDS-only estimate
-    — historical data is excluded by the checkbox above`) + `. Hover the bold dot for the full breakdown.</div>`;
+    — historical data is excluded by the checkbox above`) + `. Click any dot/diamond to pin a popup with the full breakdown (works on touch too).</div>`;
   html += `<div class="grid3" style="margin-bottom:10px;">
     <div class="stat"><div class="num">${data.length}</div><div class="lbl">zones in scope</div></div>
     <div class="stat"><div class="num">${noData.length}</div><div class="lbl">never assessed — no data at all</div></div>
@@ -2081,12 +2109,16 @@ function renderZonePriority(valley, rows){
   const plotW = W - mL - mR, H = mT+mB + withData.length*(barH+gap);
   const labelFontSize = narrow ? 10 : 11.5;
   const xScale = pct => pct/100*plotW;
+  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   [0,25,50,75,100].forEach(p => {
     const x = mL + xScale(p);
     svg += svgEl('line',{x1:x,x2:x,y1:mT,y2:H-mB,stroke:'#e3e8e2','stroke-width':1});
     if (!narrow || p%50===0) svg += svgEl('text',{x:x,y:H-mB+14,'text-anchor':'middle','font-size':10,fill:'#6b7569'}, p+'%');
   });
+  // left axis line drawn before the rows (not after) so a marker that lands exactly at 0% — at
+  // x=mL, the same spot as this line — still paints on top and stays clickable
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
   withData.forEach((d,i) => {
     const y = mT + i*(barH+gap), midY = y + barH/2;
     const label = valley==='all' ? (narrow ? `${d.unit} (${d.valley.slice(0,3)})` : `${d.unit} (${d.valley})`) : d.unit;
@@ -2100,7 +2132,11 @@ function renderZonePriority(valley, rows){
       const recencyRank = sessions.length > 1 ? si/(sessions.length-1) : 1;
       const r = 2.5 + recencyRank*2.5, opacity = (0.35 + recencyRank*0.5).toFixed(2);
       const x = mL + xScale(s.end);
-      svg += `<g>${svgEl('title',{},`${d.unit} — ${s.Date}\n${s.Action}\n${s.arrival}% → ${s.end}%`)}` +
+      const sPopupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(s.Date)}</div>
+        <div><b>Zone:</b> ${escapeHtml(d.unit)} (${escapeHtml(d.valley)})</div>
+        <div><b>Action:</b> ${escapeHtml(s.Action || '—')}</div>
+        <div><b>Cleaning:</b> ${s.arrival}% (arrival) → ${s.end}% (end of day)</div>`) - 1;
+      svg += `<g onclick="pinPopup(event, ${sPopupIdx})" style="cursor:pointer;">${svgEl('title',{},`${d.unit} — ${s.Date}\nClick for full details`)}` +
         svgEl('circle',{cx:x,cy:midY,r,fill:'#5b6b57',opacity}) + `</g>`;
     });
 
@@ -2109,7 +2145,10 @@ function renderZonePriority(valley, rows){
     // includeHist=false means zonePriorityData() never looked up a historical record for d.res.hv to use
     if (d.res.hv){
       const hx = mL + xScale(d.res.hv.pct), sz = 5;
-      svg += `<g>${svgEl('title',{},`Historical: ${d.res.hv.raw} (${d.res.hv.pct}%, ${HIST_PERIOD_LABEL[d.res.hv.period]})`)}` +
+      const hPopupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.unit)} (${escapeHtml(d.valley)})</div>
+        <div><b>Historical baseline:</b> ${escapeHtml(d.res.hv.raw)} (${d.res.hv.pct}%)</div>
+        <div><b>Survey period:</b> ${escapeHtml(HIST_PERIOD_LABEL[d.res.hv.period])}</div>`) - 1;
+      svg += `<g onclick="pinPopup(event, ${hPopupIdx})" style="cursor:pointer;">${svgEl('title',{},`Historical baseline — ${d.unit}\nClick for full details`)}` +
         svgEl('rect',{x:hx-sz,y:midY-sz,width:sz*2,height:sz*2,fill:'white',stroke:'#7e57c2','stroke-width':2,
           transform:`rotate(45 ${hx} ${midY})`}) + `</g>`;
     }
@@ -2118,18 +2157,18 @@ function renderZonePriority(valley, rows){
     const cx = mL + xScale(d.res.estimate);
     const coverTxt = d.res.usedFallback ? 'single zone-level action, no station resolved'
       : (d.res.stationsTotal ? `${d.res.stationsWithData}/${d.res.stationsTotal} stations (${Math.round((d.res.coverage||0)*100)}% coverage)` : 'no station data');
-    const titleText = `${d.unit} (${d.valley})\n${includeHist ? 'Combined estimate' : 'NRDS estimate'}: ${d.res.estimate.toFixed(0)}%\n` +
-      (includeHist ? (d.res.hv ? `Historical: ${d.res.hv.raw} (${d.res.hv.pct}%, ${HIST_PERIOD_LABEL[d.res.hv.period]}), weight ${d.res.wHistPct.toFixed(0)}%\n` : 'Historical: no data\n') : '') +
-      `NRDS: ${d.res.st ? d.res.st.pct.toFixed(0)+'%' : 'no data'} — ${coverTxt}` + (includeHist ? `, weight ${d.res.wNrdsPct ? d.res.wNrdsPct.toFixed(0) : 0}%` : '') +
-      (stale ? `\n⚠ freshest contributing data is ${d.lastDays.toFixed(0)} days old — treat this % as outdated.` : '');
-    svg += `<g>${svgEl('title',{},titleText)}` + svgEl('circle',{cx,cy:midY,r:7,fill:pctColor(d.res.estimate),stroke:'#23291f','stroke-width':1.5}) + `</g>`;
+    const ePopupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.unit)} (${escapeHtml(d.valley)})</div>
+      <div><b>${includeHist ? 'Combined estimate' : 'NRDS estimate'}:</b> ${d.res.estimate.toFixed(0)}%</div>
+      ${includeHist ? (d.res.hv ? `<div><b>Historical:</b> ${escapeHtml(d.res.hv.raw)} (${d.res.hv.pct}%, ${escapeHtml(HIST_PERIOD_LABEL[d.res.hv.period])}), weight ${d.res.wHistPct.toFixed(0)}%</div>` : `<div><b>Historical:</b> no data</div>`) : ''}
+      <div><b>NRDS:</b> ${d.res.st ? d.res.st.pct.toFixed(0)+'%' : 'no data'} — ${escapeHtml(coverTxt)}${includeHist ? `, weight ${d.res.wNrdsPct ? d.res.wNrdsPct.toFixed(0) : 0}%` : ''}</div>
+      ${stale ? `<div style="margin-top:4px;color:#b8860b;">⚠ freshest contributing data is ${d.lastDays.toFixed(0)} days old — treat this % as outdated.</div>` : ''}`) - 1;
+    svg += `<g onclick="pinPopup(event, ${ePopupIdx})" style="cursor:pointer;">${svgEl('title',{},`${d.unit} (${d.valley})\nClick for full details`)}` + svgEl('circle',{cx,cy:midY,r:7,fill:pctColor(d.res.estimate),stroke:'#23291f','stroke-width':1.5}) + `</g>`;
 
     const rightText = narrow
       ? `${d.res.estimate.toFixed(0)}%${stale ? ' ⚠' : ''}`
       : `${d.res.estimate.toFixed(0)}%` + (stale ? ' ⚠ stale' : '') + ` · ${d.lastDays!=null ? d.lastDays.toFixed(0)+'d ago' : '—'}`;
     svg += svgEl('text',{x:mL+plotW+8,y:midY+4,'font-size':narrow?10:11,fill: stale?'#b8860b':'#23291f'}, rightText);
   });
-  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
   svg += `</svg>`;
   const legend = `<div style="margin-top:8px;">
     <span class="legend-item"><span class="swatch" style="background:${pctColor(10)}"></span>low %</span>
@@ -2139,6 +2178,7 @@ function renderZonePriority(valley, rows){
     ${includeHist ? `<span class="legend-item">◆ hollow diamond = historical baseline</span>` : ''}
     <span class="legend-item">⬤ bold outlined dot = current ${includeHist?'combined':'NRDS-only'} estimate</span>
     <span class="legend-item">⚠ stale = freshest contributing data is more than ${STALE_DAYS} days old</span>
+    <br><span class="muted">Hover any dot/diamond for a quick peek — click to pin a popup with the full breakdown.</span>
   </div>`;
   return html + svg + legend;
 }
