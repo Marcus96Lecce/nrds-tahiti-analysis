@@ -847,6 +847,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
   </div>
 
+  <div class="card" id="deratPreviewCard" style="display:none;">
+    <h2>Recent Dératisation patrols</h2>
+    <div class="hint">Most recent first. Confirms a submission was recorded — the same data is in the ⬇ Dératisation download above.</div>
+    <div class="table-scroll"><table class="preview" id="deratPreviewTable"></table></div>
+  </div>
+
   <div class="card" id="analysisCard" style="display:none;">
     <h2>4. Chart analysis</h2>
     <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
@@ -1086,6 +1092,27 @@ async function fetchDeratisation(){
   tables.deratisation = deratisation; tables.sectionChecks = sectionChecks;
   dataLoaded.derat = true;
   document.getElementById('deratDataStatus').textContent = `${deratisation.length} dératisation patrols loaded from the shared database.`;
+  renderDeratPreview();
+}
+
+/* Dératisation has no chart/map, so without this table a successful submission had no visible
+   confirmation anywhere in the app beyond the bare count above — shows the most recent patrols first. */
+function renderDeratPreview(){
+  const checksByIdent = new Map();
+  for (const c of tables.sectionChecks||[]){
+    if (!checksByIdent.has(c.Identifier)) checksByIdent.set(c.Identifier, []);
+    checksByIdent.get(c.Identifier).push(`${c.Derat}:${c.Conso}`);
+  }
+  const rows = [...(tables.deratisation||[])].reverse().slice(0, 30);
+  const cols = ['Identifier','Date','Observer','Zone','Passage'];
+  let html = '<thead><tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '<th>Checks</th></tr></thead><tbody>';
+  for (const r of rows){
+    html += '<tr>' + cols.map(c=>`<td>${escapeHtml(r[c]===undefined?'':r[c])}</td>`).join('')
+      + `<td>${escapeHtml((checksByIdent.get(r.Identifier)||[]).join(', '))}</td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('deratPreviewTable').innerHTML = html;
+  document.getElementById('deratPreviewCard').style.display = '';
 }
 
 function subscribeHabitatRestoration(){
