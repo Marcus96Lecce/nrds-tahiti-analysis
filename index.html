@@ -756,6 +756,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="hint">Data loads automatically from the shared online database — every visitor sees the same up-to-date actions, no upload needed. Use the forms below to add a new action; it appears here, in the charts, and on the map for everyone within a few seconds.</div>
     <div id="liveDataStatus" class="muted">Connecting…</div>
     <div id="deratDataStatus" class="muted"></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="secondary" onclick="downloadOriginalFormat('habitat')">⬇ Habitat Restoration data (original NRDS format)</button>
+      <button class="secondary" onclick="downloadOriginalFormat('derat')">⬇ Dératisation data (original NRDS format)</button>
+    </div>
     <div id="buildSummary"></div>
   </div>
 
@@ -1462,6 +1466,20 @@ function downloadCSV(filename, rows, fields){
   const a = document.createElement('a'); a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* Exports tables.habitat/sectionEspece/deratisation/sectionChecks (built by fetchHabitatRestoration()/
+   fetchDeratisation() with the exact original NRDS column names) as a pair of CSVs each, byte-for-byte
+   in the same shape/filenames as the original "DATA DOWNLOADED from NRDS" exports — but reflecting every
+   live submission. Each click downloads both the main file and its child (species / checks) file. */
+function downloadOriginalFormat(which){
+  if (which === 'habitat'){
+    downloadCSV('Habitat Restoration.csv', tables.habitat||[], ['Identifier','Date','Name','Valley','Unit Name','Action','Type of day work','Number of Person','Précision Localisation (rat station name)','% cleaned at the end of the day','% cleaned at arrival','% evaluation','Comment']);
+    downloadCSV('Section - Espèce.csv', tables.sectionEspece||[], ['Identifier','Espèce','Number']);
+  } else {
+    downloadCSV('Dératisation.csv', tables.deratisation||[], ['Identifier','Date','Observer','Zone','Passage']);
+    downloadCSV('Section - Checks.csv', tables.sectionChecks||[], ['Identifier','Derat','Conso']);
+  }
 }
 
 /* ---------------- build button ---------------- */
