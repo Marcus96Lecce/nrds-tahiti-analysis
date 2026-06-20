@@ -752,22 +752,97 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <div class="wrap">
 
   <div class="card">
-    <h2>1. Upload the raw CSV files exported from NRDS</h2>
-    <div class="hint">Select all the files together (Ctrl+click). At minimum you need: <b>Habitat Restoration.csv</b>, <b>Section - Espèce.csv</b>, <b>Derat Tahiti.csv</b>, <b>Management Unit.csv</b>. The other files (Dératisation, Section - Checks, Espèce, Contrôle des emergentes) are accepted and stored for future analyses.</div>
-    <input type="file" id="fileInput" multiple accept=".csv">
-    <ul class="status-list" id="uploadStatus"></ul>
-  </div>
-
-  <div class="card">
-    <h2>2. Generate the enriched datasets</h2>
-    <div class="hint">Joins Habitat Restoration with the planted species, the coordinates of the nearest rat stations (fallback: centroid of the management unit), and the unit's surface area.</div>
-    <button id="buildBtn" disabled>Generate enriched dataset</button>
-    <span id="buildHint" class="muted"></span>
+    <h2>1. Live data</h2>
+    <div class="hint">Data loads automatically from the shared online database — every visitor sees the same up-to-date actions, no upload needed. Use the forms below to add a new action; it appears here, in the charts, and on the map for everyone within a few seconds.</div>
+    <div id="liveDataStatus" class="muted">Connecting…</div>
+    <div id="deratDataStatus" class="muted"></div>
     <div id="buildSummary"></div>
   </div>
 
+  <div class="card">
+    <h2>2. Add a new Habitat Restoration action</h2>
+    <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
+    <form id="hrForm" onsubmit="submitHabitatForm(event)">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="hrDate" required></label>
+        <label class="muted">Observer name: <input type="text" id="hrName" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Valley:
+          <select id="hrValley" onchange="onHrValleyChange()" required>
+            <option value="">Choose…</option>
+            <option value="Papehue">Papehue</option>
+            <option value="Maruapo">Maruapo</option>
+            <option value="Hopa">Hopa</option>
+          </select>
+        </label>
+        <label class="muted">Zone (management unit):
+          <select id="hrUnit" required><option value="">Choose a valley first</option></select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Action:
+          <select id="hrAction" required>
+            <option value="">Choose…</option>
+            <option value="Plantation">Plantation</option>
+            <option value="Entretien des plantations (cleaning around plantation)">Entretien des plantations (cleaning around plantation)</option>
+            <option value="Coupe du sous-bois (cutting undergrowth)">Coupe du sous-bois (cutting undergrowth)</option>
+          </select>
+        </label>
+        <label class="muted">Type of day work:
+          <select id="hrType" required>
+            <option value="">Choose…</option>
+            <option value="Chantier bénévole">Chantier bénévole (volunteer)</option>
+            <option value="Routine">Routine (non-volunteer staff)</option>
+          </select>
+        </label>
+        <label class="muted">Number of people: <input type="number" id="hrPeople" min="0" step="1" required style="width:80px;"></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Rat station(s), comma-separated: <input type="text" id="hrStations" list="hrStationList" placeholder="e.g. A5,A6"></label>
+        <datalist id="hrStationList"></datalist>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">% cleaned at arrival: <input type="number" id="hrPctArrival" min="0" max="100" style="width:70px;"></label>
+        <label class="muted">% cleaned at end of day: <input type="number" id="hrPctEnd" min="0" max="100" style="width:70px;"></label>
+        <label class="muted">% evaluation: <input type="number" id="hrPctEval" min="0" max="100" style="width:70px;"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
+        <textarea id="hrComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Species planted (optional):</div>
+        <div id="hrSpeciesRows"></div>
+        <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
+      </div>
+      <button type="submit">Submit action</button>
+      <span id="hrSubmitStatus" class="muted"></span>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>3. Add a new Dératisation patrol</h2>
+    <div class="hint">Pick the patrol's zone (a line of rat-control stations); every known station in that zone appears below so you can record its bait-consumption reading. Submitting writes directly to the shared database.</div>
+    <form id="drForm" onsubmit="submitDeratisationForm(event)">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date/time: <input type="datetime-local" id="drDate" required></label>
+        <label class="muted">Observer: <input type="text" id="drObserver" placeholder="e.g. Maotihau MANA (Tahiti)" required></label>
+        <label class="muted">Passage #: <input type="number" id="drPassage" min="0" step="1" style="width:70px;"></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Zone:
+          <select id="drZone" onchange="onDrZoneChange()" required><option value="">Choose…</option></select>
+        </label>
+      </div>
+      <div id="drChecksWrap" style="margin-bottom:10px;"></div>
+      <button type="submit">Submit patrol</button>
+      <span id="drSubmitStatus" class="muted"></span>
+    </form>
+  </div>
+
   <div class="card" id="analysisCard" style="display:none;">
-    <h2>3. Chart analysis</h2>
+    <h2>4. Chart analysis</h2>
     <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
     <div class="row" style="margin-bottom:12px;">
       <label class="muted">Valley:
@@ -795,7 +870,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card" id="mapCard" style="display:none;">
-    <h2>4. Map</h2>
+    <h2>5. Map</h2>
     <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
     <div class="row" style="margin-bottom:12px;">
       <label class="muted">Valley:
@@ -815,7 +890,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </label>
     </div>
     <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "5. Integration with past data"):</span>
+      <span class="muted">Historical data (from "6. Integration with past data"):</span>
       <label class="muted">
         <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
         Historical cleaning %
@@ -826,7 +901,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </label>
     </div>
     <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "5. Integration with past data"):</span>
+      <span class="muted">Historical data (from "6. Integration with past data"):</span>
       <label class="muted">
         <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
         Historical plantings
@@ -845,9 +920,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card" id="pastDataCard" style="display:none;">
-    <h2>5. Integration with past data</h2>
+    <h2>6. Integration with past data</h2>
     <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
-    <span id="pastDataStatus" class="muted">Generate the enriched datasets first (step 2).</span>
+    <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
     <div id="pastDataContent" style="display:none;">
       <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
       <label class="muted" style="margin-left:12px;">
@@ -887,6 +962,21 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 }});if(w&&w.length)es(p,w,true,o.people||[])}catch(y){if(o.WTF)throw y}}function _o(e){return e.charAt(0)=="/"?e.slice(1):e}function Ao(e,r){Ue();r=r||{};yo(r);if(Ar(e,"META-INF/manifest.xml"))return po(e,r);if(Ar(e,"objectdata.xml"))return po(e,r);if(Ar(e,"Index/Document.iwa")){if(typeof Uint8Array=="undefined")throw new Error("NUMBERS file parsing requires Uint8Array support");if(typeof parse_numbers_iwa!="undefined"){if(e.FileIndex)return parse_numbers_iwa(e);var t=Ye.utils.cfb_new();Or(e).forEach(function(r){Mr(t,r,Dr(e,r))});return parse_numbers_iwa(t)}throw new Error("Unsupported NUMBERS file")}if(!Ar(e,"[Content_Types].xml")){if(Ar(e,"index.xml.gz"))throw new Error("Unsupported NUMBERS 08 file");if(Ar(e,"index.xml"))throw new Error("Unsupported NUMBERS 09 file");throw new Error("Unsupported ZIP file")}var a=Or(e);var n=hn(Fr(e,"[Content_Types].xml"));var i=false;var s,l;if(n.workbooks.length===0){l="xl/workbook.xml";if(Er(e,l,true))n.workbooks.push(l)}if(n.workbooks.length===0){l="xl/workbook.bin";if(!Er(e,l,true))throw new Error("Could not find workbook");n.workbooks.push(l);i=true}if(n.workbooks[0].slice(-3)=="bin")i=true;var o={};var c={};if(!r.bookSheets&&!r.bookProps){As=[];if(n.sst)try{As=zl(Er(e,_o(n.sst)),n.sst,r)}catch(f){if(r.WTF)throw f}if(r.cellStyles&&n.themes.length)o=$l(Fr(e,n.themes[0].replace(/^\//,""),true)||"",n.themes[0],r);if(n.style)c=Bl(Er(e,_o(n.style)),n.style,o,r)}n.links.map(function(t){try{var a=vn(Fr(e,mn(_o(t))),t);return jl(Er(e,_o(t)),a,t,r)}catch(n){}});var u=Nl(Er(e,_o(n.workbooks[0])),n.workbooks[0],r);var h={},p="";if(n.coreprops.length){p=Er(e,_o(n.coreprops[0]),true);if(p)h=En(p);if(n.extprops.length!==0){p=Er(e,_o(n.extprops[0]),true);if(p)Pn(p,h,r)}}var d={};if(!r.bookSheets||r.bookProps){if(n.custprops.length!==0){p=Fr(e,_o(n.custprops[0]),true);if(p)d=Ln(p,r)}}var m={};if(r.bookSheets||r.bookProps){if(u.Sheets)s=u.Sheets.map(function O(e){return e.name});else if(h.Worksheets&&h.SheetNames.length>0)s=h.SheetNames;if(r.bookProps){m.Props=h;m.Custprops=d}if(r.bookSheets&&typeof s!=="undefined")m.SheetNames=s;if(r.bookSheets?m.SheetNames:r.bookProps)return m}s={};var v={};if(r.bookDeps&&n.calcchain)v=Wl(Er(e,_o(n.calcchain)),n.calcchain,r);var g=0;var b={};var w,y;{var k=u.Sheets;h.Worksheets=k.length;h.SheetNames=[];for(var x=0;x!=k.length;++x){h.SheetNames[x]=k[x].name}}var S=i?"bin":"xml";var C=n.workbooks[0].lastIndexOf("/");var _=(n.workbooks[0].slice(0,C+1)+"_rels/"+n.workbooks[0].slice(C+1)+".rels").replace(/^\//,"");if(!Ar(e,_))_="xl/_rels/workbook."+S+".rels";var A=vn(Fr(e,_,true),_.replace(/_rels.*/,"s5s"));if((n.metadata||[]).length>=1){r.xlmeta=Hl(Er(e,_o(n.metadata[0])),n.metadata[0],r)}if((n.people||[]).length>=1){r.people=is(Er(e,_o(n.people[0])),r)}if(A)A=So(A,u.Sheets);var T=Er(e,"xl/worksheets/sheet.xml",true)?1:0;e:for(g=0;g!=h.Worksheets;++g){var E="sheet";if(A&&A[g]){w="xl/"+A[g][1].replace(/[\/]?xl\//,"");if(!Ar(e,w))w=A[g][1];if(!Ar(e,w))w=_.replace(/_rels\/.*$/,"")+A[g][1];E=A[g][2]}else{w="xl/worksheets/sheet"+(g+1-T)+"."+S;w=w.replace(/sheet0\./,"sheet.")}y=w.replace(/^(.*)(\/)([^\/]*)$/,"$1/_rels/$3.rels");if(r&&r.sheets!=null)switch(typeof r.sheets){case"number":if(g!=r.sheets)continue e;break;case"string":if(h.SheetNames[g].toLowerCase()!=r.sheets.toLowerCase())continue e;break;default:if(Array.isArray&&Array.isArray(r.sheets)){var F=false;for(var D=0;D!=r.sheets.length;++D){if(typeof r.sheets[D]=="number"&&r.sheets[D]==g)F=1;if(typeof r.sheets[D]=="string"&&r.sheets[D].toLowerCase()==h.SheetNames[g].toLowerCase())F=1}if(!F)continue e};}Co(e,w,y,h.SheetNames[g],g,b,s,E,r,u,o,c)}m={Directory:n,Workbook:u,Props:h,Custprops:d,Deps:v,Sheets:s,SheetNames:h.SheetNames,Strings:As,Styles:c,Themes:o,SSF:gr(X)};if(r&&r.bookFiles){if(e.files){m.keys=a;m.files=e.files}else{m.keys=[];m.files={};e.FullPaths.forEach(function(r,t){r=r.replace(/^Root Entry[\/]/,"");m.keys.push(r);m.files[r]=e.FileIndex[t]})}}if(r&&r.bookVBA){if(n.vba.length>0)m.vbaraw=Er(e,_o(n.vba[0]),true);else if(n.defaults&&n.defaults.bin===ls)m.vbaraw=Er(e,"xl/vbaProject.bin",true)}return m}function To(e,r){var t=r||{};var a="Workbook",n=Ye.find(e,a);try{a="/!DataSpaces/Version";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);parse_DataSpaceVersionInfo(n.content);a="/!DataSpaces/DataSpaceMap";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);var i=parse_DataSpaceMap(n.content);if(i.length!==1||i[0].comps.length!==1||i[0].comps[0].t!==0||i[0].name!=="StrongEncryptionDataSpace"||i[0].comps[0].v!=="EncryptedPackage")throw new Error("ECMA-376 Encrypted file bad "+a);a="/!DataSpaces/DataSpaceInfo/StrongEncryptionDataSpace";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);var s=parse_DataSpaceDefinition(n.content);if(s.length!=1||s[0]!="StrongEncryptionTransform")throw new Error("ECMA-376 Encrypted file bad "+a);a="/!DataSpaces/TransformInfo/StrongEncryptionTransform/!Primary";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);var o=parse_EncryptionInfo(n.content);a="/EncryptedPackage";n=Ye.find(e,a);if(!n||!n.content)throw new Error("ECMA-376 Encrypted file missing "+a);if(o[0]==4&&typeof decrypt_agile!=="undefined")return decrypt_agile(o[1],n.content,t.password||"",t);if(o[0]==2&&typeof decrypt_std76!=="undefined")return decrypt_std76(o[1],n.content,t.password||"",t);throw new Error("File is password-protected")}function Eo(e,r){if(r.bookType=="ods")return bo(e,r);if(r.bookType=="numbers")return write_numbers_iwa(e,r);if(r.bookType=="xlsb")return Fo(e,r);return Do(e,r)}function Fo(e,r){Zi=1024;if(e&&!e.SSF){e.SSF=gr(X)}if(e&&e.SSF){Ue();ze(e.SSF);r.revssf=ar(e.SSF);r.revssf[e.SSF[65535]]=0;r.ssf=e.SSF}r.rels={};r.wbrels={};r.Strings=[];r.Strings.Count=0;r.Strings.Unique=0;if(Es)r.revStrings=new Map;else{r.revStrings={};r.revStrings.foo=[];delete r.revStrings.foo}var t=r.bookType=="xlsb"?"bin":"xml";var a=fs.indexOf(r.bookType)>-1;var n=un();ko(r=r||{});var i=Nr();var s="",l=0;r.cellXfs=[];Ms(r.cellXfs,{},{revssf:{General:0}});if(!e.Props)e.Props={};s="docProps/core.xml";Mr(i,s,Dn(e.Props,r));n.coreprops.push(s);bn(r.rels,2,s,dn.CORE_PROPS);s="docProps/app.xml";if(e.Props&&e.Props.SheetNames){}else if(!e.Workbook||!e.Workbook.Sheets)e.Props.SheetNames=e.SheetNames;else{var o=[];for(var c=0;c<e.SheetNames.length;++c)if((e.Workbook.Sheets[c]||{}).Hidden!=2)o.push(e.SheetNames[c]);e.Props.SheetNames=o}e.Props.Worksheets=e.Props.SheetNames.length;Mr(i,s,In(e.Props,r));n.extprops.push(s);bn(r.rels,3,s,dn.EXT_PROPS);if(e.Custprops!==e.Props&&er(e.Custprops||{}).length>0){s="docProps/custom.xml";Mr(i,s,Bn(e.Custprops,r));n.custprops.push(s);bn(r.rels,4,s,dn.CUST_PROPS)}for(l=1;l<=e.SheetNames.length;++l){var f={"!id":{}};var u=e.Sheets[e.SheetNames[l-1]];var h=(u||{})["!type"]||"sheet";switch(h){case"chart":;default:s="xl/worksheets/sheet"+l+"."+t;Mr(i,s,Xl(l-1,s,r,e,f));n.sheets.push(s);bn(r.wbrels,-1,"worksheets/sheet"+l+"."+t,dn.WS[0]);}if(u){var p=u["!comments"];var d=false;var m="";if(p&&p.length>0){m="xl/comments"+l+"."+t;Mr(i,m,Kl(p,m,r));n.comments.push(m);bn(f,-1,"../comments"+l+"."+t,dn.CMNT);d=true}if(u["!legacy"]){if(d)Mr(i,"xl/drawings/vmlDrawing"+l+".vml",Qi(l,u["!comments"]))}delete u["!comments"];delete u["!legacy"]}if(f["!id"].rId1)Mr(i,mn(s),gn(f))}if(r.Strings!=null&&r.Strings.length>0){s="xl/sharedStrings."+t;Mr(i,s,Jl(r.Strings,s,r));n.strs.push(s);bn(r.wbrels,-1,"sharedStrings."+t,dn.SST)}s="xl/workbook."+t;Mr(i,s,Vl(e,s,r));n.workbooks.push(s);bn(r.rels,1,s,dn.WB);s="xl/theme/theme1.xml";Mr(i,s,Xi(e.Themes,r));n.themes.push(s);bn(r.wbrels,-1,"theme/theme1.xml",dn.THEME);s="xl/styles."+t;Mr(i,s,Yl(e,s,r));n.styles.push(s);bn(r.wbrels,-1,"styles."+t,dn.STY);if(e.vbaraw&&a){s="xl/vbaProject.bin";Mr(i,s,e.vbaraw);n.vba.push(s);bn(r.wbrels,-1,"vbaProject.bin",dn.VBA)}s="xl/metadata."+t;Mr(i,s,ql(s));n.metadata.push(s);bn(r.wbrels,-1,"metadata."+t,dn.XLMETA);Mr(i,"[Content_Types].xml",pn(n,r));Mr(i,"_rels/.rels",gn(r.rels));Mr(i,"xl/_rels/workbook."+t+".rels",gn(r.wbrels));delete r.revssf;delete r.ssf;return i}function Do(e,r){Zi=1024;if(e&&!e.SSF){e.SSF=gr(X)}if(e&&e.SSF){Ue();ze(e.SSF);r.revssf=ar(e.SSF);r.revssf[e.SSF[65535]]=0;r.ssf=e.SSF}r.rels={};r.wbrels={};r.Strings=[];r.Strings.Count=0;r.Strings.Unique=0;if(Es)r.revStrings=new Map;else{r.revStrings={};r.revStrings.foo=[];delete r.revStrings.foo}var t="xml";var a=fs.indexOf(r.bookType)>-1;var n=un();ko(r=r||{});var i=Nr();var s="",l=0;r.cellXfs=[];Ms(r.cellXfs,{},{revssf:{General:0}});if(!e.Props)e.Props={};s="docProps/core.xml";Mr(i,s,Dn(e.Props,r));n.coreprops.push(s);bn(r.rels,2,s,dn.CORE_PROPS);s="docProps/app.xml";if(e.Props&&e.Props.SheetNames){}else if(!e.Workbook||!e.Workbook.Sheets)e.Props.SheetNames=e.SheetNames;else{var o=[];for(var c=0;c<e.SheetNames.length;++c)if((e.Workbook.Sheets[c]||{}).Hidden!=2)o.push(e.SheetNames[c]);e.Props.SheetNames=o}e.Props.Worksheets=e.Props.SheetNames.length;Mr(i,s,In(e.Props,r));n.extprops.push(s);bn(r.rels,3,s,dn.EXT_PROPS);if(e.Custprops!==e.Props&&er(e.Custprops||{}).length>0){s="docProps/custom.xml";Mr(i,s,Bn(e.Custprops,r));n.custprops.push(s);bn(r.rels,4,s,dn.CUST_PROPS)}var f=["SheetJ5"];r.tcid=0;for(l=1;l<=e.SheetNames.length;++l){var u={"!id":{}};var h=e.Sheets[e.SheetNames[l-1]];var p=(h||{})["!type"]||"sheet";switch(p){case"chart":;default:s="xl/worksheets/sheet"+l+"."+t;Mr(i,s,pl(l-1,r,e,u));n.sheets.push(s);bn(r.wbrels,-1,"worksheets/sheet"+l+"."+t,dn.WS[0]);}if(h){var d=h["!comments"];var m=false;var v="";if(d&&d.length>0){var g=false;d.forEach(function(e){e[1].forEach(function(e){if(e.T==true)g=true})});if(g){v="xl/threadedComments/threadedComment"+l+"."+t;Mr(i,v,ns(d,f,r));n.threadedcomments.push(v);bn(u,-1,"../threadedComments/threadedComment"+l+"."+t,dn.TCMNT)}v="xl/comments"+l+"."+t;Mr(i,v,ts(d,r));n.comments.push(v);bn(u,-1,"../comments"+l+"."+t,dn.CMNT);m=true}if(h["!legacy"]){if(m)Mr(i,"xl/drawings/vmlDrawing"+l+".vml",Qi(l,h["!comments"]))}delete h["!comments"];delete h["!legacy"]}if(u["!id"].rId1)Mr(i,mn(s),gn(u))}if(r.Strings!=null&&r.Strings.length>0){s="xl/sharedStrings."+t;Mr(i,s,ni(r.Strings,r));n.strs.push(s);bn(r.wbrels,-1,"sharedStrings."+t,dn.SST)}s="xl/workbook."+t;Mr(i,s,Ml(e,r));n.workbooks.push(s);bn(r.rels,1,s,dn.WB);s="xl/theme/theme1.xml";Mr(i,s,Xi(e.Themes,r));n.themes.push(s);bn(r.wbrels,-1,"theme/theme1.xml",dn.THEME);s="xl/styles."+t;Mr(i,s,Ii(e,r));n.styles.push(s);bn(r.wbrels,-1,"styles."+t,dn.STY);if(e.vbaraw&&a){s="xl/vbaProject.bin";Mr(i,s,e.vbaraw);n.vba.push(s);bn(r.wbrels,-1,"vbaProject.bin",dn.VBA)}s="xl/metadata."+t;Mr(i,s,Yi());n.metadata.push(s);bn(r.wbrels,-1,"metadata."+t,dn.XLMETA);if(f.length>1){s="xl/persons/person.xml";Mr(i,s,ss(f,r));n.people.push(s);bn(r.wbrels,-1,"persons/person.xml",dn.PEOPLE)}Mr(i,"[Content_Types].xml",pn(n,r));Mr(i,"_rels/.rels",gn(r.rels));Mr(i,"xl/_rels/workbook."+t+".rels",gn(r.wbrels));delete r.revssf;delete r.ssf;return i}function Oo(e,r){var t="";switch((r||{}).type||"base64"){case"buffer":return[e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7]];case"base64":t=w(e.slice(0,12));break;case"binary":t=e;break;case"array":return[e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7]];default:throw new Error("Unrecognized type "+(r&&r.type||"undefined"));}return[t.charCodeAt(0),t.charCodeAt(1),t.charCodeAt(2),t.charCodeAt(3),t.charCodeAt(4),t.charCodeAt(5),t.charCodeAt(6),t.charCodeAt(7)]}function Mo(e,r){if(Ye.find(e,"EncryptedPackage"))return To(e,r);return parse_xlscfb(e,r)}function No(e,r){var t,a=e;var n=r||{};if(!n.type)n.type=y&&Buffer.isBuffer(e)?"buffer":"base64";t=Pr(a,n);return Ao(t,n)}function Po(e,r){var t=0;e:while(t<e.length)switch(e.charCodeAt(t)){case 10:;case 13:;case 32:++t;break;case 60:return parse_xlml(e.slice(t),r);default:break e;}return Hn.to_workbook(e,r)}function Io(e,r){var t="",a=Oo(e,r);switch(r.type){case"base64":t=w(e);break;case"binary":t=e;break;case"buffer":t=e.toString("binary");break;case"array":t=vr(e);break;default:throw new Error("Unrecognized type "+r.type);}if(a[0]==239&&a[1]==187&&a[2]==191)t=ot(t);r.type="binary";return Po(t,r)}function Ro(e,r){var t=e;if(r.type=="base64")t=w(t);t=$cptable.utils.decode(1200,t.slice(2),"str");r.type="binary";return Po(t,r)}function Lo(e){return!e.match(/[^\x00-\x7F]/)?e:ct(e)}function Bo(e,r,t,a){if(a){t.type="string";return Hn.to_workbook(e,t)}return Hn.to_workbook(r,t)}function $o(e,r){o();var t=r||{};if(typeof ArrayBuffer!=="undefined"&&e instanceof ArrayBuffer)return $o(new Uint8Array(e),(t=gr(t),t.type="array",t));if(typeof Uint8Array!=="undefined"&&e instanceof Uint8Array&&!t.type)t.type=typeof Deno!=="undefined"?"buffer":"array";var a=e,n=[0,0,0,0],i=false;if(t.cellStyles){t.cellNF=true;t.sheetStubs=true}Ts={};if(t.dateNF)Ts.dateNF=t.dateNF;if(!t.type)t.type=y&&Buffer.isBuffer(e)?"buffer":"base64";if(t.type=="file"){t.type=y?"buffer":"binary";a=Qe(e);if(typeof Uint8Array!=="undefined"&&!y)t.type="array"}if(t.type=="string"){i=true;t.type="binary";t.codepage=65001;a=Lo(e)}if(t.type=="array"&&typeof Uint8Array!=="undefined"&&e instanceof Uint8Array&&typeof ArrayBuffer!=="undefined"){var s=new ArrayBuffer(3),l=new Uint8Array(s);l.foo="bar";if(!l.foo){t=gr(t);t.type="array";return $o(E(a),t)}}switch((n=Oo(a,t))[0]){case 208:if(n[1]===207&&n[2]===17&&n[3]===224&&n[4]===161&&n[5]===177&&n[6]===26&&n[7]===225)return Mo(Ye.read(a,t),t);break;case 9:if(n[1]<=8)return parse_xlscfb(a,t);break;case 60:return parse_xlml(a,t);case 73:if(n[1]===73&&n[2]===42&&n[3]===0)throw new Error("TIFF Image File is not a spreadsheet");if(n[1]===68)return Vn(a,t);break;case 84:if(n[1]===65&&n[2]===66&&n[3]===76)return Wn.to_workbook(a,t);break;case 80:return n[1]===75&&n[2]<9&&n[3]<9?No(a,t):Bo(e,a,t,i);case 239:return n[3]===60?parse_xlml(a,t):Bo(e,a,t,i);case 255:if(n[1]===254){return Ro(a,t)}else if(n[1]===0&&n[2]===2&&n[3]===0)return WK_.to_workbook(a,t);break;case 0:if(n[1]===0){if(n[2]>=2&&n[3]===0)return WK_.to_workbook(a,t);if(n[2]===0&&(n[3]===8||n[3]===9))return WK_.to_workbook(a,t)}break;case 3:;case 131:;case 139:;case 140:return zn.to_workbook(a,t);case 123:if(n[1]===92&&n[2]===114&&n[3]===116)return RTF.to_workbook(a,t);break;case 10:;case 13:;case 32:return Io(a,t);case 137:if(n[1]===80&&n[2]===78&&n[3]===71)throw new Error("PNG Image File is not a spreadsheet");break;}if($n.indexOf(n[0])>-1&&n[2]<=12&&n[3]<=31)return zn.to_workbook(a,t);return Bo(e,a,t,i)}function zo(e,r){var t=r||{};t.type="file";return $o(e,t)}function Uo(e,r){switch(r.type){case"base64":;case"binary":break;case"buffer":;case"array":r.type="";break;case"file":return Ze(r.file,Ye.write(e,{type:y?"buffer":""}));case"string":throw new Error("'string' output type invalid for '"+r.bookType+"' files");default:throw new Error("Unrecognized type "+r.type);}return Ye.write(e,r)}function Wo(e,r){var t=gr(r||{});var a=Eo(e,t);return Ho(a,t)}function jo(e,r){var t=gr(r||{});var a=Do(e,t);return Ho(a,t)}function Ho(e,r){var t={};var a=y?"nodebuffer":typeof Uint8Array!=="undefined"?"array":"string";if(r.compression)t.compression="DEFLATE";if(r.password)t.type=a;else switch(r.type){case"base64":t.type="base64";break;case"binary":t.type="string";break;case"string":throw new Error("'string' output type invalid for '"+r.bookType+"' files");case"buffer":;case"file":t.type=a;break;default:throw new Error("Unrecognized type "+r.type);}var n=e.FullPaths?Ye.write(e,{fileType:"zip",type:{nodebuffer:"buffer",string:"binary"}[t.type]||t.type,compression:!!r.compression}):e.generate(t);if(typeof Deno!=="undefined"){if(typeof n=="string"){if(r.type=="binary"||r.type=="base64")return n;n=new Uint8Array(_(n))}}if(r.password&&typeof encrypt_agile!=="undefined")return Uo(encrypt_agile(n,r.password),r);if(r.type==="file")return Ze(r.file,n);return r.type=="string"?ot(n):n}function Vo(e,r){var t=r||{};var a=write_xlscfb(e,t);return Uo(a,t)}function Xo(e,r,t){if(!t)t="";var a=t+e;switch(r.type){case"base64":return b(ct(a));case"binary":return ct(a);case"string":return e;case"file":return Ze(r.file,a,"utf8");case"buffer":{if(y)return k(a,"utf8");else if(typeof TextEncoder!=="undefined")return(new TextEncoder).encode(a);else return Xo(a,{type:"binary"}).split("").map(function(e){return e.charCodeAt(0)})};}throw new Error("Unrecognized type "+r.type)}function Go(e,r){switch(r.type){case"base64":return b(e);case"binary":return e;case"string":return e;case"file":return Ze(r.file,e,"binary");case"buffer":{if(y)return k(e,"binary");else return e.split("").map(function(e){return e.charCodeAt(0)})};}throw new Error("Unrecognized type "+r.type)}function Yo(e,r){switch(r.type){case"string":;case"base64":;case"binary":var t="";for(var a=0;a<e.length;++a)t+=String.fromCharCode(e[a]);return r.type=="base64"?b(t):r.type=="string"?ot(t):t;case"file":return Ze(r.file,e);case"buffer":return e;default:throw new Error("Unrecognized type "+r.type);}}function Jo(e,r){o();Fl(e);var t=gr(r||{});if(t.cellStyles){t.cellNF=true;t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=Jo(e,t);t.type="array";return _(a)}return jo(e,t)}function Ko(e,r){o();Fl(e);var t=gr(r||{});if(t.cellStyles){t.cellNF=true;t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=Ko(e,t);t.type="array";return _(a)}var n=0;if(t.sheet){if(typeof t.sheet=="number")n=t.sheet;else n=e.SheetNames.indexOf(t.sheet);if(!e.SheetNames[n])throw new Error("Sheet not found: "+t.sheet+" : "+typeof t.sheet)}switch(t.bookType||"xlsb"){case"xml":;case"xlml":return Xo(write_xlml(e,t),t);case"slk":;case"sylk":return Xo(Un.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"htm":;case"html":return Xo(no(e.Sheets[e.SheetNames[n]],t),t);case"txt":return Go(sc(e.Sheets[e.SheetNames[n]],t),t);case"csv":return Xo(ic(e.Sheets[e.SheetNames[n]],t),t,"\ufeff");case"dif":return Xo(Wn.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"dbf":return Yo(zn.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"prn":return Xo(Hn.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"rtf":return Xo(RTF.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"eth":return Xo(jn.from_sheet(e.Sheets[e.SheetNames[n]],t),t);case"fods":return Xo(bo(e,t),t);case"wk1":return Yo(WK_.sheet_to_wk1(e.Sheets[e.SheetNames[n]],t),t);case"wk3":return Yo(WK_.book_to_wk3(e,t),t);case"biff2":if(!t.biff)t.biff=2;case"biff3":if(!t.biff)t.biff=3;case"biff4":if(!t.biff)t.biff=4;return Yo(write_biff_buf(e,t),t);case"biff5":if(!t.biff)t.biff=5;case"biff8":;case"xla":;case"xls":if(!t.biff)t.biff=8;return Vo(e,t);case"xlsx":;case"xlsm":;case"xlam":;case"xlsb":;case"numbers":;case"ods":return Wo(e,t);default:throw new Error("Unrecognized bookType |"+t.bookType+"|");}}function qo(e){if(e.bookType)return;var r={xls:"biff8",htm:"html",slk:"sylk",socialcalc:"eth",Sh33tJS:"WTF"};var t=e.file.slice(e.file.lastIndexOf(".")).toLowerCase();if(t.match(/^\.[a-z]+$/))e.bookType=t.slice(1);e.bookType=r[e.bookType]||e.bookType}function Zo(e,r,t){var a=t||{};a.type="file";a.file=r;qo(a);return Ko(e,a)}function Qo(e,r,t){var a=t||{};a.type="file";a.file=r;qo(a);return Jo(e,a)}function ec(e,r,t,a){var n=t||{};n.type="file";n.file=e;qo(n);n.type="buffer";var i=a;if(!(i instanceof Function))i=t;return Je.writeFile(e,Ko(r,n),i)}function rc(e,r,t,a,n,i,s,l){var o=ya(t);var c=l.defval,f=l.raw||!Object.prototype.hasOwnProperty.call(l,"raw");var u=true;var h=n===1?[]:{};if(n!==1){if(Object.defineProperty)try{Object.defineProperty(h,"__rowNum__",{value:t,enumerable:false})}catch(p){h.__rowNum__=t}else h.__rowNum__=t}if(!s||e[t])for(var d=r.s.c;d<=r.e.c;++d){var m=s?e[t][d]:e[a[d]+o];if(m===undefined||m.t===undefined){if(c===undefined)continue;if(i[d]!=null){h[i[d]]=c}continue}var v=m.v;switch(m.t){case"z":if(v==null)break;continue;case"e":v=v==0?null:void 0;break;case"s":;case"d":;case"b":;case"n":break;default:throw new Error("unrecognized type "+m.t);}if(i[d]!=null){if(v==null){if(m.t=="e"&&v===null)h[i[d]]=null;else if(c!==undefined)h[i[d]]=c;else if(f&&v===null)h[i[d]]=null;else continue}else{h[i[d]]=f&&(m.t!=="n"||m.t==="n"&&l.rawNumbers!==false)?v:Pa(m,v,l)}if(v!=null)u=false}}return{row:h,isempty:u}}function tc(e,r){if(e==null||e["!ref"]==null)return[];var t={t:"n",v:0},a=0,n=1,i=[],s=0,l="";var o={s:{r:0,c:0},e:{r:0,c:0}};var c=r||{};var f=c.range!=null?c.range:e["!ref"];if(c.header===1)a=1;else if(c.header==="A")a=2;else if(Array.isArray(c.header))a=3;else if(c.header==null)a=0;switch(typeof f){case"string":o=Ma(f);break;case"number":o=Ma(e["!ref"]);o.s.r=f;break;default:o=f;}if(a>0)n=0;var u=ya(o.s.r);var h=[];var p=[];var d=0,m=0;var v=Array.isArray(e);var g=o.s.r,b=0;var w={};if(v&&!e[g])e[g]=[];var y=c.skipHidden&&e["!cols"]||[];var k=c.skipHidden&&e["!rows"]||[];for(b=o.s.c;b<=o.e.c;++b){if((y[b]||{}).hidden)continue;h[b]=Ca(b);t=v?e[g][b]:e[h[b]+u];switch(a){case 1:i[b]=b-o.s.c;break;case 2:i[b]=h[b];break;case 3:i[b]=c.header[b-o.s.c];break;default:if(t==null)t={w:"__EMPTY",t:"s"};l=s=Pa(t,null,c);m=w[s]||0;if(!m)w[s]=1;else{do{l=s+"_"+m++}while(w[l]);w[s]=m;w[l]=1}i[b]=l;}}for(g=o.s.r+n;g<=o.e.r;++g){if((k[g]||{}).hidden)continue;var x=rc(e,o,g,h,a,i,v,c);if(x.isempty===false||(a===1?c.blankrows!==false:!!c.blankrows))p[d++]=x.row}p.length=d;return p}var ac=/"/g;function nc(e,r,t,a,n,i,s,l){var o=true;var c=[],f="",u=ya(t);for(var h=r.s.c;h<=r.e.c;++h){if(!a[h])continue;var p=l.dense?(e[t]||[])[h]:e[a[h]+u];if(p==null)f="";else if(p.v!=null){o=false;f=""+(l.rawNumbers&&p.t=="n"?p.v:Pa(p,null,l));for(var d=0,m=0;d!==f.length;++d)if((m=f.charCodeAt(d))===n||m===i||m===34||l.forceQuotes){f='"'+f.replace(ac,'""')+'"';break}if(f=="ID")f='"ID"'}else if(p.f!=null&&!p.F){o=false;f="="+p.f;if(f.indexOf(",")>=0)f='"'+f.replace(ac,'""')+'"'}else f="";c.push(f)}if(l.blankrows===false&&o)return null;return c.join(s)}function ic(e,r){var t=[];var a=r==null?{}:r;if(e==null||e["!ref"]==null)return"";var n=Ma(e["!ref"]);var i=a.FS!==undefined?a.FS:",",s=i.charCodeAt(0);var l=a.RS!==undefined?a.RS:"\n",o=l.charCodeAt(0);var c=new RegExp((i=="|"?"\\|":i)+"+$");var f="",u=[];a.dense=Array.isArray(e);var h=a.skipHidden&&e["!cols"]||[];var p=a.skipHidden&&e["!rows"]||[];for(var d=n.s.c;d<=n.e.c;++d)if(!(h[d]||{}).hidden)u[d]=Ca(d);var m=0;for(var v=n.s.r;v<=n.e.r;++v){if((p[v]||{}).hidden)continue;f=nc(e,n,v,u,s,o,i,a);if(f==null){continue}if(a.strip)f=f.replace(c,"");if(f||a.blankrows!==false)t.push((m++?l:"")+f)}delete a.dense;return t.join("")}function sc(e,r){if(!r)r={};r.FS="\t";r.RS="\n";var t=ic(e,r);if(typeof $cptable=="undefined"||r.type=="string")return t;var a=$cptable.utils.encode(1200,t,"str");return String.fromCharCode(255)+String.fromCharCode(254)+a}function lc(e){var r="",t,a="";if(e==null||e["!ref"]==null)return[];var n=Ma(e["!ref"]),i="",s=[],l;var o=[];var c=Array.isArray(e);for(l=n.s.c;l<=n.e.c;++l)s[l]=Ca(l);for(var f=n.s.r;f<=n.e.r;++f){i=ya(f);for(l=n.s.c;l<=n.e.c;++l){r=s[l]+i;t=c?(e[f]||[])[l]:e[r];a="";if(t===undefined)continue;else if(t.F!=null){r=t.F;if(!t.f)continue;a=t.f;if(r.indexOf(":")==-1)r=r+":"+r}if(t.f!=null)a=t.f;else if(t.t=="z")continue;else if(t.t=="n"&&t.v!=null)a=""+t.v;else if(t.t=="b")a=t.v?"TRUE":"FALSE";else if(t.w!==undefined)a="'"+t.w;else if(t.v===undefined)continue;else if(t.t=="s")a="'"+t.v;else a=""+t.v;o[o.length]=r+"="+a}}return o}function oc(e,r,t){var a=t||{};var n=+!a.skipHeader;var i=e||{};var s=0,l=0;if(i&&a.origin!=null){if(typeof a.origin=="number")s=a.origin;else{var o=typeof a.origin=="string"?Ea(a.origin):a.origin;s=o.r;l=o.c}}var c;var f={s:{c:0,r:0},e:{c:l,r:s+r.length-1+n}};if(i["!ref"]){var u=Ma(i["!ref"]);f.e.c=Math.max(f.e.c,u.e.c);f.e.r=Math.max(f.e.r,u.e.r);if(s==-1){s=u.e.r+1;f.e.r=s+r.length-1+n}}else{if(s==-1){s=0;f.e.r=r.length-1+n}}var h=a.header||[],p=0;r.forEach(function(e,r){er(e).forEach(function(t){if((p=h.indexOf(t))==-1)h[p=h.length]=t;var o=e[t];var f="z";var u="";var d=Fa({c:l+p,r:s+r+n});c=fc(i,d);if(o&&typeof o==="object"&&!(o instanceof Date)){i[d]=o}else{if(typeof o=="number")f="n";else if(typeof o=="boolean")f="b";else if(typeof o=="string")f="s";else if(o instanceof Date){f="d";if(!a.cellDates){f="n";o=sr(o)}u=a.dateNF||X[14]}else if(o===null&&a.nullError){f="e";o=0}if(!c)i[d]=c={t:f,v:o};else{c.t=f;c.v=o;delete c.w;delete c.R;if(u)c.z=u}if(u)c.z=u}})});f.e.c=Math.max(f.e.c,l+h.length-1);var d=ya(s);if(n)for(p=0;p<h.length;++p)i[Ca(p+l)+d]={t:"s",v:h[p]};i["!ref"]=Oa(f);return i}function cc(e,r){return oc(null,e,r)}function fc(e,r,t){if(typeof r=="string"){if(Array.isArray(e)){var a=Ea(r);if(!e[a.r])e[a.r]=[];return e[a.r][a.c]||(e[a.r][a.c]={t:"z"})}return e[r]||(e[r]={t:"z"})}if(typeof r!="number")return fc(e,Fa(r));return fc(e,Fa({r:r,c:t||0}))}function uc(e,r){if(typeof r=="number"){if(r>=0&&e.SheetNames.length>r)return r;throw new Error("Cannot find sheet # "+r)}else if(typeof r=="string"){var t=e.SheetNames.indexOf(r);if(t>-1)return t;throw new Error("Cannot find sheet name |"+r+"|")}else throw new Error("Cannot find sheet |"+r+"|")}function hc(){return{SheetNames:[],Sheets:{}}}function pc(e,r,t,a){var n=1;if(!t)for(;n<=65535;++n,t=undefined)if(e.SheetNames.indexOf(t="Sheet"+n)==-1)break;if(!t||e.SheetNames.length>=65535)throw new Error("Too many worksheets");if(a&&e.SheetNames.indexOf(t)>=0){var i=t.match(/(^.*?)(\d+)$/);n=i&&+i[2]||0;var s=i&&i[1]||t;for(++n;n<=65535;++n)if(e.SheetNames.indexOf(t=s+n)==-1)break}Tl(t);if(e.SheetNames.indexOf(t)>=0)throw new Error("Worksheet with name |"+t+"| already exists!");e.SheetNames.push(t);e.Sheets[t]=r;return t}function dc(e,r,t){if(!e.Workbook)e.Workbook={};if(!e.Workbook.Sheets)e.Workbook.Sheets=[];var a=uc(e,r);if(!e.Workbook.Sheets[a])e.Workbook.Sheets[a]={};switch(t){case 0:;case 1:;case 2:break;default:throw new Error("Bad sheet visibility setting "+t);}e.Workbook.Sheets[a].Hidden=t}function mc(e,r){e.z=r;return e}function vc(e,r,t){if(!r){delete e.l}else{e.l={Target:r};if(t)e.l.Tooltip=t}return e}function gc(e,r,t){return vc(e,"#"+r,t)}function bc(e,r,t){if(!e.c)e.c=[];e.c.push({t:r,a:t||"SheetJS"})}function wc(e,r,t,a){var n=typeof r!="string"?r:Ma(r);var i=typeof r=="string"?r:Oa(r);for(var s=n.s.r;s<=n.e.r;++s)for(var l=n.s.c;l<=n.e.c;++l){var o=fc(e,s,l);o.t="n";o.F=i;delete o.v;if(s==n.s.r&&l==n.s.c){o.f=t;if(a)o.D=true}}return e}var yc={encode_col:Ca,encode_row:ya,encode_cell:Fa,encode_range:Oa,decode_col:Sa,decode_row:wa,split_cell:Ta,decode_cell:Ea,decode_range:Da,format_cell:Pa,sheet_add_aoa:Ra,sheet_add_json:oc,sheet_add_dom:io,aoa_to_sheet:La,json_to_sheet:cc,table_to_sheet:so,table_to_book:lo,sheet_to_csv:ic,sheet_to_txt:sc,sheet_to_json:tc,sheet_to_html:no,sheet_to_formulae:lc,sheet_to_row_object_array:tc,sheet_get_cell:fc,book_new:hc,book_append_sheet:pc,book_set_sheet_visibility:dc,cell_set_number_format:mc,cell_set_hyperlink:vc,cell_set_internal_link:gc,cell_add_comment:bc,sheet_set_array_formula:wc,consts:{SHEET_VISIBLE:0,SHEET_HIDDEN:1,SHEET_VERY_HIDDEN:2}};if(typeof parse_xlscfb!=="undefined")e.parse_xlscfb=parse_xlscfb;e.parse_zip=Ao;e.read=$o;e.readFile=zo;e.readFileSync=zo;e.write=Ko;e.writeFile=Zo;e.writeFileSync=Zo;e.writeFileAsync=ec;e.utils=yc;e.writeXLSX=Jo;e.writeFileXLSX=Qo;e.SSF=We;if(typeof __stream!=="undefined")e.stream=__stream;if(typeof Ye!=="undefined")e.CFB=Ye;if(typeof require!=="undefined"){var kc=undefined;if((kc||{}).Readable)set_readable(kc.Readable)}}if(typeof exports!=="undefined")make_xlsx_lib(exports);else if(typeof module!=="undefined"&&module.exports)make_xlsx_lib(module.exports);else if(typeof define==="function"&&define.amd)define("xlsx",function(){if(!XLSX.version)make_xlsx_lib(XLSX);return XLSX});else make_xlsx_lib(XLSX);if(typeof window!=="undefined"&&!window.XLSX)try{window.XLSX=XLSX}catch(e){}
 
 </script>
+<script type="module">
+  import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+  // The URL + anon key below are not secrets (the anon key is designed to be public, like a Firebase
+  // web config) — access control is enforced by the Postgres row-level-security policies created via
+  // supabase_schema.sql (public read, public insert, no update/delete), not by hiding these values.
+  // Inline onclick="" handlers in the rest of this file look up names on `window`, so the client
+  // created here (module-scoped, not global) is re-exposed onto window for the main script to use.
+  const SUPABASE_URL = "https://vyzzvawfqdcfuwkofnuu.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_mtZtn8RevTY7DmZA83WK0A_GN2N8pJ8";
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  window.sb = supabase;
+  window.dispatchEvent(new Event('supabase-ready'));
+</script>
 <script>
 /* ---------------- CSV parsing (RFC4180-ish) ---------------- */
 function parseCSV(text){
@@ -912,43 +1002,223 @@ function parseCSV(text){
   return rows.map(r => { const o = {}; header.forEach((h,idx)=>o[h]=r[idx]!==undefined?r[idx]:''); return o; });
 }
 
-/* ---------------- filename matching ---------------- */
-const EXPECTED = {
-  habitat: 'Habitat Restoration', sectionEspece: 'Section - Espèce',
-  deratTahiti: 'Derat Tahiti', managementUnit: 'Management Unit',
-  deratisation: 'Dératisation', sectionChecks: 'Section - Checks',
-  espece: 'Espèce', controleEmergentes: 'Contrôle des emergentes'
-};
-function normalizeName(s){
-  return s.replace(/\.csv$/i,'').normalize('NFD').replace(/[̀-ͯ]/g,'')
-    .toLowerCase().replace(/\s+/g,' ').trim();
-}
-const EXPECTED_NORM = {}; for (const k in EXPECTED) EXPECTED_NORM[k] = normalizeName(EXPECTED[k]);
-const REQUIRED = ['habitat','sectionEspece','deratTahiti','managementUnit'];
-
 let tables = {};
 let enriched = null;
 
 let pastData = null;
 
-document.getElementById('fileInput').addEventListener('change', async (e) => {
-  const msgs = [];
-  for (const file of e.target.files){
-    const norm = normalizeName(file.name);
-    const key = Object.keys(EXPECTED_NORM).find(k => EXPECTED_NORM[k] === norm);
-    if (!key){ msgs.push(`<li class="warn">⚠ Not recognized, ignored: ${file.name}</li>`); continue; }
-    const text = await file.text();
-    tables[key] = parseCSV(text);
-    msgs.push(`<li class="ok">✓ ${file.name} → ${tables[key].length} rows (${EXPECTED[key]})</li>`);
+/* ---------------- live shared data: static reference JSON + Supabase (replaces CSV upload) ----------------
+   Reference tables (Management Unit, Derat Tahiti, Espèce) rarely change and aren't edited via the new
+   forms, so they're plain static JSON fetched once. Habitat Restoration and Dératisation are the two
+   tables the forms write to, so they're read live from Supabase (Postgres) and re-fetched whenever a
+   Realtime change event fires — every visitor (and every open tab) re-renders automatically the moment
+   anyone submits a new action, no refresh needed. Species/checks are stored as a jsonb column per row
+   (one row per action, not a separate child table) and flattened back into the same flat-row shape
+   (tables.sectionEspece / tables.sectionChecks) that buildEnriched() already expects unchanged. */
+let dataLoaded = { ref: false, habitat: false, derat: false };
+
+function whenSupabaseReady(cb){
+  if (window.sb) cb(); else window.addEventListener('supabase-ready', cb, { once: true });
+}
+
+async function loadReferenceData(){
+  const [mu, dt, es] = await Promise.all([
+    fetch('data/management_unit.json').then(r => r.json()),
+    fetch('data/derat_tahiti.json').then(r => r.json()),
+    fetch('data/espece.json').then(r => r.json()),
+  ]);
+  tables.managementUnit = mu; tables.deratTahiti = dt; tables.espece = es;
+  resetUnitStationsCache();
+  dataLoaded.ref = true;
+  populateFormReferenceOptions();
+  maybeBuildEnriched();
+}
+
+function dbRowToHabitatRow(r){
+  return {
+    Identifier: String(r.id), Date: r.date||'', Name: r.name||'', Valley: r.valley||'', 'Unit Name': r.unit_name||'',
+    Action: r.action||'', 'Type of day work': r.type_of_day_work||'', 'Number of Person': r.number_of_person||'',
+    'Précision Localisation (rat station name)': r.precision_localisation||'',
+    '% cleaned at the end of the day': r.pct_cleaned_end_of_day||'',
+    '% cleaned at arrival': r.pct_cleaned_arrival||'', '% evaluation': r.pct_evaluation||'',
+    Comment: r.comment||''
+  };
+}
+
+async function fetchHabitatRestoration(){
+  const { data, error } = await window.sb.from('habitat_restoration').select('*').order('id');
+  if (error){
+    document.getElementById('liveDataStatus').innerHTML = `<span class="err">Error loading habitat restoration data: ${escapeHtml(error.message)}</span>`;
+    return;
   }
-  resetUnitStationsCache(); // managementUnit/deratTahiti may have just been replaced
-  document.getElementById('uploadStatus').innerHTML = msgs.join('');
-  const missing = REQUIRED.filter(k => !tables[k]);
-  document.getElementById('buildBtn').disabled = missing.length > 0;
-  document.getElementById('buildHint').textContent = missing.length
-    ? 'Missing: ' + missing.map(k=>EXPECTED[k]).join(', ')
-    : 'All required files are loaded.';
-});
+  const habitat = [], sectionEspece = [];
+  for (const r of data){
+    habitat.push(dbRowToHabitatRow(r));
+    for (const sp of (r.species||[])){
+      sectionEspece.push({ Identifier: String(r.id), 'Espèce': [sp.name,sp.common,sp.type].join(' | '), Number: sp.number });
+    }
+  }
+  tables.habitat = habitat; tables.sectionEspece = sectionEspece;
+  dataLoaded.habitat = true;
+  document.getElementById('liveDataStatus').textContent = `Connected — ${habitat.length} habitat restoration actions loaded from the shared database.`;
+  maybeBuildEnriched();
+}
+
+async function fetchDeratisation(){
+  const { data, error } = await window.sb.from('deratisation').select('*').order('id');
+  if (error){
+    document.getElementById('deratDataStatus').innerHTML = `<span class="err">Error loading dératisation data: ${escapeHtml(error.message)}</span>`;
+    return;
+  }
+  const deratisation = [], sectionChecks = [];
+  for (const r of data){
+    deratisation.push({ Identifier: String(r.id), Date: r.date||'', Observer: r.observer||'', Zone: r.zone||'', Passage: r.passage||'' });
+    for (const c of (r.checks||[])){
+      sectionChecks.push({ Identifier: String(r.id), Derat: c.station, Conso: c.conso });
+    }
+  }
+  tables.deratisation = deratisation; tables.sectionChecks = sectionChecks;
+  dataLoaded.derat = true;
+  document.getElementById('deratDataStatus').textContent = `${deratisation.length} dératisation patrols loaded from the shared database.`;
+}
+
+function subscribeHabitatRestoration(){
+  fetchHabitatRestoration();
+  window.sb.channel('habitat_restoration_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'habitat_restoration' }, () => fetchHabitatRestoration())
+    .subscribe();
+}
+
+function subscribeDeratisation(){
+  fetchDeratisation();
+  window.sb.channel('deratisation_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'deratisation' }, () => fetchDeratisation())
+    .subscribe();
+}
+
+function maybeBuildEnriched(){
+  if (!dataLoaded.ref || !dataLoaded.habitat) return;
+  onDataUpdated();
+}
+
+/* ---------------- Habitat Restoration entry form ---------------- */
+function populateFormReferenceOptions(){
+  const zones = [...new Set((tables.deratTahiti||[]).map(s => s.Ligne_stat).filter(Boolean))].sort();
+  document.getElementById('drZone').innerHTML = '<option value="">Choose…</option>' + zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join('');
+}
+
+function onHrValleyChange(){
+  const valley = document.getElementById('hrValley').value;
+  const unitSel = document.getElementById('hrUnit');
+  if (!valley){ unitSel.innerHTML = '<option value="">Choose a valley first</option>'; document.getElementById('hrStationList').innerHTML = ''; return; }
+  const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+  unitSel.innerHTML = '<option value="">Choose…</option>' + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
+  document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+}
+
+let hrSpeciesRowCount = 0;
+function addHrSpeciesRow(){
+  const wrap = document.getElementById('hrSpeciesRows');
+  const idx = hrSpeciesRowCount++;
+  const speciesOptions = [...new Set((tables.espece||[]).map(e => e.Name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const div = document.createElement('div');
+  div.className = 'row'; div.style.marginBottom = '6px'; div.id = `hrSpeciesRow${idx}`;
+  div.innerHTML = `
+    <select class="hr-species-name">
+      <option value="">Choose a species…</option>
+      ${speciesOptions.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+    </select>
+    <input type="number" class="hr-species-number" min="0" step="1" placeholder="number" style="width:90px;">
+    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('hrSpeciesRow${idx}').remove()">×</button>`;
+  wrap.appendChild(div);
+}
+
+async function submitHabitatForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('hrSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const species = [...document.querySelectorAll('#hrSpeciesRows > div')].map(row => {
+      const name = row.querySelector('.hr-species-name').value;
+      const number = parseInt(row.querySelector('.hr-species-number').value, 10) || 0;
+      if (!name) return null;
+      const espRow = (tables.espece||[]).find(e => e.Name === name);
+      return { name, common: espRow ? espRow['Common Name'] : '', type: espRow ? espRow.Type : '', number };
+    }).filter(Boolean);
+
+    const newRow = {
+      date: document.getElementById('hrDate').value,
+      name: document.getElementById('hrName').value,
+      valley: document.getElementById('hrValley').value,
+      unit_name: document.getElementById('hrUnit').value,
+      action: document.getElementById('hrAction').value,
+      type_of_day_work: document.getElementById('hrType').value,
+      number_of_person: document.getElementById('hrPeople').value,
+      precision_localisation: document.getElementById('hrStations').value,
+      pct_cleaned_arrival: document.getElementById('hrPctArrival').value,
+      pct_cleaned_end_of_day: document.getElementById('hrPctEnd').value,
+      pct_evaluation: document.getElementById('hrPctEval').value,
+      comment: document.getElementById('hrComment').value,
+      species,
+    };
+    const { error } = await window.sb.from('habitat_restoration').insert(newRow);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Submitted — updating the charts and map above…</span>';
+    await fetchHabitatRestoration(); // don't wait on the Realtime echo for the submitter's own update
+    document.getElementById('hrForm').reset();
+    document.getElementById('hrSpeciesRows').innerHTML = '';
+    document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
+    document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+/* ---------------- Dératisation entry form ---------------- */
+function onDrZoneChange(){
+  const zone = document.getElementById('drZone').value;
+  const wrap = document.getElementById('drChecksWrap');
+  if (!zone){ wrap.innerHTML = ''; return; }
+  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Ligne_stat === zone).map(s => s.Station).filter(Boolean))].sort();
+  if (!stations.length){ wrap.innerHTML = '<span class="muted">No registered station found for this zone.</span>'; return; }
+  wrap.innerHTML = '<div class="muted" style="margin-bottom:4px;">Bait consumption (Conso 0–4) per station:</div>' +
+    '<div class="grid3">' + stations.map(s => `
+      <div class="stat" style="text-align:left;padding:6px 10px;">
+        <label class="muted" style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+          ${escapeHtml(s)}
+          <input type="number" class="dr-conso" data-station="${escapeHtml(s)}" min="0" max="4" step="1" style="width:55px;">
+        </label>
+      </div>`).join('') + '</div>';
+}
+
+async function submitDeratisationForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('drSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const checks = [...document.querySelectorAll('.dr-conso')]
+      .filter(inp => inp.value !== '')
+      .map(inp => ({ station: inp.dataset.station, conso: parseInt(inp.value, 10) }));
+    const newRow = {
+      date: document.getElementById('drDate').value.replace('T', ' '),
+      observer: document.getElementById('drObserver').value,
+      zone: document.getElementById('drZone').value,
+      passage: document.getElementById('drPassage').value,
+      checks,
+    };
+    const { error } = await window.sb.from('deratisation').insert(newRow);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
+    await fetchDeratisation(); // don't wait on the Realtime echo for the submitter's own update
+    document.getElementById('drForm').reset();
+    document.getElementById('drChecksWrap').innerHTML = '';
+    const now = new Date(); const pad = n => String(n).padStart(2,'0');
+    document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
 
 /* ---------------- past-data workbook (.xlsx) parsing ---------------- */
 function parsePastDataWorkbook(arrayBuffer){
@@ -983,6 +1253,18 @@ try {
 } catch (err) {
   console.error('Error loading the embedded historical data:', err);
 }
+
+/* ---------------- bootstrap: kick off the automatic live-data load ---------------- */
+whenSupabaseReady(() => {
+  subscribeHabitatRestoration();
+  subscribeDeratisation();
+});
+loadReferenceData();
+document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+(function setDefaultDrDate(){
+  const now = new Date(), pad = n => String(n).padStart(2,'0');
+  document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+})();
 
 /* ---------------- WKT geometry -> centroid ---------------- */
 function splitTopLevel(str, sep){
@@ -1162,7 +1444,15 @@ function downloadCSV(filename, rows, fields){
 }
 
 /* ---------------- build button ---------------- */
-document.getElementById('buildBtn').addEventListener('click', () => {
+// Runs every time the live data changes — the first time it loads, and again automatically whenever
+// anyone (anywhere) submits one of the two forms, since this is called after every Supabase Realtime
+// change event. Filter dropdowns are rebuilt from scratch (the set of zones/stations may have grown), so
+// the user's current selection is captured beforehand and restored afterward if it's still valid —
+// otherwise an in-progress filter silently jumped back to "All" every time someone else added an action.
+function onDataUpdated(){
+  const prevZone = document.getElementById('chartZone').value;
+  const prevStation = document.getElementById('chartStation').value;
+
   enriched = buildEnriched();
   const { mainRows, stationRows, speciesRows, unmatched } = enriched;
   const counts = { rat_station:0, management_unit:0, none:0 };
@@ -1187,9 +1477,12 @@ document.getElementById('buildBtn').addEventListener('click', () => {
   document.getElementById('analysisCard').style.display = '';
   document.getElementById('mapCard').style.display = '';
   refreshChartZoneOptions();
+  if ([...document.getElementById('chartZone').options].some(o => o.value === prevZone)) document.getElementById('chartZone').value = prevZone;
   refreshChartStationOptions();
+  if ([...document.getElementById('chartStation').options].some(o => o.value === prevStation)) document.getElementById('chartStation').value = prevStation;
   renderPreview(mainRows);
   renderMap();
+  if (currentChartView) rerenderCurrentChart();
 
   document.getElementById('pastDataCard').style.display = '';
   const pdStatus = document.getElementById('pastDataStatus');
@@ -1200,7 +1493,7 @@ document.getElementById('buildBtn').addEventListener('click', () => {
     pdStatus.textContent = 'Error loading the embedded historical data — check the browser console.';
     document.getElementById('pastDataContent').style.display = 'none';
   }
-});
+}
 
 /* ---------------- chart filters (valley -> zone -> rat station) ---------------- */
 function getFilteredMainRows(valley, zone, station){
@@ -2033,7 +2326,7 @@ function pastUnitLookupMap(){
 const STALE_DAYS = 180;
 
 // Per-zone inputs for the "Cleaning % trend over time" priority view: reuses the exact same combined
-// historical+NRDS estimate (recency- and station-coverage-weighted) shown on the map and in section 5,
+// historical+NRDS estimate (recency- and station-coverage-weighted) shown on the map and in section 6,
 // so a zone ranked "worst" here is ranked worst everywhere else in the app too — one number, several views.
 // includeHist=false simply withholds the historical lookup, which combinedCleaningEstimate already
 // treats as "no historical snapshot" and falls back to an NRDS-only estimate — no separate code path needed.
@@ -2080,14 +2373,14 @@ function renderZonePriority(valley, rows){
 
   let html = `<label class="muted" style="display:block;margin-bottom:8px;">
     <input type="checkbox" id="zonePriorityHistToggle" ${includeHist?'checked':''} onchange="toggleZonePriorityHistorical(this.checked)">
-    Include historical data (from "5. Integration with past data") in the ranking below
+    Include historical data (from "6. Integration with past data") in the ranking below
   </label>`;
   html += `<div class="hint" style="margin-bottom:6px;">Zone priority overview, dirtiest/least-recently-assessed zones first — one merged view per zone: the small dots
     are every individual NRDS session recorded there (more recent = larger/darker, hover for date and value) — note this only counts sessions where a
     cleaning % was actually logged, so a zone whose visits were mostly planting (no cleaning % field filled in) will show fewer dots than its total
     number of NRDS entries` +
     (includeHist ? `, the hollow diamond (if present) is the historical baseline, and the bold outlined dot is the combined estimate (recency- and
-    coverage-weighted blend of the two, the same method used on the map and in section 5)` : ` and the bold outlined dot is the current NRDS-only estimate
+    coverage-weighted blend of the two, the same method used on the map and in section 6)` : ` and the bold outlined dot is the current NRDS-only estimate
     — historical data is excluded by the checkbox above`) + `. Click any dot/diamond to pin a popup with the full breakdown (works on touch too).</div>`;
   html += `<div class="grid3" style="margin-bottom:10px;">
     <div class="stat"><div class="num">${data.length}</div><div class="lbl">zones in scope</div></div>
