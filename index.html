@@ -1093,6 +1093,7 @@ async function fetchDeratisation(){
   dataLoaded.derat = true;
   document.getElementById('deratDataStatus').textContent = `${deratisation.length} dératisation patrols loaded from the shared database.`;
   renderDeratPreview();
+  if (enriched) onDataUpdated(); // keeps the "total actions" stat (habitat + dératisation) in sync when derat loads/changes after habitat
 }
 
 /* Dératisation has no chart/map, so without this table a successful submission had no visible
@@ -1523,12 +1524,14 @@ function onDataUpdated(){
   const { mainRows, stationRows, speciesRows, unmatched } = enriched;
   const counts = { rat_station:0, management_unit:0, none:0 };
   mainRows.forEach(r => counts[r.Location_Precision]++);
+  const habitatCount = mainRows.length;
+  const deratCount = (tables.deratisation||[]).length;
 
   let html = `<div class="grid3">
-    <div class="stat"><div class="num">${mainRows.length}</div><div class="lbl">total actions</div></div>
-    <div class="stat"><div class="num">${counts.rat_station}</div><div class="lbl">geolocated at station level</div></div>
-    <div class="stat"><div class="num">${counts.management_unit}</div><div class="lbl">geolocated at unit level</div></div>
-    <div class="stat"><div class="num">${counts.none}</div><div class="lbl">no location</div></div>
+    <div class="stat"><div class="num">${habitatCount + deratCount}</div><div class="lbl">total actions</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${habitatCount} habitat restoration · ${deratCount} dératisation</div></div>
+    <div class="stat"><div class="num">${counts.rat_station}</div><div class="lbl">habitat restoration: geolocated at station level</div></div>
+    <div class="stat"><div class="num">${counts.management_unit}</div><div class="lbl">habitat restoration: geolocated at unit level</div></div>
+    <div class="stat"><div class="num">${counts.none}</div><div class="lbl">habitat restoration: no location</div></div>
   </div>`;
   if (unmatched.length){
     html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
