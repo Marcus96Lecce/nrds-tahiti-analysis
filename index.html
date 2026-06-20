@@ -1516,6 +1516,31 @@ function downloadOriginalFormat(which){
 // change event. Filter dropdowns are rebuilt from scratch (the set of zones/stations may have grown), so
 // the user's current selection is captured beforehand and restored afterward if it's still valid —
 // otherwise an in-progress filter silently jumped back to "All" every time someone else added an action.
+// Area-weighted average of latestUnitStatus()'s "% cleaned at end of day" per zone, same convention as
+// weightedPctNowFromNRDS() (units with no cleaning record yet are excluded from both sides, not treated
+// as 0%) — generalized here to also return the all-valleys overall figure, not just one valley at a time.
+function weightedCleaningPctSummary(){
+  const statusMap = latestUnitStatus();
+  const perValley = {};
+  let totalArea = 0, sum = 0;
+  for (const u of tables.managementUnit||[]){
+    const st = statusMap.get(u['Nom']);
+    if (!st) continue;
+    const area = +u['Surface'] || 0;
+    const valley = u['Vallee'];
+    if (!perValley[valley]) perValley[valley] = { area:0, sum:0 };
+    perValley[valley].area += area; perValley[valley].sum += area*st.pct;
+    totalArea += area; sum += area*st.pct;
+  }
+  const byValley = {};
+  for (const v in perValley) byValley[v] = perValley[v].area ? (perValley[v].sum/perValley[v].area) : null;
+  return { overall: totalArea ? sum/totalArea : null, byValley };
+}
+function lastActionOfType(mainRows, actionValue){
+  const rows = mainRows.filter(r => r.Action === actionValue && r.Date);
+  rows.sort((a,b) => new Date(b.Date) - new Date(a.Date));
+  return rows[0] || null;
+}
 function onDataUpdated(){
   const prevZone = document.getElementById('chartZone').value;
   const prevStation = document.getElementById('chartStation').value;
@@ -1527,11 +1552,25 @@ function onDataUpdated(){
   const habitatCount = mainRows.length;
   const deratCount = (tables.deratisation||[]).length;
 
+  const cleaningSummary = weightedCleaningPctSummary();
+  const valleyOrder = ['Papehue','Maruapo','Hopa'];
+  const cleaningByValleyText = valleyOrder.filter(v => cleaningSummary.byValley[v] != null)
+    .map(v => `${v} ${cleaningSummary.byValley[v].toFixed(0)}%`).join(' · ') || 'no data yet';
+
+  const lastCutting = lastActionOfType(mainRows, 'Coupe du sous-bois (cutting undergrowth)');
+  const lastPlantation = lastActionOfType(mainRows, 'Plantation');
+  const cuttingText = lastCutting
+    ? `${escapeHtml(lastCutting.Unit_Name)} (${escapeHtml(lastCutting.Valley)}) — ${lastCutting.Pct_cleaned_end_of_day || '?'}%`
+    : '—';
+  const plantationSpecies = lastPlantation ? (lastPlantation.Species_Planted||'').split(';').filter(Boolean).map(escapeHtml).join(', ') : '';
+  const plantationText = lastPlantation
+    ? `Last plantation: ${escapeHtml(lastPlantation.Unit_Name)} (${escapeHtml(lastPlantation.Valley)}) — ${plantationSpecies || 'no species recorded'}`
+    : 'No plantation recorded yet';
+
   let html = `<div class="grid3">
     <div class="stat"><div class="num">${habitatCount + deratCount}</div><div class="lbl">total actions</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${habitatCount} habitat restoration · ${deratCount} dératisation</div></div>
-    <div class="stat"><div class="num">${counts.rat_station}</div><div class="lbl">habitat restoration: geolocated at station level</div></div>
-    <div class="stat"><div class="num">${counts.management_unit}</div><div class="lbl">habitat restoration: geolocated at unit level</div></div>
-    <div class="stat"><div class="num">${counts.none}</div><div class="lbl">habitat restoration: no location</div></div>
+    <div class="stat"><div class="num">${cleaningSummary.overall != null ? cleaningSummary.overall.toFixed(0)+'%' : '—'}</div><div class="lbl">area-weighted cleaning %</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${cleaningByValleyText}</div></div>
+    <div class="stat"><div class="num" style="font-size:15px;">${cuttingText}</div><div class="lbl">last cutting undergrowth: zone, valley & % cleaned</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${plantationText}</div></div>
   </div>`;
   if (unmatched.length){
     html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
