@@ -1989,7 +1989,7 @@ function ensureMap(){
     maxZoom: 19, subdomains: 'abc', attribution: '&copy; OpenStreetMap contributors'
   });
   satellite.addTo(leafletMap);
-  L.control.layers({ 'Satellite (Esri)': satellite, 'Street map (OSM)': streets }, {}, { collapsed: false, position: 'topright' }).addTo(leafletMap);
+  L.control.layers({ 'Satellite (Esri)': satellite, 'Street map (OSM)': streets }, {}, { collapsed: window.innerWidth < 760, position: 'topright' }).addTo(leafletMap);
   L.control.scale({ metric: true, imperial: false }).addTo(leafletMap);
   unitLayerGroup = L.layerGroup().addTo(leafletMap);
   pointLayerGroup = L.layerGroup().addTo(leafletMap);
