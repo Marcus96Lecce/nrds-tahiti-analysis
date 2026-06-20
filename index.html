@@ -782,7 +782,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Action:
-          <select id="hrAction" required>
+          <select id="hrAction" onchange="onHrActionChange()" required>
             <option value="">Choose…</option>
             <option value="Plantation">Plantation</option>
             <option value="Entretien des plantations (cleaning around plantation)">Entretien des plantations (cleaning around plantation)</option>
@@ -802,17 +802,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="muted">Rat station(s), comma-separated: <input type="text" id="hrStations" list="hrStationList" placeholder="e.g. A5,A6"></label>
         <datalist id="hrStationList"></datalist>
       </div>
-      <div class="row" style="margin-bottom:10px;">
+      <div class="row" id="hrCleaningPctRow" style="margin-bottom:10px;display:none;">
         <label class="muted">% cleaned at arrival: <input type="number" id="hrPctArrival" min="0" max="100" style="width:70px;"></label>
         <label class="muted">% cleaned at end of day: <input type="number" id="hrPctEnd" min="0" max="100" style="width:70px;"></label>
+      </div>
+      <div class="row" id="hrEvalRow" style="margin-bottom:10px;display:none;">
         <label class="muted">% evaluation: <input type="number" id="hrPctEval" min="0" max="100" style="width:70px;"></label>
       </div>
       <div style="margin-bottom:10px;">
         <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
         <textarea id="hrComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
       </div>
-      <div style="margin-bottom:10px;">
-        <div class="muted" style="margin-bottom:4px;">Species planted (optional):</div>
+      <div id="hrSpeciesSection" style="margin-bottom:10px;display:none;">
+        <div class="muted" style="margin-bottom:4px;">Species planted:</div>
         <div id="hrSpeciesRows"></div>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
       </div>
@@ -1117,6 +1119,17 @@ function onHrValleyChange(){
   document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
 }
 
+function onHrActionChange(){
+  const action = document.getElementById('hrAction').value;
+  const isPlantation = action === 'Plantation';
+  const isCleaningType = action === 'Entretien des plantations (cleaning around plantation)' || action === 'Coupe du sous-bois (cutting undergrowth)';
+  document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
+  document.getElementById('hrEvalRow').style.display = isPlantation ? '' : 'none';
+  document.getElementById('hrSpeciesSection').style.display = isPlantation ? '' : 'none';
+  if (!isCleaningType){ document.getElementById('hrPctArrival').value = ''; document.getElementById('hrPctEnd').value = ''; }
+  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; }
+}
+
 let hrSpeciesRowCount = 0;
 function addHrSpeciesRow(){
   const wrap = document.getElementById('hrSpeciesRows');
@@ -1147,12 +1160,18 @@ async function submitHabitatForm(evt){
       return { name, common: espRow ? espRow['Common Name'] : '', type: espRow ? espRow.Type : '', number };
     }).filter(Boolean);
 
+    const action = document.getElementById('hrAction').value;
+    if (action === 'Plantation' && species.length === 0){
+      statusEl.innerHTML = '<span class="err">Add at least one planted species — required for a Plantation action.</span>';
+      return;
+    }
+
     const newRow = {
       date: document.getElementById('hrDate').value,
       name: document.getElementById('hrName').value,
       valley: document.getElementById('hrValley').value,
       unit_name: document.getElementById('hrUnit').value,
-      action: document.getElementById('hrAction').value,
+      action,
       type_of_day_work: document.getElementById('hrType').value,
       number_of_person: document.getElementById('hrPeople').value,
       precision_localisation: document.getElementById('hrStations').value,
@@ -1170,6 +1189,7 @@ async function submitHabitatForm(evt){
     document.getElementById('hrSpeciesRows').innerHTML = '';
     document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
     document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+    onHrActionChange();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
   }
@@ -1182,12 +1202,13 @@ function onDrZoneChange(){
   if (!zone){ wrap.innerHTML = ''; return; }
   const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Ligne_stat === zone).map(s => s.Station).filter(Boolean))].sort();
   if (!stations.length){ wrap.innerHTML = '<span class="muted">No registered station found for this zone.</span>'; return; }
-  wrap.innerHTML = '<div class="muted" style="margin-bottom:4px;">Bait consumption (Conso 0–4) per station:</div>' +
+  const checkOptions = '<option value="">—</option><option value="0">0 — no activity</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4 — fully consumed</option>';
+  wrap.innerHTML = '<div class="muted" style="margin-bottom:4px;">Checks (bait consumption, 0–4) per station:</div>' +
     '<div class="grid3">' + stations.map(s => `
       <div class="stat" style="text-align:left;padding:6px 10px;">
         <label class="muted" style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
           ${escapeHtml(s)}
-          <input type="number" class="dr-conso" data-station="${escapeHtml(s)}" min="0" max="4" step="1" style="width:55px;">
+          <select class="dr-conso" data-station="${escapeHtml(s)}">${checkOptions}</select>
         </label>
       </div>`).join('') + '</div>';
 }
