@@ -813,6 +813,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </label>
     </div>
     <div class="row" style="margin-bottom:12px;">
+      <label class="muted">
+        <input type="checkbox" id="ratLinesOverlayToggle" onchange="toggleRatLinesOverlay(this.checked)">
+        Overlay all rat lines (Ligne_stat)
+      </label>
+    </div>
+    <div class="row" style="margin-bottom:12px;">
       <label class="muted date-label">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
       <label class="muted date-label">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
       <button class="secondary date-reset-btn" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
@@ -2301,8 +2307,9 @@ function speciesSummaryByAction(){
 let mapValleyFilter = 'all';
 let mapLayer = 'all_obs';
 let showStationsOverlay = false;
+let showRatLines = false;
 let histZoneMode = null; // null | 'cleaning' | 'combined' | 'planting' | 'plantingActivity' — overrides zone fill color; only the pair matching the active mapLayer ('cleaning'/'combined' under "Cleaning status by zone", 'planting'/'plantingActivity' under "Planted species") is ever reachable via the UI
-let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null, newLinesLayerGroup = null;
+let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null, newLinesLayerGroup = null, ratLinesLayerGroup = null;
 
 function ensureMap(){
   if (leafletMap) return;
@@ -2320,6 +2327,7 @@ function ensureMap(){
   pointLayerGroup = L.layerGroup().addTo(leafletMap);
   stationsOverlayGroup = L.layerGroup().addTo(leafletMap);
   newLinesLayerGroup = L.layerGroup().addTo(leafletMap);
+  ratLinesLayerGroup = L.layerGroup().addTo(leafletMap);
 }
 
 /* ---------------- "Add Elements" draw mode ---------------- */
@@ -2501,6 +2509,20 @@ function toggleStationsOverlay(checked){
   showStationsOverlay = checked;
   renderMap(false);
 }
+function toggleRatLinesOverlay(checked){
+  showRatLines = checked;
+  renderMap(false);
+}
+// Reconstructs each Ligne_stat's physical station order from its codes (e.g. S1, S2, ..., S6, S6A,
+// S6B, S7, ..., S14, ..., S21) — a plain alphabetic sort would put "S14" before "S2". Splits each
+// code into its leading letters / numeric part / trailing letters and compares those separately.
+function naturalStationCompare(a, b){
+  const pa = a.match(/^(\D*)(\d+)(\D*)$/), pb = b.match(/^(\D*)(\d+)(\D*)$/);
+  if (!pa || !pb) return a.localeCompare(b);
+  if (pa[1] !== pb[1]) return pa[1].localeCompare(pb[1]);
+  const na = parseInt(pa[2],10), nb = parseInt(pb[2],10);
+  return na !== nb ? na - nb : pa[3].localeCompare(pb[3]);
+}
 function toggleHistCleaning(checked){
   histZoneMode = checked ? 'cleaning' : null;
   if (checked) document.getElementById('histCombinedToggle').checked = false;
@@ -2535,6 +2557,7 @@ function renderMap(shouldFit){
   pointLayerGroup.clearLayers();
   stationsOverlayGroup.clearLayers();
   newLinesLayerGroup.clearLayers();
+  ratLinesLayerGroup.clearLayers();
   // user-drawn lines have no Valley of their own, so they always render regardless of the valley
   // filter/units-empty check below — they're independent annotations, not part of the zone registry
   const lineBoundsLatLngs = [];
@@ -2547,6 +2570,32 @@ function renderMap(shouldFit){
     poly.bindPopup(html);
     poly.addTo(newLinesLayerGroup);
     latlngs.forEach(ll => lineBoundsLatLngs.push(ll));
+  }
+  // existing NRDS rat-patrol lines (Ligne_stat, e.g. "Hopa-A") — connects each line's own stations
+  // in natural code order to approximate the physical patrol line; same "no Valley of its own to be
+  // gated by units.length" reasoning as the user-drawn lines above
+  if (showRatLines){
+    const stations = tables.deratTahiti.filter(r => mapValleyFilter==='all' || r['Vallee']===mapValleyFilter);
+    const byLine = new Map();
+    for (const s of stations){
+      const lat = +s['Latitude'], lon = +s['Longitude'];
+      if (!s['Ligne_stat'] || !isFinite(lat) || !isFinite(lon)) continue;
+      const key = s['Vallee'] + '||' + s['Ligne_stat'];
+      if (!byLine.has(key)) byLine.set(key, []);
+      byLine.get(key).push({ code: s['Station'], lat, lon });
+    }
+    for (const [key, pts] of byLine){
+      if (pts.length < 2) continue;
+      pts.sort((a,b) => naturalStationCompare(a.code, b.code));
+      const latlngs = pts.map(p => [p.lat, p.lon]);
+      const [valley, ligneStat] = key.split('||');
+      const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
+      const poly = L.polyline(latlngs, { color:'#ffaa00', weight:2, dashArray:'4,4', opacity:0.85 });
+      poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+      poly.bindPopup(html);
+      poly.addTo(ratLinesLayerGroup);
+      latlngs.forEach(ll => lineBoundsLatLngs.push(ll));
+    }
   }
   if (!units.length){
     document.getElementById('mapLegend').innerHTML = '<span class="muted">No management unit for this valley.</span>';
@@ -2774,6 +2823,9 @@ function renderMap(shouldFit){
   }
   if (newLineRows.length){
     legend += `<br><span class="legend-item">— colored lines = custom lines drawn via "Add Elements" (always shown, regardless of layer)</span>`;
+  }
+  if (showRatLines){
+    legend += `<br><span class="legend-item"><span style="display:inline-block;width:16px;border-top:2px dashed #ffaa00;vertical-align:middle;"></span> dashed amber lines = existing rat-patrol lines (Ligne_stat), stations connected in code order</span>`;
   }
   legend += `<br><span class="muted">Hover (or tap) a point/zone for details — click to pin the popup.</span>`;
   document.getElementById('mapLegend').innerHTML = legend;
