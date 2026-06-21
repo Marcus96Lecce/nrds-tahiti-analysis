@@ -847,12 +847,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
   </div>
 
-  <div class="card" id="deratPreviewCard" style="display:none;">
-    <h2>Recent Dératisation patrols</h2>
-    <div class="hint">Most recent first. Confirms a submission was recorded — the same data is in the ⬇ Dératisation download above.</div>
-    <div class="table-scroll"><table class="preview" id="deratPreviewTable"></table></div>
-  </div>
-
   <div class="card" id="analysisCard" style="display:none;">
     <h2>4. Chart analysis</h2>
     <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
@@ -876,6 +870,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
       <button class="secondary" onclick="renderSpecies()">Most-planted species</button>
       <button class="secondary" onclick="renderWorkforce()">People involved (volunteer vs routine)</button>
+      <button class="secondary" onclick="renderDeratChart()">Bait consumption (Checks)</button>
     </div>
     <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis to run.</span></div>
     <div id="chartPopup" class="chart-popup" style="display:none;"></div>
@@ -896,6 +891,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="secondary map-layer-btn active" data-layer="all_obs" onclick="setMapLayer('all_obs')">All observations</button>
       <button class="secondary map-layer-btn" data-layer="species" onclick="setMapLayer('species')">Planted species</button>
       <button class="secondary map-layer-btn" data-layer="cleaning" onclick="setMapLayer('cleaning')">Cleaning status by zone</button>
+      <button class="secondary map-layer-btn" data-layer="derat" onclick="setMapLayer('derat')">Bait consumption (Checks)</button>
       <label class="muted" style="margin-left:auto;">
         <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
         Overlay all rat stations
@@ -1092,28 +1088,7 @@ async function fetchDeratisation(){
   tables.deratisation = deratisation; tables.sectionChecks = sectionChecks;
   dataLoaded.derat = true;
   document.getElementById('deratDataStatus').textContent = `${deratisation.length} dératisation patrols loaded from the shared database.`;
-  renderDeratPreview();
   if (enriched) onDataUpdated(); // keeps the "total actions" stat (habitat + dératisation) in sync when derat loads/changes after habitat
-}
-
-/* Dératisation has no chart/map, so without this table a successful submission had no visible
-   confirmation anywhere in the app beyond the bare count above — shows the most recent patrols first. */
-function renderDeratPreview(){
-  const checksByIdent = new Map();
-  for (const c of tables.sectionChecks||[]){
-    if (!checksByIdent.has(c.Identifier)) checksByIdent.set(c.Identifier, []);
-    checksByIdent.get(c.Identifier).push(`${c.Derat}:${c.Conso}`);
-  }
-  const rows = [...(tables.deratisation||[])].reverse().slice(0, 30);
-  const cols = ['Identifier','Date','Observer','Zone','Passage'];
-  let html = '<thead><tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '<th>Checks</th></tr></thead><tbody>';
-  for (const r of rows){
-    html += '<tr>' + cols.map(c=>`<td>${escapeHtml(r[c]===undefined?'':r[c])}</td>`).join('')
-      + `<td>${escapeHtml((checksByIdent.get(r.Identifier)||[]).join(', '))}</td></tr>`;
-  }
-  html += '</tbody>';
-  document.getElementById('deratPreviewTable').innerHTML = html;
-  document.getElementById('deratPreviewCard').style.display = '';
 }
 
 function subscribeHabitatRestoration(){
@@ -1642,6 +1617,7 @@ function rerenderCurrentChart(){
   if (currentChartView === 'cleaning') renderCleaning();
   else if (currentChartView === 'species') renderSpecies();
   else if (currentChartView === 'workforce') renderWorkforce();
+  else if (currentChartView === 'derat') renderDeratChart();
 }
 
 function renderPreview(mainRows){
@@ -1971,6 +1947,91 @@ function renderWorkforce(){
   area.innerHTML = hint + dateFilterUi + summary + svg + legend;
 }
 
+// Dératisation has no Unit_Name/zone concept that matches Habitat Restoration's vocabulary (its own
+// Zone field is a Derat Tahiti "Ligne_stat" grouping like "Hopa-A", not a management unit), so this
+// chart only respects the Valley filter above, not Zone/Station — explained in its own hint text
+// rather than hiding those dropdowns. One bar per patrol that has at least one recorded check (same
+// one-mark-per-session/chronological convention as renderWorkforce()), height/color = that patrol's
+// average Conso (0-4) across its checked stations; color reuses pctColor() but inverted, since high
+// Conso (lots of bait eaten = more rat activity) is the "bad" end here, unlike cleaning % where high
+// is "good".
+function renderDeratChart(){
+  currentChartView = 'derat';
+  hideChartPopup();
+  const valley = document.getElementById('chartValley').value;
+  const area = document.getElementById('chartArea');
+
+  const checksByIdent = new Map();
+  for (const c of tables.sectionChecks||[]){
+    if (!checksByIdent.has(c.Identifier)) checksByIdent.set(c.Identifier, []);
+    checksByIdent.get(c.Identifier).push(c);
+  }
+
+  const rows = (tables.deratisation||[]).map(d => {
+    const checks = (checksByIdent.get(d.Identifier) || []).filter(c => c.Conso != null && c.Conso !== '' && isFinite(+c.Conso));
+    if (!checks.length || !d.Date) return null;
+    const avgConso = checks.reduce((s,c)=>s+(+c.Conso),0) / checks.length;
+    return { ...d, valley: (d.Zone||'').split('-')[0], checks, avgConso, ts: new Date(d.Date).getTime() };
+  }).filter(Boolean)
+    .filter(r => valley === 'all' || r.valley === valley)
+    .sort((a,b) => a.ts - b.ts);
+
+  if (!rows.length){ area.innerHTML = '<span class="muted">No dératisation patrol with a recorded check for this valley.</span>'; return; }
+  chartPopupData = [];
+
+  const W = Math.max(700, rows.length*55), H = 360, mL = 50, mR = 20, mT = 20, mB = 90;
+  const slotW = (W-mL-mR)/rows.length;
+  const xCenter = i => mL + (i+0.5)*slotW;
+  const barW = Math.min(36, slotW*0.6);
+  const yScale = v => H-mB - v/4*(H-mT-mB);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=4; v++){
+    const y = yScale(v);
+    svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
+    svg += svgEl('text',{x:mL-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#6b7569'}, v);
+  }
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  rows.forEach((r,i) => {
+    const x = xCenter(i), color = pctColor((4-r.avgConso)/4*100);
+    const y1 = yScale(0), y2 = yScale(r.avgConso);
+    const stationsTxt = r.checks.map(c=>`${c.Derat}: ${c.Conso}`).join(', ');
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.Date)}</div>
+      <div><b>Valley:</b> ${escapeHtml(r.valley)}</div>
+      <div><b>Zone:</b> ${escapeHtml(r.Zone||'—')}</div>
+      <div><b>Observer:</b> ${escapeHtml(r.Observer||'—')}</div>
+      <div><b>Passage #:</b> ${escapeHtml(r.Passage||'—')}</div>
+      <div><b>Average Conso:</b> ${r.avgConso.toFixed(1)}/4</div>
+      <div><b>Checks:</b> ${escapeHtml(stationsTxt)}</div>`) - 1;
+    svg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
+    svg += svgEl('title',{},`${r.valley} — ${r.Zone||''} — ${r.Date}\nAvg Conso: ${r.avgConso.toFixed(1)}/4\nClick for full details`);
+    svg += svgEl('rect',{x:x-barW/2,y:y2,width:barW,height:Math.max(0,y1-y2),fill:color});
+    svg += svgEl('text',{x,y:y2-6,'text-anchor':'middle','font-size':10.5,fill:'#23291f'}, r.avgConso.toFixed(1));
+    svg += svgEl('text',{x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, r.Date);
+    svg += `</g>`;
+  });
+  svg += `</svg>`;
+
+  const allConso = rows.flatMap(r => r.checks.map(c=>+c.Conso));
+  const avgOverall = allConso.reduce((s,v)=>s+v,0) / allConso.length;
+  const zeroCount = allConso.filter(v=>v===0).length;
+  const summary = `<div class="grid3" style="margin-bottom:10px;">
+    <div class="stat"><div class="num">${rows.length}</div><div class="lbl">patrols with at least one check</div></div>
+    <div class="stat"><div class="num">${avgOverall.toFixed(1)}</div><div class="lbl">average Conso (0–4), ${allConso.length} station checks</div></div>
+    <div class="stat"><div class="num">${zeroCount}</div><div class="lbl">checks with no activity (Conso 0)</div></div>
+  </div>`;
+  const legend = `<div style="margin-top:8px;">
+    <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>0 — no activity</span>
+    <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>2</span>
+    <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>4 — fully consumed</span>
+    <span class="legend-item">Each bar = one dératisation patrol, in chronological order; height/color = average Conso across its checked stations</span>
+    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the per-station breakdown. Only the Valley filter above applies here — Zone/Station use Habitat Restoration zone codes, which don't match dératisation's own zone naming.</span>
+  </div>`;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Bait consumption (Checks) per dératisation patrol over time — high Conso means more rat activity was found, so red/orange bars are the patrols that found the most.</div>`;
+  area.innerHTML = hint + summary + svg + legend;
+}
+
 function pctColor(pct){
   const stops = [[0,[214,39,40]],[50,[255,221,87]],[100,[44,160,44]]];
   let lo = stops[0], hi = stops[stops.length-1];
@@ -1999,6 +2060,27 @@ function latestStationStatus(){
       if (!cur || new Date(r.Date) > new Date(cur.date)){
         map.set(key, { pct:+r.Pct_cleaned_end_of_day, date:r.Date, valley:r.Valley, station:code });
       }
+    }
+  }
+  return map;
+}
+// Same "latest reading per station" idea as latestStationStatus(), for the Dératisation map layer —
+// keyed Valley||Station (Derat Tahiti station codes collide across valleys, same gotcha as everywhere
+// else this composite key is used). Valley is parsed from the patrol's own Zone field (e.g. "Hopa-A"),
+// since Dératisation has no separate Valley column.
+function latestStationConso(){
+  const patrolByIdent = new Map((tables.deratisation||[]).map(d => [d.Identifier, d]));
+  const map = new Map(); // key: Valley+'||'+Station
+  for (const c of tables.sectionChecks||[]){
+    if (c.Conso == null || c.Conso === '' || !isFinite(+c.Conso) || !c.Derat) continue;
+    const patrol = patrolByIdent.get(c.Identifier);
+    if (!patrol || !patrol.Date) continue;
+    const valley = (patrol.Zone||'').split('-')[0];
+    if (!valley) continue;
+    const key = valley + '||' + c.Derat;
+    const cur = map.get(key);
+    if (!cur || new Date(patrol.Date) > new Date(cur.date)){
+      map.set(key, { conso:+c.Conso, date:patrol.Date, valley, station:c.Derat });
     }
   }
   return map;
@@ -2251,6 +2333,27 @@ function renderMap(shouldFit){
     }
   }
 
+  if (mapLayer === 'derat'){
+    // discrete colored station dots, same visual language as the cleaning layer above — not a true
+    // blurred heat-density layer (no extra library needed for that), just per-station latest-Conso
+    // color, which already reads as a "where's the activity" map at this station density.
+    const consoMap = latestStationConso();
+    const stationCoordLookup = new Map(tables.deratTahiti.map(r => [r['Vallee']+'||'+r['Station'], r]));
+    for (const st of consoMap.values()){
+      if (mapValleyFilter !== 'all' && st.valley !== mapValleyFilter) continue;
+      const coordRow = stationCoordLookup.get(st.valley+'||'+st.station);
+      if (!coordRow) continue;
+      const lat = +coordRow['Latitude'], lon = +coordRow['Longitude'];
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const html = `<b>Station ${st.station}</b> (${st.valley})<br>Bait consumption — latest check (${st.date}): <b>${st.conso}/4</b>`;
+      const marker = L.circleMarker([lat, lon], { radius:7, color:'#222', weight:1.5, fillColor: pctColor((4-st.conso)/4*100), fillOpacity:0.9 });
+      marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+      marker.bindPopup(html);
+      marker.addTo(pointLayerGroup);
+      boundsLatLngs.push([lat, lon]);
+    }
+  }
+
   if (mapLayer === 'all_obs' || mapLayer === 'species'){
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter));
     if (mapLayer === 'species') rows = rows.filter(r => r.Species_Planted);
@@ -2339,6 +2442,12 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Introduced}"></span>Introduced only</span>
       <span class="legend-item"><span class="swatch" style="background:#9467bd"></span>Native + introduced</span>
       <span class="legend-item">point size ∝ number of individuals planted</span>`;
+  } else if (mapLayer === 'derat'){
+    legend += `
+      <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>0 — no activity</span>
+      <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>2</span>
+      <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>4 — fully consumed</span>
+      <span class="legend-item">dots = latest Checks (bait consumption) reading per rat station</span>`;
   } else {
     legend += `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
       <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
