@@ -13,12 +13,16 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);}
-  header{background:var(--green-dark);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+  header{background:var(--green-dark);color:#fff;padding:18px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px;}
   header h1{margin:0;font-size:20px;}
   header p{margin:4px 0 0;font-size:13px;opacity:.85;}
   .nav-btn{background:#fff;color:var(--green-dark);border:none;border-radius:50%;width:38px;height:38px;font-size:22px;
     font-weight:600;cursor:pointer;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center;}
   .nav-btn:hover{background:#eef5ee;}
+  .add-elements-menu{position:fixed;right:10px;background:#fff;border:1px solid var(--border);border-radius:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.18);padding:8px;z-index:1000;display:flex;flex-direction:column;gap:6px;
+    min-width:200px;max-width:calc(100vw - 20px);}
+  .add-elements-menu button{white-space:nowrap;text-align:left;}
   .wrap{max-width:1000px;margin:0 auto;padding:20px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   .card h2{margin:0 0 6px;font-size:16px;color:var(--green-dark);}
@@ -754,9 +758,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <h1>NRDS — Habitat Restoration Analysis</h1>
     <p>SOP Manu · Papehue, Maruapo, Hopa valleys · live shared database — actions you submit are visible to everyone</p>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-    <span style="font-size:13px;font-weight:600;">Add a New Submission</span>
-    <button class="nav-btn" onclick="showSubmitView()" title="Submit new data">+</button>
+  <div style="display:flex;align-items:center;gap:18px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+    <div style="display:flex;align-items:center;gap:10px;position:relative;">
+      <span style="font-size:13px;font-weight:600;">Add Elements</span>
+      <button class="nav-btn" id="addElementsBtn" onclick="toggleAddElementsMenu()" title="Draw a new zone, station or line on the map">✎</button>
+      <div id="addElementsMenu" class="add-elements-menu" style="display:none;">
+        <button class="secondary" onclick="startDrawMode('zone')">New Zone (polygon)</button>
+        <button class="secondary" onclick="startDrawMode('station')">New Station (point)</button>
+        <button class="secondary" onclick="startDrawMode('line')">New Line</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:13px;font-weight:600;">Add a New Submission</span>
+      <button class="nav-btn" onclick="showSubmitView()" title="Submit new data">+</button>
+    </div>
   </div>
 </header>
 
@@ -777,6 +792,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="card" id="mapCard" style="display:none;">
     <h2>2. Map</h2>
     <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
+    <div id="drawBanner" class="hint" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+    <div id="drawFormBox" class="hint" style="display:none;background:#f7faf6;border:1px solid var(--border);padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
     <div class="row" style="margin-bottom:12px;">
       <label class="muted">Valley:
         <select id="mapValley" onchange="setMapValley(this.value)">
@@ -1055,14 +1072,25 @@ function whenSupabaseReady(cb){
   if (window.sb) cb(); else window.addEventListener('supabase-ready', cb, { once: true });
 }
 
+// Static reference data (the original NRDS export) plus whatever zones/stations have been drawn and
+// saved via "Add Elements" — kept as separate base arrays so rebuildMergedTables() can recompute
+// tables.managementUnit/deratTahiti (the names every other function already reads) without re-fetching
+// the static JSON every time someone draws a new element.
+let staticManagementUnit = [], staticDeratTahiti = [];
+let newZoneRows = [], newStationRows = [], newLineRows = [];
+function rebuildMergedTables(){
+  tables.managementUnit = staticManagementUnit.concat(newZoneRows);
+  tables.deratTahiti = staticDeratTahiti.concat(newStationRows);
+  resetUnitStationsCache();
+}
 async function loadReferenceData(){
   const [mu, dt, es] = await Promise.all([
     fetch('data/management_unit.json').then(r => r.json()),
     fetch('data/derat_tahiti.json').then(r => r.json()),
     fetch('data/espece.json').then(r => r.json()),
   ]);
-  tables.managementUnit = mu; tables.deratTahiti = dt; tables.espece = es;
-  resetUnitStationsCache();
+  staticManagementUnit = mu; staticDeratTahiti = dt; tables.espece = es;
+  rebuildMergedTables();
   dataLoaded.ref = true;
   populateFormReferenceOptions();
   maybeBuildEnriched();
@@ -1128,6 +1156,63 @@ function subscribeDeratisation(){
   fetchDeratisation();
   window.sb.channel('deratisation_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'deratisation' }, () => fetchDeratisation())
+    .subscribe();
+}
+
+/* ---------------- "Add Elements" — user-drawn zones/stations/lines ----------------
+   Zones merge into tables.managementUnit (as a WKT Geometry string, same shape every existing
+   function already expects) and stations into tables.deratTahiti — so a drawn zone/station is
+   immediately usable everywhere a registry zone/station already is (form dropdowns, the map
+   choropleth, zonePriorityData, the spatial station<->unit join, etc.) with no further code changes.
+   Lines have no existing-table analog; they're just their own always-on map layer. */
+function geoJsonPolygonToWKT(geom){
+  const ring = geom.coordinates[0];
+  return 'SRID=4326;POLYGON((' + ring.map(([lon,lat]) => `${lon} ${lat}`).join(',') + '))';
+}
+// Local equirectangular projection (meters, centered on the ring's own mean latitude) before the
+// shoelace formula — accurate enough for a single management-unit-sized polygon; matches the
+// real Surface column closely enough to area-weight alongside it without a full geodesy library.
+function computePolygonAreaM2(ring){
+  const R = 6378137;
+  const lat0 = ring.reduce((s,p)=>s+p[1],0)/ring.length * Math.PI/180;
+  const pts = ring.map(([lon,lat]) => [lon*Math.PI/180*R*Math.cos(lat0), lat*Math.PI/180*R]);
+  let area = 0;
+  for (let i=0;i<pts.length-1;i++) area += pts[i][0]*pts[i+1][1] - pts[i+1][0]*pts[i][1];
+  return Math.abs(area/2);
+}
+async function fetchNewElements(){
+  const { data, error } = await window.sb.from('new_elements').select('*').order('id');
+  if (error){
+    console.error('Error loading new_elements:', error.message);
+    return;
+  }
+  newZoneRows = []; newStationRows = []; newLineRows = [];
+  for (const r of data){
+    if (r.type === 'zone' && r.geometry){
+      newZoneRows.push({
+        Nom: r.name, Vallee: r.valley, Geometry: geoJsonPolygonToWKT(r.geometry),
+        Surface: String(computePolygonAreaM2(r.geometry.coordinates[0]))
+      });
+    } else if (r.type === 'station' && r.geometry){
+      const [lon, lat] = r.geometry.coordinates;
+      newStationRows.push({
+        Station: r.name, Vallee: r.valley, Ligne_stat: r.ligne_stat || '', Zone: '',
+        Latitude: String(lat), Longitude: String(lon), Geometry: `SRID=4326;POINT(${lon} ${lat})`,
+        'Last Check': ''
+      });
+    } else if (r.type === 'line' && r.geometry){
+      newLineRows.push(r);
+    }
+  }
+  rebuildMergedTables();
+  populateFormReferenceOptions();
+  if (enriched) onDataUpdated();
+  if (leafletMap) renderMap(false);
+}
+function subscribeNewElements(){
+  fetchNewElements();
+  window.sb.channel('new_elements_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'new_elements' }, () => fetchNewElements())
     .subscribe();
 }
 
@@ -1331,6 +1416,7 @@ if (location.hash === '#submit') showSubmitView();
 whenSupabaseReady(() => {
   subscribeHabitatRestoration();
   subscribeDeratisation();
+  subscribeNewElements();
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
@@ -2216,7 +2302,7 @@ let mapValleyFilter = 'all';
 let mapLayer = 'all_obs';
 let showStationsOverlay = false;
 let histZoneMode = null; // null | 'cleaning' | 'combined' | 'planting' | 'plantingActivity' — overrides zone fill color; only the pair matching the active mapLayer ('cleaning'/'combined' under "Cleaning status by zone", 'planting'/'plantingActivity' under "Planted species") is ever reachable via the UI
-let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null;
+let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null, newLinesLayerGroup = null;
 
 function ensureMap(){
   if (leafletMap) return;
@@ -2233,6 +2319,158 @@ function ensureMap(){
   unitLayerGroup = L.layerGroup().addTo(leafletMap);
   pointLayerGroup = L.layerGroup().addTo(leafletMap);
   stationsOverlayGroup = L.layerGroup().addTo(leafletMap);
+  newLinesLayerGroup = L.layerGroup().addTo(leafletMap);
+}
+
+/* ---------------- "Add Elements" draw mode ---------------- */
+function toggleAddElementsMenu(){
+  const m = document.getElementById('addElementsMenu');
+  const opening = m.style.display === 'none' || !m.style.display;
+  if (opening){
+    // position:fixed anchored to the real viewport edge (not the narrow label+button wrapper) so the
+    // menu can't run off the left side of a narrow phone screen the way a relative/absolute offset did
+    const rect = document.getElementById('addElementsBtn').getBoundingClientRect();
+    m.style.top = (rect.bottom + 8) + 'px';
+  }
+  m.style.display = opening ? '' : 'none';
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('addElementsMenu');
+  if (menu && menu.style.display !== 'none' && !menu.contains(e.target) && !e.target.closest('#addElementsBtn')){
+    menu.style.display = 'none';
+  }
+});
+
+let drawMode = null; // null | 'zone' | 'station' | 'line'
+let drawPoints = []; // [[lat,lon], ...] in the order clicked
+let drawPreviewLayer = null;
+let drawClickHandler = null;
+
+function startDrawMode(type){
+  document.getElementById('addElementsMenu').style.display = 'none';
+  showHomeView();
+  ensureMap();
+  document.getElementById('mapCard').scrollIntoView({ behavior:'smooth' });
+  if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  drawMode = type; drawPoints = [];
+  document.getElementById('drawFormBox').style.display = 'none';
+  if (drawClickHandler) leafletMap.off('click', drawClickHandler);
+  drawClickHandler = onMapDrawClick;
+  leafletMap.on('click', drawClickHandler);
+  updateDrawBanner();
+}
+function onMapDrawClick(e){
+  drawPoints.push([e.latlng.lat, e.latlng.lng]);
+  if (drawMode === 'station'){ finishDrawing(); return; }
+  redrawDrawPreview();
+  updateDrawBanner();
+}
+function redrawDrawPreview(){
+  if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  if (drawPoints.length === 1){
+    drawPreviewLayer = L.circleMarker(drawPoints[0], { radius:6, color:'#d62728', weight:2, fillColor:'#d62728', fillOpacity:0.9 }).addTo(leafletMap);
+  } else if (drawPoints.length > 1){
+    drawPreviewLayer = drawMode === 'zone'
+      ? L.polygon(drawPoints, { color:'#d62728', weight:2, dashArray:'6,4', fillOpacity:0.15 }).addTo(leafletMap)
+      : L.polyline(drawPoints, { color:'#d62728', weight:3, dashArray:'6,4' }).addTo(leafletMap);
+  }
+}
+function undoLastDrawPoint(){
+  drawPoints.pop();
+  redrawDrawPreview();
+  updateDrawBanner();
+}
+function cancelDrawMode(){
+  if (drawClickHandler){ leafletMap.off('click', drawClickHandler); drawClickHandler = null; }
+  if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  drawMode = null; drawPoints = [];
+  document.getElementById('drawBanner').style.display = 'none';
+  document.getElementById('drawFormBox').style.display = 'none';
+}
+function updateDrawBanner(){
+  const el = document.getElementById('drawBanner');
+  if (!drawMode){ el.style.display = 'none'; return; }
+  el.style.display = '';
+  const label = drawMode === 'zone' ? 'New Zone' : drawMode === 'line' ? 'New Line' : 'New Station';
+  const need = drawMode === 'zone' ? 'Click at least 3 points on the map, then Finish to close the polygon.'
+    : drawMode === 'line' ? 'Click at least 2 points on the map, then Finish.'
+    : 'Click once on the map to place the station.';
+  const minPoints = drawMode === 'zone' ? 3 : 2;
+  el.innerHTML = `<b>${label}.</b> ${need} Points placed: ${drawPoints.length}.<br>
+    <div class="row" style="margin-top:6px;">
+      <button class="secondary" onclick="undoLastDrawPoint()" style="padding:4px 10px;font-size:12px;" ${drawPoints.length?'':'disabled'}>Undo last point</button>
+      ${drawMode !== 'station' ? `<button class="secondary" onclick="finishDrawing()" style="padding:4px 10px;font-size:12px;" ${drawPoints.length<minPoints?'disabled':''}>Finish</button>` : ''}
+      <button class="secondary" onclick="cancelDrawMode()" style="padding:4px 10px;font-size:12px;">Cancel</button>
+    </div>`;
+}
+function finishDrawing(){
+  if (drawClickHandler){ leafletMap.off('click', drawClickHandler); drawClickHandler = null; }
+  document.getElementById('drawBanner').style.display = 'none';
+  showDrawForm();
+}
+function showDrawForm(){
+  const box = document.getElementById('drawFormBox');
+  const namePlaceholder = drawMode === 'zone' ? 'e.g. New Plot' : drawMode === 'station' ? 'e.g. Z5' : 'e.g. Trail A';
+  let html = `<div class="muted" style="margin-bottom:6px;"><b>${drawPoints.length}</b> point(s) placed. Name and save this ${drawMode}, or discard it.</div>
+    <div class="row" style="margin-bottom:8px;">
+      <label class="muted">Name: <input type="text" id="drawName" placeholder="${namePlaceholder}"></label>`;
+  if (drawMode !== 'line'){
+    html += `<label class="muted">Valley:
+      <select id="drawValley"><option value="">Choose…</option><option value="Papehue">Papehue</option><option value="Maruapo">Maruapo</option><option value="Hopa">Hopa</option></select>
+    </label>`;
+  }
+  if (drawMode === 'station'){
+    html += `<label class="muted">Line (Ligne_stat), optional: <input type="text" id="drawLigneStat" placeholder="e.g. Hopa-A"></label>`;
+  }
+  if (drawMode === 'line'){
+    html += `<label class="muted">Color: <input type="color" id="drawColor" value="#d62728"></label>`;
+  }
+  html += `</div>
+    <button onclick="saveDrawnElement()">Save ${drawMode}</button>
+    <button class="secondary" onclick="discardDrawnElement()">Discard</button>
+    <span id="drawSaveStatus" class="muted"></span>`;
+  box.innerHTML = html;
+  box.style.display = '';
+}
+function discardDrawnElement(){
+  if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  drawMode = null; drawPoints = [];
+  document.getElementById('drawFormBox').style.display = 'none';
+}
+async function saveDrawnElement(){
+  const statusEl = document.getElementById('drawSaveStatus');
+  const name = document.getElementById('drawName').value.trim();
+  if (!name){ statusEl.innerHTML = '<span class="err">Name is required.</span>'; return; }
+  const valley = drawMode !== 'line' ? document.getElementById('drawValley').value : '';
+  if (drawMode !== 'line' && !valley){ statusEl.innerHTML = '<span class="err">Valley is required.</span>'; return; }
+
+  let geometry;
+  if (drawMode === 'station'){
+    const [lat, lon] = drawPoints[0];
+    geometry = { type: 'Point', coordinates: [lon, lat] };
+  } else if (drawMode === 'zone'){
+    const ring = drawPoints.map(([lat,lon]) => [lon, lat]);
+    ring.push(ring[0]);
+    geometry = { type: 'Polygon', coordinates: [ring] };
+  } else {
+    geometry = { type: 'LineString', coordinates: drawPoints.map(([lat,lon]) => [lon, lat]) };
+  }
+  const row = { type: drawMode, name, valley: valley || null, geometry };
+  if (drawMode === 'station') row.ligne_stat = document.getElementById('drawLigneStat').value.trim() || null;
+  if (drawMode === 'line') row.color = document.getElementById('drawColor').value;
+
+  statusEl.innerHTML = 'Saving…';
+  try {
+    const { error } = await window.sb.from('new_elements').insert(row);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
+    if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+    drawMode = null; drawPoints = [];
+    await fetchNewElements();
+    setTimeout(() => { document.getElementById('drawFormBox').style.display = 'none'; }, 1200);
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
 }
 
 function setMapValley(v){ mapValleyFilter = v; renderMap(true); }
@@ -2296,7 +2534,25 @@ function renderMap(shouldFit){
   unitLayerGroup.clearLayers();
   pointLayerGroup.clearLayers();
   stationsOverlayGroup.clearLayers();
-  if (!units.length){ document.getElementById('mapLegend').innerHTML = '<span class="muted">No management unit for this valley.</span>'; return; }
+  newLinesLayerGroup.clearLayers();
+  // user-drawn lines have no Valley of their own, so they always render regardless of the valley
+  // filter/units-empty check below — they're independent annotations, not part of the zone registry
+  const lineBoundsLatLngs = [];
+  for (const ln of newLineRows){
+    if (!ln.geometry || !ln.geometry.coordinates) continue;
+    const latlngs = ln.geometry.coordinates.map(([lon,lat]) => [lat,lon]);
+    const html = `<b>${escapeHtml(ln.name)}</b> (custom line)`;
+    const poly = L.polyline(latlngs, { color: ln.color || '#d62728', weight: 3 });
+    poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+    poly.bindPopup(html);
+    poly.addTo(newLinesLayerGroup);
+    latlngs.forEach(ll => lineBoundsLatLngs.push(ll));
+  }
+  if (!units.length){
+    document.getElementById('mapLegend').innerHTML = '<span class="muted">No management unit for this valley.</span>';
+    if (shouldFit && lineBoundsLatLngs.length) leafletMap.fitBounds(lineBoundsLatLngs, { padding: [20,20] });
+    return;
+  }
 
   // plain live-cleaning layer respects the map's own date-range filter; the "combined" historical+NRDS
   // estimate keeps using the unfiltered latest reading — its own recency-weighting already handles time
@@ -2304,7 +2560,7 @@ function renderMap(shouldFit){
   const statusMapForCombined = histZoneMode === 'combined' ? latestUnitStatus() : null;
   const speciesMap = mapLayer === 'species' ? speciesSummaryByAction() : null;
   const pastUnitLookup = pastUnitLookupMap();
-  const boundsLatLngs = [];
+  const boundsLatLngs = [...lineBoundsLatLngs];
   const combinedBreakdown = [];
 
   for (const u of units){
@@ -2515,6 +2771,9 @@ function renderMap(shouldFit){
   }
   if (showStationsOverlay){
     legend += `<br><span class="legend-item"><span class="swatch" style="background:#fff;border:1px solid #444;border-radius:50%;width:8px;height:8px;display:inline-block;"></span>small gray dot = registered rat station (all of them, regardless of the chosen map layer)</span>`;
+  }
+  if (newLineRows.length){
+    legend += `<br><span class="legend-item">— colored lines = custom lines drawn via "Add Elements" (always shown, regardless of layer)</span>`;
   }
   legend += `<br><span class="muted">Hover (or tap) a point/zone for details — click to pin the popup.</span>`;
   document.getElementById('mapLegend').innerHTML = legend;
