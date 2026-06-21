@@ -1575,6 +1575,11 @@ function onDataUpdated(){
   if (unmatched.length){
     html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
   }
+  const topZones = topPriorityZones(10);
+  html += `<div class="map-flex-row" style="margin-top:10px;">
+    <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(topZones)}</div>
+    <div class="map-combined-box" id="priorityCalcBox" style="display:none;">${renderPriorityCalcBox(topZones)}</div>
+  </div>`;
   html += `<div class="row" style="margin-top:12px;">
     <button class="secondary" onclick="downloadCSV('habitat_restoration_enriched.csv', enriched.mainRows, Object.keys(enriched.mainRows[0]))">⬇ habitat_restoration_enriched.csv</button>
     <button class="secondary" onclick="downloadCSV('habitat_restoration_stations_long.csv', enriched.stationRows, ['Identifier','Valley','Station','Latitude','Longitude'])">⬇ stations_long.csv</button>
@@ -2457,6 +2462,115 @@ function zonePriorityData(valley, includeHist){
     const lastDays = res.daysNrds != null ? res.daysNrds : res.daysHist;
     return { unit: nom, valley: val, res, lastDays };
   });
+}
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180, dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+// Home-page "where to work next" ranking for cutting/cleaning actions, reusing the exact same
+// combinedCleaningEstimate() numbers shown in the zone-priority chart and the map, so this list
+// agrees with both. Primary sort: combined estimate, dirtiest first, bucketed to the nearest 5%
+// so near-equal zones tie rather than splitting on noise. Tiebreak: proximity to the nearest
+// "already clean" zone (estimate above the median of all zones that have data) — the idea being
+// that finishing off a zone next to an already-clean one consolidates a clean area, vs. starting
+// fresh somewhere isolated. Zones with no estimate at all are excluded (no data = no claim of
+// urgency, same convention as the existing zone-priority "no data" bucket).
+function topPriorityZones(n){
+  const data = zonePriorityData('all', true).filter(d => d.res.estimate != null);
+  if (!data.length) return [];
+
+  const centroidByKey = new Map();
+  for (const u of tables.managementUnit||[]){
+    const c = geometryCentroid(u['Geometry']);
+    if (c) centroidByKey.set(u['Vallee']+'||'+u['Nom'], c);
+  }
+  for (const d of data) d.centroid = centroidByKey.get(d.valley+'||'+d.unit) || null;
+
+  const sorted = [...data].sort((a,b) => a.res.estimate - b.res.estimate);
+  const mid = sorted.length / 2;
+  const median = sorted.length % 2 === 1 ? sorted[Math.floor(mid)].res.estimate
+    : (sorted[mid-1].res.estimate + sorted[mid].res.estimate) / 2;
+  const cleanZones = data.filter(d => d.res.estimate > median && d.centroid);
+
+  for (const d of data){
+    let best = Infinity;
+    if (d.centroid && cleanZones.length){
+      for (const c of cleanZones){
+        if (c === d) continue;
+        const dist = haversineKm(d.centroid.lat, d.centroid.lon, c.centroid.lat, c.centroid.lon);
+        if (dist < best) best = dist;
+      }
+    }
+    d.nearestCleanKm = best;
+  }
+
+  data.sort((a,b) => {
+    const bucketDiff = Math.round(a.res.estimate/5) - Math.round(b.res.estimate/5);
+    return bucketDiff !== 0 ? bucketDiff : a.nearestCleanKm - b.nearestCleanKm;
+  });
+
+  return data.slice(0, n);
+}
+
+function renderPriorityZonesDropdown(top){
+  if (!top.length){
+    return `<details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning</summary>
+      <div class="muted" style="padding:8px 0 0;">No zone has a combined estimate yet.</div>
+    </details>`;
+  }
+  const rows = top.map((d,i) => {
+    const color = pctColor(d.res.estimate);
+    const stale = d.lastDays != null && d.lastDays > STALE_DAYS;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid ${color};border-radius:0 6px 6px 0;">
+      <span class="muted" style="width:18px;">#${i+1}</span>
+      <span style="flex:1;font-size:13px;">${escapeHtml(d.unit)} (${escapeHtml(d.valley)})</span>
+      <span style="font-weight:600;color:${color};">${d.res.estimate.toFixed(0)}%</span>
+      ${stale ? `<span class="muted" title="Freshest contributing data is over ${STALE_DAYS} days old">⚠ stale</span>` : ''}
+    </div>`;
+  }).join('');
+  return `<details style="margin-top:10px;" ontoggle="document.getElementById('priorityCalcBox').style.display=this.open?'':'none'">
+    <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning (click to expand)</summary>
+    <div style="margin-top:8px;">
+      <div class="muted" style="margin-bottom:6px;">Top 10, worst combined estimate (historical + NRDS, recency-weighted) first — fire red = intervene now, fading toward green = less urgent. Ties broken by proximity to an already-clean zone.</div>
+      ${rows}
+    </div>
+  </details>`;
+}
+
+// Same "explain the calculation" side-box pattern as the map's renderCombinedCalcBox()/
+// renderPlantingActivityBox() — shown/hidden together with the <details> above via its ontoggle.
+function renderPriorityCalcBox(top){
+  let html = `<b>How this ranking is calculated:</b>
+    Same "Combined current estimate" (historical + NRDS, recency-weighted) shown on the map and in the
+    "Cleaning % trend over time" chart — see those for the full station-coverage formula. Here, zones
+    are bucketed to the nearest 5% (so near-equal estimates tie instead of splitting on noise) and
+    sorted dirtiest-first by that bucket.<br><br>
+    <b>Tiebreak — proximity to a clean zone:</b> within a tied bucket, "clean" zones are defined as
+    those above the median estimate of all zones that currently have data. For every zone, the
+    great-circle distance (haversine) from its management-unit polygon centroid to the nearest clean
+    zone's centroid is computed; the smaller that distance, the higher the zone ranks within its bucket.
+    The idea: finishing off a zone right next to an already-clean one consolidates a contiguous clean
+    area, rather than spreading effort to an isolated dirty zone far from any progress already made.<br><br>
+    Zones with no combined estimate at all (no historical or NRDS data) are excluded — no data means no
+    basis to claim urgency. ⚠ stale = the freshest contributing source is more than ${STALE_DAYS} days old.`;
+  if (top.length){
+    html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
+      <th>#</th><th>Unit</th><th>Valley</th><th>Estimate</th><th>Nearest clean zone</th><th></th>
+      </tr></thead><tbody>`;
+    top.forEach((d,i) => {
+      const km = d.nearestCleanKm === Infinity ? '—' : `${d.nearestCleanKm.toFixed(2)} km`;
+      const stale = (d.lastDays != null && d.lastDays > STALE_DAYS) ? '⚠ stale' : '';
+      html += `<tr><td>${i+1}</td><td>${escapeHtml(d.unit)}</td><td>${escapeHtml(d.valley)}</td>` +
+        `<td><b>${d.res.estimate.toFixed(0)}%</b></td><td>${km}</td><td>${stale}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+  return html;
 }
 
 // Merged view: the ranked priority list (one row per zone) now also carries each zone's own
