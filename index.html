@@ -13,9 +13,12 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);}
-  header{background:var(--green-dark);color:#fff;padding:18px 24px;}
+  header{background:var(--green-dark);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
   header h1{margin:0;font-size:20px;}
   header p{margin:4px 0 0;font-size:13px;opacity:.85;}
+  .nav-btn{background:#fff;color:var(--green-dark);border:none;border-radius:50%;width:38px;height:38px;font-size:22px;
+    font-weight:600;cursor:pointer;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center;}
+  .nav-btn:hover{background:#eef5ee;}
   .wrap{max-width:1000px;margin:0 auto;padding:20px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   .card h2{margin:0 0 6px;font-size:16px;color:var(--green-dark);}
@@ -745,15 +748,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </head>
 <body>
 <header>
-  <h1>NRDS — Habitat Restoration Analysis</h1>
-  <p>SOP Manu · Papehue, Maruapo, Hopa valleys · live shared database — actions you submit are visible to everyone</p>
+  <div>
+    <h1>NRDS — Habitat Restoration Analysis</h1>
+    <p>SOP Manu · Papehue, Maruapo, Hopa valleys · live shared database — actions you submit are visible to everyone</p>
+  </div>
+  <button class="nav-btn" onclick="showSubmitView()" title="Submit new data">+</button>
 </header>
 
-<div class="wrap">
+<div class="wrap" id="homeView">
 
   <div class="card">
     <h2>1. Live data</h2>
-    <div class="hint">Data loads automatically from the shared online database — every visitor sees the same up-to-date actions, no upload needed. Use the forms below to add a new action; it appears here, in the charts, and on the map for everyone within a few seconds.</div>
+    <div class="hint">Data loads automatically from the shared online database — every visitor sees the same up-to-date actions, no upload needed. Tap the + button above to add a new action; it appears here, in the charts, and on the map for everyone within a few seconds.</div>
     <div id="liveDataStatus" class="muted">Connecting…</div>
     <div id="deratDataStatus" class="muted"></div>
     <div class="row" style="margin-top:10px;">
@@ -763,8 +769,115 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div id="buildSummary"></div>
   </div>
 
+  <div class="card" id="mapCard" style="display:none;">
+    <h2>2. Map</h2>
+    <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">Valley:
+        <select id="mapValley" onchange="setMapValley(this.value)">
+          <option value="all">All valleys</option>
+          <option value="Papehue">Papehue</option>
+          <option value="Maruapo">Maruapo</option>
+          <option value="Hopa">Hopa</option>
+        </select>
+      </label>
+      <button class="secondary map-layer-btn active" data-layer="all_obs" onclick="setMapLayer('all_obs')">All observations</button>
+      <button class="secondary map-layer-btn" data-layer="species" onclick="setMapLayer('species')">Planted species</button>
+      <button class="secondary map-layer-btn" data-layer="cleaning" onclick="setMapLayer('cleaning')">Cleaning status by zone</button>
+      <button class="secondary map-layer-btn" data-layer="derat" onclick="setMapLayer('derat')">Bait consumption (Checks)</button>
+      <label class="muted" style="margin-left:auto;">
+        <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
+        Overlay all rat stations
+      </label>
+    </div>
+    <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
+      <span class="muted">Historical data (from "4. Integration with past data"):</span>
+      <label class="muted">
+        <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
+        Historical cleaning %
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="histCombinedToggle" onchange="toggleHistCombined(this.checked)">
+        Combined current estimate (historical + NRDS, recency-weighted)
+      </label>
+    </div>
+    <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
+      <span class="muted">Historical data (from "4. Integration with past data"):</span>
+      <label class="muted">
+        <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
+        Historical plantings
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="histPlantingActivityToggle" onchange="toggleHistPlantingActivity(this.checked)">
+        Compare with NRDS activity (species and individuals planted)
+      </label>
+    </div>
+    <span id="mapStatus" class="muted">Generate the enriched datasets first.</span>
+    <div class="map-flex-row">
+      <div id="mapContainer" class="map-container" style="display:none;"></div>
+      <div id="mapCombinedBox" class="hint map-combined-box" style="display:none;margin:0;"></div>
+    </div>
+    <div id="mapLegend" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card" id="analysisCard" style="display:none;">
+    <h2>3. Chart analysis</h2>
+    <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">Valley:
+        <select id="chartValley" onchange="onChartValleyChange()">
+          <option value="all">All valleys</option>
+          <option value="Papehue">Papehue</option>
+          <option value="Maruapo">Maruapo</option>
+          <option value="Hopa">Hopa</option>
+        </select>
+      </label>
+      <label class="muted">Zone (unit):
+        <select id="chartZone" onchange="onChartZoneChange()"><option value="all">All zones</option></select>
+      </label>
+      <label class="muted">Rat station:
+        <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
+      </label>
+    </div>
+    <div class="tabs">
+      <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
+      <button class="secondary" onclick="renderSpecies()">Most-planted species</button>
+      <button class="secondary" onclick="renderWorkforce()">People involved (volunteer vs routine)</button>
+      <button class="secondary" onclick="renderDeratChart()">Bait consumption (Checks)</button>
+    </div>
+    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis to run.</span></div>
+    <div id="chartPopup" class="chart-popup" style="display:none;"></div>
+  </div>
+
+  <div class="card" id="pastDataCard" style="display:none;">
+    <h2>4. Integration with past data</h2>
+    <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
+    <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
+    <div id="pastDataContent" style="display:none;">
+      <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
+      <label class="muted" style="margin-left:12px;">
+        <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
+        Add combined current estimate (historical + NRDS, recency-weighted) — cleaning
+      </label>
+      <div id="pastDataCharts" style="margin-top:12px;"></div>
+      <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
+      <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
+    </div>
+  </div>
+
+  <div class="card" id="previewCard" style="display:none;">
+    <h2>Enriched dataset preview (Habitat Restoration)</h2>
+    <div class="table-scroll"><table class="preview" id="previewTable"></table></div>
+  </div>
+
+</div>
+
+<div class="wrap" id="submitView" style="display:none;">
+
+  <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
+
   <div class="card">
-    <h2>2. Add a new Habitat Restoration action</h2>
+    <h2>1. Add a new Habitat Restoration action</h2>
     <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
     <form id="hrForm" onsubmit="submitHabitatForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -828,7 +941,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
-    <h2>3. Add a new Dératisation patrol</h2>
+    <h2>2. Add a new Dératisation patrol</h2>
     <div class="hint">Pick the patrol's zone (a line of rat-control stations); every known station in that zone appears below so you can record its bait-consumption reading. Submitting writes directly to the shared database.</div>
     <form id="drForm" onsubmit="submitDeratisationForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -845,107 +958,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button type="submit">Submit patrol</button>
       <span id="drSubmitStatus" class="muted"></span>
     </form>
-  </div>
-
-  <div class="card" id="analysisCard" style="display:none;">
-    <h2>4. Chart analysis</h2>
-    <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted">Valley:
-        <select id="chartValley" onchange="onChartValleyChange()">
-          <option value="all">All valleys</option>
-          <option value="Papehue">Papehue</option>
-          <option value="Maruapo">Maruapo</option>
-          <option value="Hopa">Hopa</option>
-        </select>
-      </label>
-      <label class="muted">Zone (unit):
-        <select id="chartZone" onchange="onChartZoneChange()"><option value="all">All zones</option></select>
-      </label>
-      <label class="muted">Rat station:
-        <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
-      </label>
-    </div>
-    <div class="tabs">
-      <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
-      <button class="secondary" onclick="renderSpecies()">Most-planted species</button>
-      <button class="secondary" onclick="renderWorkforce()">People involved (volunteer vs routine)</button>
-      <button class="secondary" onclick="renderDeratChart()">Bait consumption (Checks)</button>
-    </div>
-    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis to run.</span></div>
-    <div id="chartPopup" class="chart-popup" style="display:none;"></div>
-  </div>
-
-  <div class="card" id="mapCard" style="display:none;">
-    <h2>5. Map</h2>
-    <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted">Valley:
-        <select id="mapValley" onchange="setMapValley(this.value)">
-          <option value="all">All valleys</option>
-          <option value="Papehue">Papehue</option>
-          <option value="Maruapo">Maruapo</option>
-          <option value="Hopa">Hopa</option>
-        </select>
-      </label>
-      <button class="secondary map-layer-btn active" data-layer="all_obs" onclick="setMapLayer('all_obs')">All observations</button>
-      <button class="secondary map-layer-btn" data-layer="species" onclick="setMapLayer('species')">Planted species</button>
-      <button class="secondary map-layer-btn" data-layer="cleaning" onclick="setMapLayer('cleaning')">Cleaning status by zone</button>
-      <button class="secondary map-layer-btn" data-layer="derat" onclick="setMapLayer('derat')">Bait consumption (Checks)</button>
-      <label class="muted" style="margin-left:auto;">
-        <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
-        Overlay all rat stations
-      </label>
-    </div>
-    <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "6. Integration with past data"):</span>
-      <label class="muted">
-        <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
-        Historical cleaning %
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="histCombinedToggle" onchange="toggleHistCombined(this.checked)">
-        Combined current estimate (historical + NRDS, recency-weighted)
-      </label>
-    </div>
-    <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "6. Integration with past data"):</span>
-      <label class="muted">
-        <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
-        Historical plantings
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="histPlantingActivityToggle" onchange="toggleHistPlantingActivity(this.checked)">
-        Compare with NRDS activity (species and individuals planted)
-      </label>
-    </div>
-    <span id="mapStatus" class="muted">Generate the enriched datasets first.</span>
-    <div class="map-flex-row">
-      <div id="mapContainer" class="map-container" style="display:none;"></div>
-      <div id="mapCombinedBox" class="hint map-combined-box" style="display:none;margin:0;"></div>
-    </div>
-    <div id="mapLegend" style="margin-top:8px;"></div>
-  </div>
-
-  <div class="card" id="pastDataCard" style="display:none;">
-    <h2>6. Integration with past data</h2>
-    <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
-    <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
-    <div id="pastDataContent" style="display:none;">
-      <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
-      <label class="muted" style="margin-left:12px;">
-        <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
-        Add combined current estimate (historical + NRDS, recency-weighted) — cleaning
-      </label>
-      <div id="pastDataCharts" style="margin-top:12px;"></div>
-      <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
-      <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
-    </div>
-  </div>
-
-  <div class="card" id="previewCard" style="display:none;">
-    <h2>Enriched dataset preview (Habitat Restoration)</h2>
-    <div class="table-scroll"><table class="preview" id="previewTable"></table></div>
   </div>
 
 </div>
@@ -1281,6 +1293,25 @@ try {
 } catch (err) {
   console.error('Error loading the embedded historical data:', err);
 }
+
+/* ---------------- home / submit view switch ---------------- */
+// Two top-level views instead of one long scroll: the dashboard (live data, map, charts, past-data
+// comparison) and a dedicated submit page with the two entry forms, reachable via the + button in the
+// header. Uses location.hash (not just a flag) so a direct link to #submit opens straight into the
+// forms — handy for sharing a "go submit field data" link with volunteers without the dashboard noise.
+function showSubmitView(){
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('submitView').style.display = '';
+  if (location.hash !== '#submit') location.hash = 'submit';
+  window.scrollTo(0,0);
+}
+function showHomeView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('homeView').style.display = '';
+  if (location.hash === '#submit') history.replaceState(null, '', location.pathname + location.search);
+  window.scrollTo(0,0);
+}
+if (location.hash === '#submit') showSubmitView();
 
 /* ---------------- bootstrap: kick off the automatic live-data load ---------------- */
 whenSupabaseReady(() => {
