@@ -765,7 +765,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div id="addElementsMenu" class="add-elements-menu" style="display:none;">
         <button class="secondary" onclick="startDrawMode('zone')">New Zone (polygon)</button>
         <button class="secondary" onclick="startDrawMode('station')">New Station (point)</button>
-        <button class="secondary" onclick="startDrawMode('line')">New Line</button>
+        <button class="secondary" onclick="startDrawMode('line')">New Rat Line</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -2362,12 +2362,19 @@ function startDrawMode(type){
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
   drawMode = type; drawPoints = [];
   document.getElementById('drawFormBox').style.display = 'none';
-  if (drawClickHandler) leafletMap.off('click', drawClickHandler);
+  if (drawClickHandler) leafletMap.off('preclick', drawClickHandler);
   drawClickHandler = onMapDrawClick;
-  leafletMap.on('click', drawClickHandler);
+  // 'preclick' (not 'click'): the map is covered edge-to-edge by interactive zone polygons/station
+  // dots, each of which stops the click from ever reaching the map's own 'click' listener once it has
+  // its own popup/tooltip — meaning most clicks (anywhere inside an existing zone) would silently fail
+  // to register a new point with a plain 'click' handler. 'preclick' fires before any layer underneath
+  // gets a chance to swallow it. Still stop propagation afterwards so that layer's own popup doesn't
+  // also pop open at the same time, which would be confusing mid-drawing.
+  leafletMap.on('preclick', drawClickHandler);
   updateDrawBanner();
 }
 function onMapDrawClick(e){
+  L.DomEvent.stopPropagation(e);
   drawPoints.push([e.latlng.lat, e.latlng.lng]);
   if (drawMode === 'station'){ finishDrawing(); return; }
   redrawDrawPreview();
@@ -2375,12 +2382,17 @@ function onMapDrawClick(e){
 }
 function redrawDrawPreview(){
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  const previewColor = drawMode === 'line' ? '#ffaa00' : '#d62728'; // amber for line mode, matching the rat-line overlay color it'll join once saved
+  // interactive:false is essential here, not cosmetic: an interactive preview shape swallows clicks
+  // that land on/near it instead of passing them to the map, which silently drops the next point
+  // whenever it's placed close to the line/polygon edge already drawn (very easy to do on a straight
+  // transect) — confirmed losing points in testing before this was added.
   if (drawPoints.length === 1){
-    drawPreviewLayer = L.circleMarker(drawPoints[0], { radius:6, color:'#d62728', weight:2, fillColor:'#d62728', fillOpacity:0.9 }).addTo(leafletMap);
+    drawPreviewLayer = L.circleMarker(drawPoints[0], { radius:6, color:previewColor, weight:2, fillColor:previewColor, fillOpacity:0.9, interactive:false }).addTo(leafletMap);
   } else if (drawPoints.length > 1){
     drawPreviewLayer = drawMode === 'zone'
-      ? L.polygon(drawPoints, { color:'#d62728', weight:2, dashArray:'6,4', fillOpacity:0.15 }).addTo(leafletMap)
-      : L.polyline(drawPoints, { color:'#d62728', weight:3, dashArray:'6,4' }).addTo(leafletMap);
+      ? L.polygon(drawPoints, { color:previewColor, weight:2, dashArray:'6,4', fillOpacity:0.15, interactive:false }).addTo(leafletMap)
+      : L.polyline(drawPoints, { color:previewColor, weight:3, dashArray:'6,4', interactive:false }).addTo(leafletMap);
   }
 }
 function undoLastDrawPoint(){
@@ -2389,7 +2401,7 @@ function undoLastDrawPoint(){
   updateDrawBanner();
 }
 function cancelDrawMode(){
-  if (drawClickHandler){ leafletMap.off('click', drawClickHandler); drawClickHandler = null; }
+  if (drawClickHandler){ leafletMap.off('preclick', drawClickHandler); drawClickHandler = null; }
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
   drawMode = null; drawPoints = [];
   document.getElementById('drawBanner').style.display = 'none';
@@ -2399,7 +2411,7 @@ function updateDrawBanner(){
   const el = document.getElementById('drawBanner');
   if (!drawMode){ el.style.display = 'none'; return; }
   el.style.display = '';
-  const label = drawMode === 'zone' ? 'New Zone' : drawMode === 'line' ? 'New Line' : 'New Station';
+  const label = drawMode === 'zone' ? 'New Zone' : drawMode === 'line' ? 'New Rat Line' : 'New Station';
   const need = drawMode === 'zone' ? 'Click at least 3 points on the map, then Finish to close the polygon.'
     : drawMode === 'line' ? 'Click at least 2 points on the map, then Finish.'
     : 'Click once on the map to place the station.';
@@ -2412,29 +2424,28 @@ function updateDrawBanner(){
     </div>`;
 }
 function finishDrawing(){
-  if (drawClickHandler){ leafletMap.off('click', drawClickHandler); drawClickHandler = null; }
+  if (drawClickHandler){ leafletMap.off('preclick', drawClickHandler); drawClickHandler = null; }
   document.getElementById('drawBanner').style.display = 'none';
   showDrawForm();
 }
 function showDrawForm(){
   const box = document.getElementById('drawFormBox');
-  const namePlaceholder = drawMode === 'zone' ? 'e.g. New Plot' : drawMode === 'station' ? 'e.g. Z5' : 'e.g. Trail A';
-  let html = `<div class="muted" style="margin-bottom:6px;"><b>${drawPoints.length}</b> point(s) placed. Name and save this ${drawMode}, or discard it.</div>
+  const namePlaceholder = drawMode === 'zone' ? 'e.g. New Plot' : drawMode === 'station' ? 'e.g. Z5' : 'e.g. Hopa-NewTrail';
+  const nameLabel = drawMode === 'line' ? 'Line name (becomes the new Ligne_stat):' : 'Name:';
+  const desc = drawMode === 'line'
+    ? `<div class="muted" style="margin-bottom:6px;"><b>${drawPoints.length}</b> point(s) placed. Each point becomes a new rat station (auto-named, e.g. "<i>name</i>-1", "<i>name</i>-2", ...), all sharing the line name below as their Ligne_stat — so this line shows up exactly like the existing ones in "Overlay all rat lines". Name it and save, or discard.</div>`
+    : `<div class="muted" style="margin-bottom:6px;"><b>${drawPoints.length}</b> point(s) placed. Name and save this ${drawMode}, or discard it.</div>`;
+  let html = desc + `
     <div class="row" style="margin-bottom:8px;">
-      <label class="muted">Name: <input type="text" id="drawName" placeholder="${namePlaceholder}"></label>`;
-  if (drawMode !== 'line'){
-    html += `<label class="muted">Valley:
-      <select id="drawValley"><option value="">Choose…</option><option value="Papehue">Papehue</option><option value="Maruapo">Maruapo</option><option value="Hopa">Hopa</option></select>
-    </label>`;
-  }
+      <label class="muted">${nameLabel} <input type="text" id="drawName" placeholder="${namePlaceholder}"></label>
+      <label class="muted">Valley:
+        <select id="drawValley"><option value="">Choose…</option><option value="Papehue">Papehue</option><option value="Maruapo">Maruapo</option><option value="Hopa">Hopa</option></select>
+      </label>`;
   if (drawMode === 'station'){
     html += `<label class="muted">Line (Ligne_stat), optional: <input type="text" id="drawLigneStat" placeholder="e.g. Hopa-A"></label>`;
   }
-  if (drawMode === 'line'){
-    html += `<label class="muted">Color: <input type="color" id="drawColor" value="#d62728"></label>`;
-  }
   html += `</div>
-    <button onclick="saveDrawnElement()">Save ${drawMode}</button>
+    <button onclick="saveDrawnElement()">Save ${drawMode === 'line' ? 'rat line' : drawMode}</button>
     <button class="secondary" onclick="discardDrawnElement()">Discard</button>
     <span id="drawSaveStatus" class="muted"></span>`;
   box.innerHTML = html;
@@ -2448,28 +2459,33 @@ function discardDrawnElement(){
 async function saveDrawnElement(){
   const statusEl = document.getElementById('drawSaveStatus');
   const name = document.getElementById('drawName').value.trim();
-  if (!name){ statusEl.innerHTML = '<span class="err">Name is required.</span>'; return; }
-  const valley = drawMode !== 'line' ? document.getElementById('drawValley').value : '';
-  if (drawMode !== 'line' && !valley){ statusEl.innerHTML = '<span class="err">Valley is required.</span>'; return; }
+  if (!name){ statusEl.innerHTML = `<span class="err">${drawMode === 'line' ? 'Line name' : 'Name'} is required.</span>`; return; }
+  const valley = document.getElementById('drawValley').value;
+  if (!valley){ statusEl.innerHTML = '<span class="err">Valley is required.</span>'; return; }
 
-  let geometry;
+  // A "New Line" is not its own geometry type — it reuses the exact same station (point) logic as
+  // "New Station", just once per clicked point, all sharing `name` as their Ligne_stat. That alone is
+  // enough for them to render as a brand-new rat line in "Overlay all rat lines" (which already just
+  // groups every station by Ligne_stat and connects them) — no separate line-geometry/color path needed.
+  let rowOrRows;
   if (drawMode === 'station'){
     const [lat, lon] = drawPoints[0];
-    geometry = { type: 'Point', coordinates: [lon, lat] };
+    rowOrRows = { type: 'station', name, valley, ligne_stat: document.getElementById('drawLigneStat').value.trim() || null,
+      geometry: { type: 'Point', coordinates: [lon, lat] } };
   } else if (drawMode === 'zone'){
     const ring = drawPoints.map(([lat,lon]) => [lon, lat]);
     ring.push(ring[0]);
-    geometry = { type: 'Polygon', coordinates: [ring] };
-  } else {
-    geometry = { type: 'LineString', coordinates: drawPoints.map(([lat,lon]) => [lon, lat]) };
+    rowOrRows = { type: 'zone', name, valley, geometry: { type: 'Polygon', coordinates: [ring] } };
+  } else { // line -> N station rows sharing one new Ligne_stat
+    rowOrRows = drawPoints.map(([lat,lon], i) => ({
+      type: 'station', name: `${name}-${i+1}`, valley, ligne_stat: name,
+      geometry: { type: 'Point', coordinates: [lon, lat] }
+    }));
   }
-  const row = { type: drawMode, name, valley: valley || null, geometry };
-  if (drawMode === 'station') row.ligne_stat = document.getElementById('drawLigneStat').value.trim() || null;
-  if (drawMode === 'line') row.color = document.getElementById('drawColor').value;
 
   statusEl.innerHTML = 'Saving…';
   try {
-    const { error } = await window.sb.from('new_elements').insert(row);
+    const { error } = await window.sb.from('new_elements').insert(rowOrRows);
     if (error) throw error;
     statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
     if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
