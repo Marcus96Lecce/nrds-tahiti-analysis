@@ -1799,6 +1799,13 @@ function svgEl(tag, attrs, text){
 }
 
 function categoricalColor(i){ return `hsl(${(i*53)%360},60%,45%)`; }
+// deterministic per-string color seed (so e.g. a rat line keeps the same color across re-renders
+// regardless of which other lines happen to be in view) — feed straight into categoricalColor()
+function hashStringToInt(s){
+  let h = 0;
+  for (let i=0; i<s.length; i++) h = (h*31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
 
 function renderCleaning(){
   currentChartView = 'cleaning';
@@ -2605,8 +2612,14 @@ function renderMap(shouldFit){
       pts.sort((a,b) => naturalStationCompare(a.code, b.code));
       const latlngs = pts.map(p => [p.lat, p.lon]);
       const [valley, ligneStat] = key.split('||');
-      const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
-      const poly = L.polyline(latlngs, { color:'#ffaa00', weight:2, dashArray:'4,4', opacity:0.85 });
+      // hash the name (not a positional index) so a given line keeps the same color regardless of
+      // which other lines are currently in view (valley filter, new lines added later, etc.)
+      const color = categoricalColor(hashStringToInt(key));
+      let lengthKm = 0;
+      for (let j=0;j<pts.length-1;j++) lengthKm += haversineKm(pts[j].lat, pts[j].lon, pts[j+1].lat, pts[j+1].lon);
+      const lengthTxt = lengthKm < 1 ? `${Math.round(lengthKm*1000)} m` : `${lengthKm.toFixed(2)} km`;
+      const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
+      const poly = L.polyline(latlngs, { color, weight:2.5, dashArray:'4,4', opacity:0.9 });
       poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       poly.bindPopup(html);
       poly.addTo(ratLinesLayerGroup);
@@ -2841,7 +2854,7 @@ function renderMap(shouldFit){
     legend += `<br><span class="legend-item">— colored lines = custom lines drawn via "Add Elements" (always shown, regardless of layer)</span>`;
   }
   if (showRatLines){
-    legend += `<br><span class="legend-item"><span style="display:inline-block;width:16px;border-top:2px dashed #ffaa00;vertical-align:middle;"></span> dashed amber lines = existing rat-patrol lines (Ligne_stat), stations connected in code order</span>`;
+    legend += `<br><span class="legend-item">dashed colored lines = existing rat-patrol lines (Ligne_stat), each its own color, stations connected in code order — hover/tap for name and length</span>`;
   }
   legend += `<br><span class="muted">Hover (or tap) a point/zone for details — click to pin the popup.</span>`;
   document.getElementById('mapLegend').innerHTML = legend;
