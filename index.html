@@ -74,6 +74,8 @@
     .row{gap:8px;}
     .row > label.muted{flex:1 1 auto;}
     .row select{width:100%;}
+    .row input[type=date]{width:100%;}
+    .date-label, .date-reset-btn{flex:1 1 100% !important;}
     .grid3{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
     .map-flex-row{flex-direction:column;}
     .map-container{flex:none;width:100%;height:380px;}
@@ -794,9 +796,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </label>
     </div>
     <div class="row" style="margin-bottom:12px;">
-      <label class="muted">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
-      <label class="muted">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
-      <button class="secondary" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
+      <label class="muted date-label">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
+      <label class="muted date-label">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
+      <button class="secondary date-reset-btn" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
       <span class="muted">Applies to points and the live cleaning/bait-consumption layers — not to the historical/combined overlays below, which have their own time-weighting.</span>
     </div>
     <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
@@ -847,9 +849,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="muted">Rat station:
         <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
       </label>
-      <label class="muted">From: <input type="date" id="chartDateFrom" onchange="onChartDateChange()"></label>
-      <label class="muted">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
-      <button class="secondary" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
+      <label class="muted date-label">From: <input type="date" id="chartDateFrom" onchange="onChartDateChange()"></label>
+      <label class="muted date-label">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
+      <button class="secondary date-reset-btn" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
     </div>
     <div class="tabs">
       <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
