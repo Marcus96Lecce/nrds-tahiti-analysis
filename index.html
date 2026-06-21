@@ -793,6 +793,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
         Overlay all rat stations
       </label>
     </div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
+      <label class="muted">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
+      <button class="secondary" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
+      <span class="muted">Applies to points and the live cleaning/bait-consumption layers — not to the historical/combined overlays below, which have their own time-weighting.</span>
+    </div>
     <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
       <span class="muted">Historical data (from "4. Integration with past data"):</span>
       <label class="muted">
@@ -841,6 +847,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="muted">Rat station:
         <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
       </label>
+      <label class="muted">From: <input type="date" id="chartDateFrom" onchange="onChartDateChange()"></label>
+      <label class="muted">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
+      <button class="secondary" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
     </div>
     <div class="tabs">
       <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
@@ -1617,12 +1626,33 @@ function onDataUpdated(){
   }
 }
 
-/* ---------------- chart filters (valley -> zone -> rat station) ---------------- */
+/* ---------------- chart filters (valley -> zone -> rat station -> date range) ---------------- */
+// Habitat Restoration dates are plain "YYYY-MM-DD"; Dératisation dates carry a time suffix
+// ("YYYY-MM-DD HH:MM"). Slicing to the first 10 chars before comparing against a plain
+// <input type=date> bound keeps both "from" and "to" correct for either format — without it,
+// a same-day Dératisation patrol would wrongly sort *after* a "to" bound of that same day.
+function inDateRange(dateStr, from, to){
+  const d = (dateStr||'').slice(0,10);
+  return (!from || d >= from) && (!to || d <= to);
+}
+let chartDateFrom = '', chartDateTo = '';
+function onChartDateChange(){
+  chartDateFrom = document.getElementById('chartDateFrom').value;
+  chartDateTo = document.getElementById('chartDateTo').value;
+  rerenderCurrentChart();
+}
+function resetChartDateFilter(){
+  chartDateFrom = ''; chartDateTo = '';
+  document.getElementById('chartDateFrom').value = '';
+  document.getElementById('chartDateTo').value = '';
+  rerenderCurrentChart();
+}
 function getFilteredMainRows(valley, zone, station){
   return enriched.mainRows.filter(r =>
     (valley==='all' || r.Valley===valley) &&
     (zone==='all' || r.Unit_Name===zone) &&
-    (station==='all' || (r.Rat_Stations||'').split(';').includes(station))
+    (station==='all' || (r.Rat_Stations||'').split(';').includes(station)) &&
+    inDateRange(r.Date, chartDateFrom, chartDateTo)
   );
 }
 function refreshChartZoneOptions(){
@@ -1877,17 +1907,6 @@ function pinPopup(evt, idx){
   showChartPopup(chartPopupData[idx], evt.clientX, evt.clientY);
 }
 
-let workforceDateFrom = '', workforceDateTo = '';
-function setWorkforceDateFilter(){
-  workforceDateFrom = document.getElementById('workforceDateFrom').value || '';
-  workforceDateTo = document.getElementById('workforceDateTo').value || '';
-  renderWorkforce();
-}
-function resetWorkforceDateFilter(){
-  workforceDateFrom = ''; workforceDateTo = '';
-  renderWorkforce();
-}
-
 function renderWorkforce(){
   currentChartView = 'workforce';
   hideChartPopup();
@@ -1896,29 +1915,14 @@ function renderWorkforce(){
   const station = document.getElementById('chartStation').value;
   const area = document.getElementById('chartArea');
 
-  const baseRows = getFilteredMainRows(valley, zone, station)
+  // date range is the shared filter above the tabs now (chartDateFrom/chartDateTo, applied inside
+  // getFilteredMainRows) — this chart no longer has its own scoped date picker
+  const rows = getFilteredMainRows(valley, zone, station)
     .map(r => ({...r, people: +r.Number_of_Person || 0, ts: new Date(r.Date).getTime()}))
     .filter(r => r.people > 0)
     .sort((a,b) => a.ts - b.ts);
-  if (!baseRows.length){ area.innerHTML = '<span class="muted">No action with a recorded headcount for this selection.</span>'; return; }
-
-  // temporal filter: a from/to date range scoped to this chart, on top of the Valley/Zone/Station
-  // filters above — min/max bounds always reflect the full range available for the current selection
-  const minDate = baseRows[0].Date, maxDate = baseRows[baseRows.length-1].Date;
-  const rows = baseRows.filter(r => (!workforceDateFrom || r.Date >= workforceDateFrom) && (!workforceDateTo || r.Date <= workforceDateTo));
+  if (!rows.length){ area.innerHTML = '<span class="muted">No action with a recorded headcount for this selection.</span>'; return; }
   chartPopupData = [];
-
-  const dateFilterUi = `<div class="row" style="margin-bottom:10px;">
-    <label class="muted">From: <input type="date" id="workforceDateFrom" value="${workforceDateFrom}" min="${minDate}" max="${maxDate}" onchange="setWorkforceDateFilter()"></label>
-    <label class="muted">To: <input type="date" id="workforceDateTo" value="${workforceDateTo}" min="${minDate}" max="${maxDate}" onchange="setWorkforceDateFilter()"></label>
-    ${(workforceDateFrom || workforceDateTo) ? `<button class="secondary" style="padding:5px 10px;font-size:12.5px;" onclick="resetWorkforceDateFilter()">Reset range</button>` : ''}
-    <span class="muted">full range available: ${minDate} → ${maxDate}${rows.length!==baseRows.length ? ` — showing ${rows.length}/${baseRows.length} sessions` : ''}</span>
-  </div>`;
-
-  if (!rows.length){
-    area.innerHTML = dateFilterUi + '<span class="muted">No session in the selected date range.</span>';
-    return;
-  }
 
   // always one bar per individual NRDS session, in chronological order — same ordinal-axis
   // convention as the cleaning-trend chart, at every filter depth (all valleys down to one
@@ -1978,7 +1982,7 @@ function renderWorkforce(){
     <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with full session details (zone, stations, action, comment).</span>
   </div>`;
   const hint = `<div class="hint" style="margin-bottom:6px;">People involved per individual session over time, split between volunteer worksites and routine/non-volunteer staff — read this alongside the zone priority view above to see where cleaning effort has (or hasn't) already gone.</div>`;
-  area.innerHTML = hint + dateFilterUi + summary + svg + legend;
+  area.innerHTML = hint + summary + svg + legend;
 }
 
 // Dératisation has no Unit_Name/zone concept that matches Habitat Restoration's vocabulary (its own
@@ -2008,9 +2012,10 @@ function renderDeratChart(){
     return { ...d, valley: (d.Zone||'').split('-')[0], checks, avgConso, ts: new Date(d.Date).getTime() };
   }).filter(Boolean)
     .filter(r => valley === 'all' || r.valley === valley)
+    .filter(r => inDateRange(r.Date, chartDateFrom, chartDateTo))
     .sort((a,b) => a.ts - b.ts);
 
-  if (!rows.length){ area.innerHTML = '<span class="muted">No dératisation patrol with a recorded check for this valley.</span>'; return; }
+  if (!rows.length){ area.innerHTML = '<span class="muted">No dératisation patrol with a recorded check for this valley/date range.</span>'; return; }
   chartPopupData = [];
 
   const W = Math.max(700, rows.length*55), H = 360, mL = 50, mR = 20, mT = 20, mB = 90;
@@ -2060,7 +2065,7 @@ function renderDeratChart(){
     <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>2</span>
     <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>4 — fully consumed</span>
     <span class="legend-item">Each bar = one dératisation patrol, in chronological order; height/color = average Conso across its checked stations</span>
-    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the per-station breakdown. Only the Valley filter above applies here — Zone/Station use Habitat Restoration zone codes, which don't match dératisation's own zone naming.</span>
+    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the per-station breakdown. Only Valley and the date range above apply here — Zone/Station use Habitat Restoration zone codes, which don't match dératisation's own zone naming.</span>
   </div>`;
   const hint = `<div class="hint" style="margin-bottom:6px;">Bait consumption (Checks) per dératisation patrol over time — high Conso means more rat activity was found, so red/orange bars are the patrols that found the most.</div>`;
   area.innerHTML = hint + summary + svg + legend;
@@ -2074,20 +2079,23 @@ function pctColor(pct){
   const rgb = lo[1].map((c,i)=>Math.round(c+(hi[1][i]-c)*t));
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
-function latestUnitStatus(){
+// dateFrom/dateTo are optional — omitted (as zoneNrdsAggregate()/combinedCleaningEstimate() do
+// internally) they mean "latest reading overall", unaffected by the map's own date-range filter;
+// the map's plain (non-historical) cleaning/derat layers pass mapDateFrom/mapDateTo explicitly.
+function latestUnitStatus(dateFrom, dateTo){
   const map = new Map();
   for (const r of enriched.mainRows){
-    if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name) continue;
+    if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     const cur = map.get(r.Unit_Name);
     if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date});
   }
   return map;
 }
 // same idea as latestUnitStatus() but at rat-station precision, for actions where it's available
-function latestStationStatus(){
+function latestStationStatus(dateFrom, dateTo){
   const map = new Map(); // key: Valley+'||'+Station
   for (const r of enriched.mainRows){
-    if (r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations) continue;
+    if (r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     for (const code of r.Rat_Stations.split(';').filter(Boolean)){
       const key = r.Valley + '||' + code;
       const cur = map.get(key);
@@ -2102,13 +2110,13 @@ function latestStationStatus(){
 // keyed Valley||Station (Derat Tahiti station codes collide across valleys, same gotcha as everywhere
 // else this composite key is used). Valley is parsed from the patrol's own Zone field (e.g. "Hopa-A"),
 // since Dératisation has no separate Valley column.
-function latestStationConso(){
+function latestStationConso(dateFrom, dateTo){
   const patrolByIdent = new Map((tables.deratisation||[]).map(d => [d.Identifier, d]));
   const map = new Map(); // key: Valley+'||'+Station
   for (const c of tables.sectionChecks||[]){
     if (c.Conso == null || c.Conso === '' || !isFinite(+c.Conso) || !c.Derat) continue;
     const patrol = patrolByIdent.get(c.Identifier);
-    if (!patrol || !patrol.Date) continue;
+    if (!patrol || !patrol.Date || !inDateRange(patrol.Date, dateFrom, dateTo)) continue;
     const valley = (patrol.Zone||'').split('-')[0];
     if (!valley) continue;
     const key = valley + '||' + c.Derat;
@@ -2226,6 +2234,18 @@ function ensureMap(){
 }
 
 function setMapValley(v){ mapValleyFilter = v; renderMap(true); }
+let mapDateFrom = '', mapDateTo = '';
+function onMapDateChange(){
+  mapDateFrom = document.getElementById('mapDateFrom').value;
+  mapDateTo = document.getElementById('mapDateTo').value;
+  renderMap(false);
+}
+function resetMapDateFilter(){
+  mapDateFrom = ''; mapDateTo = '';
+  document.getElementById('mapDateFrom').value = '';
+  document.getElementById('mapDateTo').value = '';
+  renderMap(false);
+}
 function setMapLayer(l){
   mapLayer = l;
   document.querySelectorAll('.map-layer-btn').forEach(b=>b.classList.toggle('active', b.dataset.layer===l));
@@ -2276,7 +2296,10 @@ function renderMap(shouldFit){
   stationsOverlayGroup.clearLayers();
   if (!units.length){ document.getElementById('mapLegend').innerHTML = '<span class="muted">No management unit for this valley.</span>'; return; }
 
-  const statusMap = (mapLayer === 'cleaning' || histZoneMode === 'combined') ? latestUnitStatus() : null;
+  // plain live-cleaning layer respects the map's own date-range filter; the "combined" historical+NRDS
+  // estimate keeps using the unfiltered latest reading — its own recency-weighting already handles time
+  const statusMap = (mapLayer === 'cleaning' && !histZoneMode) ? latestUnitStatus(mapDateFrom, mapDateTo) : null;
+  const statusMapForCombined = histZoneMode === 'combined' ? latestUnitStatus() : null;
   const speciesMap = mapLayer === 'species' ? speciesSummaryByAction() : null;
   const pastUnitLookup = pastUnitLookupMap();
   const boundsLatLngs = [];
@@ -2289,7 +2312,7 @@ function renderMap(shouldFit){
     let html = `<b>${u['Nom']}</b> (${u['Vallee']})<br>Surface area: ${u['Surface'] ? Math.round(+u['Surface'])+' m²' : '—'}`;
     if (histZoneMode === 'combined'){
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
-      const st = statusMap.get(u['Nom']);
+      const st = statusMapForCombined.get(u['Nom']);
       const res = combinedCleaningEstimate(hu, u['Nom'], st);
       fillColor = res.estimate != null ? pctColor(res.estimate) : '#d8d8d8';
       fillOpacity = 0.75;
@@ -2349,8 +2372,10 @@ function renderMap(shouldFit){
   }
 
   if (mapLayer === 'cleaning'){
-    // station-level color points, where the data is precise enough — drawn on top of the zone choropleth
-    const stationStatus = latestStationStatus();
+    // station-level color points, where the data is precise enough — drawn on top of the zone choropleth.
+    // These represent live NRDS readings, so the date filter applies here regardless of histZoneMode
+    // (the choropleth underneath may be showing a recency-weighted blend unaffected by the date range).
+    const stationStatus = latestStationStatus(mapDateFrom, mapDateTo);
     const stationCoordLookup = new Map(tables.deratTahiti.map(r => [r['Vallee']+'||'+r['Station'], r]));
     for (const st of stationStatus.values()){
       if (mapValleyFilter !== 'all' && st.valley !== mapValleyFilter) continue;
@@ -2371,7 +2396,7 @@ function renderMap(shouldFit){
     // discrete colored station dots, same visual language as the cleaning layer above — not a true
     // blurred heat-density layer (no extra library needed for that), just per-station latest-Conso
     // color, which already reads as a "where's the activity" map at this station density.
-    const consoMap = latestStationConso();
+    const consoMap = latestStationConso(mapDateFrom, mapDateTo);
     const stationCoordLookup = new Map(tables.deratTahiti.map(r => [r['Vallee']+'||'+r['Station'], r]));
     for (const st of consoMap.values()){
       if (mapValleyFilter !== 'all' && st.valley !== mapValleyFilter) continue;
@@ -2389,7 +2414,7 @@ function renderMap(shouldFit){
   }
 
   if (mapLayer === 'all_obs' || mapLayer === 'species'){
-    let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter));
+    let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
     if (mapLayer === 'species') rows = rows.filter(r => r.Species_Planted);
     rows.forEach(r => {
       const lat = +r.Centroid_Latitude, lon = +r.Centroid_Longitude;
@@ -2763,7 +2788,7 @@ function renderZonePriority(valley, rows){
 
   let html = `<label class="muted" style="display:block;margin-bottom:8px;">
     <input type="checkbox" id="zonePriorityHistToggle" ${includeHist?'checked':''} onchange="toggleZonePriorityHistorical(this.checked)">
-    Include historical data (from "6. Integration with past data") in the ranking below
+    Include historical data (from "4. Integration with past data") in the ranking below
   </label>`;
   html += `<div class="hint" style="margin-bottom:6px;">Zone priority overview, dirtiest/least-recently-assessed zones first — one merged view per zone: the small dots
     are every individual NRDS session recorded there (more recent = larger/darker, hover for date and value) — note this only counts sessions where a
