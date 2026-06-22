@@ -1009,6 +1009,43 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
   </div>
 
+  <div class="card">
+    <h2>3. Add a New Action</h2>
+    <div class="hint">For a conservation action that isn't Habitat Restoration or Dératisation. Submitting writes directly to the shared database; use "Add detail" below for anything that doesn't fit a fixed field.</div>
+    <form id="naForm" onsubmit="submitNewActionForm(event)">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="naDate" required></label>
+        <label class="muted">Observer name: <input type="text" id="naName" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Valley:
+          <select id="naValley" required>
+            <option value="">Choose…</option>
+            <option value="Papehue">Papehue</option>
+            <option value="Maruapo">Maruapo</option>
+            <option value="Hopa">Hopa</option>
+          </select>
+        </label>
+        <label class="muted">Zone/Location: <input type="text" id="naZone" placeholder="e.g. PGC, or a free description"></label>
+        <label class="muted">Number of people: <input type="number" id="naPeople" min="0" step="1" style="width:80px;"></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted" style="flex:1;min-width:240px;">Action name: <input type="text" id="naActionName" placeholder="e.g. Bird nest monitoring" required style="width:100%;"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
+        <textarea id="naComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Extra details (optional — anything not covered above):</div>
+        <div id="naDetailRows"></div>
+        <button type="button" class="secondary" onclick="addNaDetailRow()" style="padding:5px 10px;font-size:12.5px;">+ Add detail</button>
+      </div>
+      <button type="submit">Submit action</button>
+      <span id="naSubmitStatus" class="muted"></span>
+    </form>
+  </div>
+
 </div>
 
 <script>
@@ -1377,6 +1414,53 @@ async function submitDeratisationForm(evt){
   }
 }
 
+/* ---------------- New Action entry form ---------------- */
+let naDetailRowCount = 0;
+function addNaDetailRow(){
+  const wrap = document.getElementById('naDetailRows');
+  const idx = naDetailRowCount++;
+  const div = document.createElement('div');
+  div.className = 'row'; div.style.marginBottom = '6px'; div.id = `naDetailRow${idx}`;
+  div.innerHTML = `
+    <input type="text" class="na-detail-key" placeholder="Detail name (e.g. Depth)" style="width:170px;">
+    <input type="text" class="na-detail-value" placeholder="Value (e.g. 2m)" style="width:170px;">
+    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('naDetailRow${idx}').remove()">×</button>`;
+  wrap.appendChild(div);
+}
+
+async function submitNewActionForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('naSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const details = [...document.querySelectorAll('#naDetailRows > div')].map(row => {
+      const key = row.querySelector('.na-detail-key').value.trim();
+      const value = row.querySelector('.na-detail-value').value.trim();
+      if (!key && !value) return null;
+      return { key, value };
+    }).filter(Boolean);
+
+    const newRow = {
+      date: document.getElementById('naDate').value,
+      name: document.getElementById('naName').value,
+      valley: document.getElementById('naValley').value,
+      zone: document.getElementById('naZone').value,
+      action_name: document.getElementById('naActionName').value,
+      number_of_person: document.getElementById('naPeople').value,
+      comment: document.getElementById('naComment').value,
+      details,
+    };
+    const { error } = await window.sb.from('new_action').insert(newRow);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
+    document.getElementById('naForm').reset();
+    document.getElementById('naDetailRows').innerHTML = '';
+    document.getElementById('naDate').value = new Date().toISOString().slice(0,10);
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
 /* ---------------- past-data workbook (.xlsx) parsing ---------------- */
 function parsePastDataWorkbook(arrayBuffer){
   const wb = XLSX.read(arrayBuffer, { type: 'array' });
@@ -1438,6 +1522,7 @@ whenSupabaseReady(() => {
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+document.getElementById('naDate').value = new Date().toISOString().slice(0,10);
 (function setDefaultDrDate(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
   document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
