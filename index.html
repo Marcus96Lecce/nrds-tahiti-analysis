@@ -2213,7 +2213,7 @@ function latestStationStatus(dateFrom, dateTo){
       const key = r.Valley + '||' + code;
       const cur = map.get(key);
       if (!cur || new Date(r.Date) > new Date(cur.date)){
-        map.set(key, { pct:+r.Pct_cleaned_end_of_day, date:r.Date, valley:r.Valley, station:code });
+        map.set(key, { pct:+r.Pct_cleaned_end_of_day, date:r.Date, valley:r.Valley, station:code, name:r.Name });
       }
     }
   }
@@ -2235,7 +2235,7 @@ function latestStationConso(dateFrom, dateTo){
     const key = valley + '||' + c.Derat;
     const cur = map.get(key);
     if (!cur || new Date(patrol.Date) > new Date(cur.date)){
-      map.set(key, { conso:+c.Conso, date:patrol.Date, valley, station:c.Derat });
+      map.set(key, { conso:+c.Conso, date:patrol.Date, valley, station:c.Derat, observer:patrol.Observer });
     }
   }
   return map;
@@ -2804,7 +2804,7 @@ function renderMap(shouldFit){
       if (!coordRow) continue;
       const lat = +coordRow['Latitude'], lon = +coordRow['Longitude'];
       if (!isFinite(lat) || !isFinite(lon)) continue;
-      const html = `<b>Station ${st.station}</b> (${st.valley})<br>Cleaning % (latest survey ${st.date}): <b>${st.pct}%</b>`;
+      const html = `<b>Station ${st.station}</b> (${st.valley})<br>Latest survey: ${st.date}<br>Observer: ${escapeHtml(st.name || '—')}<br>Cleaning %: <b>${st.pct}%</b>`;
       const marker = L.circleMarker([lat, lon], { radius:6, color:'#222', weight:1.5, fillColor: pctColor(st.pct), fillOpacity:0.95 });
       marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       marker.bindPopup(html);
@@ -2825,7 +2825,7 @@ function renderMap(shouldFit){
       if (!coordRow) continue;
       const lat = +coordRow['Latitude'], lon = +coordRow['Longitude'];
       if (!isFinite(lat) || !isFinite(lon)) continue;
-      const html = `<b>Station ${st.station}</b> (${st.valley})<br>Bait consumption — latest check (${st.date}): <b>${st.conso}/4</b>`;
+      const html = `<b>Station ${st.station}</b> (${st.valley})<br>Latest check: ${st.date}<br>Observer: ${escapeHtml(st.observer || '—')}<br>Bait consumption: <b>${st.conso}/4</b>`;
       const marker = L.circleMarker([lat, lon], { radius:7, color:'#222', weight:1.5, fillColor: pctColor((4-st.conso)/4*100), fillOpacity:0.9 });
       marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       marker.bindPopup(html);
@@ -2849,6 +2849,7 @@ function renderMap(shouldFit){
         color = VALLEY_HEX[r.Valley] || '#888';
       }
       const html = `<b>${r.Unit_Name || '(no unit)'}</b> — ${r.Date}<br>` +
+        `Observer: ${escapeHtml(r.Name || '—')}<br>` +
         `${r.Action}<br>Valley: ${r.Valley}<br>People: ${r.Number_of_Person || '—'}<br>` +
         `Cleaning %: ${r.Pct_cleaned_arrival || '—'} → ${r.Pct_cleaned_end_of_day || '—'}<br>` +
         `Precision: ${approx ? 'management-unit centroid' : `rat station (${r.Rat_Stations})`}<br>` +
