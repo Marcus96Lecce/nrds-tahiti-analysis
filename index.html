@@ -1745,8 +1745,9 @@ function weightedCleaningPctSummary(){
   for (const v in perValley) byValley[v] = perValley[v].area ? (perValley[v].sum/perValley[v].area) : null;
   return { overall: totalArea ? sum/totalArea : null, byValley };
 }
-function lastActionOfType(mainRows, actionValue){
-  const rows = mainRows.filter(r => r.Action === actionValue && r.Date);
+function lastActionOfType(mainRows, actionValues){
+  const values = Array.isArray(actionValues) ? actionValues : [actionValues];
+  const rows = mainRows.filter(r => values.includes(r.Action) && r.Date);
   rows.sort((a,b) => new Date(b.Date) - new Date(a.Date));
   return rows[0] || null;
 }
@@ -1766,7 +1767,7 @@ function onDataUpdated(){
   const cleaningByValleyText = valleyOrder.filter(v => cleaningSummary.byValley[v] != null)
     .map(v => `${v} ${cleaningSummary.byValley[v].toFixed(0)}%`).join(' · ') || 'no data yet';
 
-  const lastCutting = lastActionOfType(mainRows, 'Coupe du sous-bois (cutting undergrowth)');
+  const lastCutting = lastActionOfType(mainRows, ['Coupe du sous-bois (cutting undergrowth)', 'Entretien des plantations (cleaning around plantation)']);
   const lastPlantation = lastActionOfType(mainRows, 'Plantation');
   const cuttingText = lastCutting
     ? `${escapeHtml(lastCutting.Unit_Name)} (${escapeHtml(lastCutting.Valley)}) — ${lastCutting.Pct_cleaned_end_of_day || '?'}%`
@@ -1779,7 +1780,7 @@ function onDataUpdated(){
   let html = `<div class="grid3">
     <div class="stat"><div class="num">${habitatCount + deratCount}</div><div class="lbl">total actions</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${habitatCount} habitat restoration · ${deratCount} dératisation</div></div>
     <div class="stat"><div class="num">${cleaningSummary.overall != null ? cleaningSummary.overall.toFixed(0)+'%' : '—'}</div><div class="lbl">area-weighted cleaning %</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${cleaningByValleyText}</div></div>
-    <div class="stat"><div class="num" style="font-size:15px;">${cuttingText}</div><div class="lbl">last cutting undergrowth: zone, valley & % cleaned</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${plantationText}</div></div>
+    <div class="stat"><div class="num" style="font-size:15px;">${cuttingText}</div><div class="lbl">last cleaning action (cutting / entretien): zone, valley & % cleaned</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${plantationText}</div></div>
   </div>`;
   if (unmatched.length){
     html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
