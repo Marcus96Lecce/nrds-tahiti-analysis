@@ -1019,7 +1019,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Date: <input type="date" id="pffDate" required></label>
         <label class="muted">Observer name: <input type="text" id="pffObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+        <label class="muted">Zone (your own name for this area): <input type="text" id="pffZone" list="pffZoneList" placeholder="e.g. Trail A, Camp 3 — new or existing" required style="width:180px;"></label>
+        <datalist id="pffZoneList"></datalist>
       </div>
+      <div class="hint" style="margin-top:-6px;margin-bottom:10px;">All the points added below belong to this one Zone — type a new name the first time, or pick an existing one to add more reports there.</div>
       <div class="row" style="margin-bottom:10px;align-items:center;">
         <label class="muted">Status:
           <select id="pffStatus" onchange="onPffStatusChange()" required>
@@ -1375,6 +1378,11 @@ async function fetchPffObservations(){
   const { data, error } = await window.sb.from('pff_observations').select('*').order('id');
   if (error){ console.error('Error loading pff_observations:', error.message); return; }
   pffObservations = data || [];
+  // The Zone datalist is the registry itself, built live from whatever's already been submitted —
+  // the first report under a new name "saves" it, since it becomes a suggested option for everyone
+  // from that point on (re-populated on every fetch/Realtime update, not just once).
+  const zones = [...new Set(pffObservations.map(r => r.zone).filter(Boolean))].sort();
+  document.getElementById('pffZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
   if (leafletMap) renderMap(false);
   if (currentChartView === 'pff') renderPffChart();
 }
@@ -1720,8 +1728,9 @@ async function submitPffForm(evt){
     if (!pffPendingPoints.length) throw new Error('Please tap the map to add at least one point.');
     const date = document.getElementById('pffDate').value;
     const observer = document.getElementById('pffObserver').value;
+    const zone = document.getElementById('pffZone').value;
     const newRows = pffPendingPoints.map(p => ({
-      date, observer, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
+      date, observer, zone, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
     }));
     const { error } = await window.sb.from('pff_observations').insert(newRows);
     if (error) throw error;
@@ -2962,6 +2971,7 @@ function renderPffChart(){
     const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)}</div>
       <div><b>Status:</b> ${escapeHtml(r.status||'—')}</div>
       <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
+      <div><b>Zone:</b> ${escapeHtml(r.zone||'—')}</div>
       ${r.value ? `<div><b>Value:</b> ${escapeHtml(r.value)}</div>` : ''}
       ${r.notes ? `<div><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}
       <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>`) - 1;
@@ -3652,7 +3662,7 @@ function renderMap(shouldFit){
       if (!isFinite(lat) || !isFinite(lon)) continue;
       const color = PFF_STATUS_COLORS[r.status] || '#888';
       const html = `<b>Petite fourmi de feu (PFF)</b> — ${escapeHtml(r.status || '—')}<br>` +
-        `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}` +
+        `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>Zone: ${escapeHtml(r.zone || '—')}` +
         (r.value ? `<br>Value: ${escapeHtml(r.value)}` : '') +
         (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
       const marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
