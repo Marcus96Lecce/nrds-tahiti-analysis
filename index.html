@@ -3420,9 +3420,14 @@ document.addEventListener('click', e => {
 });
 
 let drawMode = null; // null | 'zone' | 'station' | 'line'
-let drawPoints = []; // [[lat,lon], ...] in the order clicked
+let drawPoints = []; // [[lat,lon], ...] in the order clicked or recorded by GPS tracking
 let drawPreviewLayer = null;
 let drawClickHandler = null;
+// GPS tracking — an alternative way to fill the same drawPoints array used by manual clicking, for
+// zone/line modes only (walk the perimeter/trail instead of tapping each point). Because it's the
+// same array, Undo/Finish/Cancel and the save form all work unchanged regardless of how points got in.
+let gpsTrackingWatchId = null, gpsTrackingFirstFix = true, gpsLastAccuracy = null, gpsTrackingError = '';
+const GPS_MIN_DISTANCE_M = 3; // skip a new fix if it's closer than this to the last recorded point, so standing still (GPS jitter) doesn't clutter the track with near-duplicate points
 
 function startDrawMode(type){
   document.getElementById('addElementsMenu').style.display = 'none';
@@ -3430,6 +3435,8 @@ function startDrawMode(type){
   ensureMap();
   document.getElementById('mapCard').scrollIntoView({ behavior:'smooth' });
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
+  stopGpsTracking();
+  gpsTrackingError = '';
   drawMode = type; drawPoints = [];
   document.getElementById('drawFormBox').style.display = 'none';
   if (drawClickHandler) leafletMap.off('preclick', drawClickHandler);
@@ -3471,6 +3478,7 @@ function undoLastDrawPoint(){
   updateDrawBanner();
 }
 function cancelDrawMode(){
+  stopGpsTracking();
   if (drawClickHandler){ leafletMap.off('preclick', drawClickHandler); drawClickHandler = null; }
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
   drawMode = null; drawPoints = [];
@@ -3486,14 +3494,64 @@ function updateDrawBanner(){
     : drawMode === 'line' ? 'Click at least 2 points on the map, then Finish.'
     : 'Click once on the map to place the station.';
   const minPoints = drawMode === 'zone' ? 3 : 2;
+  const trackingRow = drawMode === 'station' ? '' : `
+    <div class="row" style="margin-top:6px;align-items:center;">
+      ${gpsTrackingWatchId == null
+        ? `<button class="secondary" onclick="startGpsTracking()" style="padding:4px 10px;font-size:12px;">📍 Start tracking (GPS)</button>`
+        : `<button class="secondary" onclick="stopGpsTracking()" style="padding:4px 10px;font-size:12px;background:#fde8e8;">⏹ Stop tracking</button>`}
+      <span class="muted">${
+        gpsTrackingWatchId != null
+          ? `Tracking — walk the ${drawMode === 'zone' ? 'perimeter' : 'trail'}; a point is recorded roughly every ${GPS_MIN_DISTANCE_M} m of movement${gpsLastAccuracy != null ? ` (±${Math.round(gpsLastAccuracy)} m accuracy)` : ''}.`
+          : gpsTrackingError || 'Or walk it with your phone instead of tapping each point.'
+      }</span>
+    </div>`;
   el.innerHTML = `<b>${label}.</b> ${need} Points placed: ${drawPoints.length}.<br>
     <div class="row" style="margin-top:6px;">
       <button class="secondary" onclick="undoLastDrawPoint()" style="padding:4px 10px;font-size:12px;" ${drawPoints.length?'':'disabled'}>Undo last point</button>
       ${drawMode !== 'station' ? `<button class="secondary" onclick="finishDrawing()" style="padding:4px 10px;font-size:12px;" ${drawPoints.length<minPoints?'disabled':''}>Finish</button>` : ''}
       <button class="secondary" onclick="cancelDrawMode()" style="padding:4px 10px;font-size:12px;">Cancel</button>
-    </div>`;
+    </div>${trackingRow}`;
+}
+function startGpsTracking(){
+  if (!navigator.geolocation){ gpsTrackingError = 'Geolocation is not supported by this browser.'; updateDrawBanner(); return; }
+  gpsTrackingError = '';
+  gpsTrackingFirstFix = true;
+  gpsTrackingWatchId = navigator.geolocation.watchPosition(onGpsTrackingUpdate, onGpsTrackingError,
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+  updateDrawBanner();
+}
+function stopGpsTracking(){
+  if (gpsTrackingWatchId != null){ navigator.geolocation.clearWatch(gpsTrackingWatchId); gpsTrackingWatchId = null; }
+  updateDrawBanner(); // safe even if drawMode is already null (it just hides the banner in that case)
+}
+function onGpsTrackingUpdate(pos){
+  const { latitude, longitude, accuracy } = pos.coords;
+  gpsLastAccuracy = accuracy;
+  if (drawPoints.length){
+    const [lastLat, lastLon] = drawPoints[drawPoints.length - 1];
+    if (haversineKm(lastLat, lastLon, latitude, longitude) * 1000 < GPS_MIN_DISTANCE_M){ updateDrawBanner(); return; }
+  }
+  drawPoints.push([latitude, longitude]);
+  if (gpsTrackingFirstFix){ leafletMap.setView([latitude, longitude], 18); gpsTrackingFirstFix = false; }
+  redrawDrawPreview();
+  updateDrawBanner();
+}
+function onGpsTrackingError(err){
+  // watchPosition fires transient POSITION_UNAVAILABLE/TIMEOUT errors on its own between otherwise-
+  // good fixes (confirmed happening on every single position change while testing, not an edge case)
+  // — it's designed to keep retrying on its own, so only a real permission denial should actually stop
+  // tracking; a real device losing GPS lock briefly outdoors (tree canopy, cliffs) should recover the
+  // same way, not abort the whole walk.
+  if (err.code === err.PERMISSION_DENIED){
+    gpsTrackingError = 'Location permission denied.';
+    stopGpsTracking();
+  } else {
+    gpsTrackingError = err.code === err.TIMEOUT ? 'Location signal lost momentarily — still trying…' : 'Location signal weak — still trying…';
+  }
+  updateDrawBanner();
 }
 function finishDrawing(){
+  stopGpsTracking();
   if (drawClickHandler){ leafletMap.off('preclick', drawClickHandler); drawClickHandler = null; }
   document.getElementById('drawBanner').style.display = 'none';
   showDrawForm();
@@ -3522,6 +3580,7 @@ function showDrawForm(){
   box.style.display = '';
 }
 function discardDrawnElement(){
+  stopGpsTracking();
   if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
   drawMode = null; drawPoints = [];
   document.getElementById('drawFormBox').style.display = 'none';
