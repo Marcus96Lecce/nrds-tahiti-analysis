@@ -1010,40 +1010,74 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
-    <h2>3. Add a New Action</h2>
-    <div class="hint">For a conservation action that isn't Habitat Restoration or Dératisation. Submitting writes directly to the shared database; use "Add detail" below for anything that doesn't fit a fixed field.</div>
-    <form id="naForm" onsubmit="submitNewActionForm(event)">
+    <h2>3. Activity Types</h2>
+    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "4. Log an Activity" below.</div>
+    <div id="atListWrap"></div>
+    <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
+    <form id="atForm" onsubmit="submitActivityTypeForm(event)" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
       <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Date: <input type="date" id="naDate" required></label>
-        <label class="muted">Observer name: <input type="text" id="naName" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+        <label class="muted">Quick start:
+          <select id="atPreset" onchange="applyActivityTypePreset()"><option value="">Start from scratch…</option></select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Name: <input type="text" id="atName" placeholder="e.g. Predator control — cats" required style="width:240px;"></label>
+        <label class="muted">Color: <input type="color" id="atColor" value="#2e7d32"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Description:</label>
+        <textarea id="atDescription" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="What is this activity for? Helps whoever logs it later."></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Custom fields (in addition to Date, Observer, Valley, Zone, People, Comment which every activity already has):</div>
+        <div id="atFieldRows"></div>
+        <button type="button" class="secondary" onclick="addAtFieldRow()" style="padding:5px 10px;font-size:12.5px;">+ Add field</button>
+      </div>
+      <button type="submit">Save activity type</button>
+      <button type="button" class="secondary" onclick="toggleActivityTypeBuilder()">Cancel</button>
+      <span id="atSubmitStatus" class="muted"></span>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>4. Log an Activity</h2>
+    <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
+    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "3. Activity Types" above first.</div>
+    <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Activity type:
+          <select id="aeType" onchange="onActivityTypeChange()" required><option value="">Choose…</option></select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="aeDate" required></label>
+        <label class="muted">Observer name: <input type="text" id="aeObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
       </div>
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Valley:
-          <select id="naValley" required>
+          <select id="aeValley" required>
             <option value="">Choose…</option>
             <option value="Papehue">Papehue</option>
             <option value="Maruapo">Maruapo</option>
             <option value="Hopa">Hopa</option>
           </select>
         </label>
-        <label class="muted">Zone/Location: <input type="text" id="naZone" placeholder="e.g. PGC, or a free description"></label>
-        <label class="muted">Number of people: <input type="number" id="naPeople" min="0" step="1" style="width:80px;"></label>
+        <label class="muted">Zone/Location: <input type="text" id="aeZone" list="aeZoneList" placeholder="e.g. PGC, or a free description"></label>
+        <datalist id="aeZoneList"></datalist>
+        <label class="muted">Number of people: <input type="number" id="aePeople" min="0" step="1" style="width:80px;"></label>
       </div>
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted" style="flex:1;min-width:240px;">Action name: <input type="text" id="naActionName" placeholder="e.g. Bird nest monitoring" required style="width:100%;"></label>
-      </div>
+      <div id="aeCustomFields"></div>
       <div style="margin-bottom:10px;">
         <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
-        <textarea id="naComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
+        <textarea id="aeComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
       </div>
-      <div style="margin-bottom:10px;">
-        <div class="muted" style="margin-bottom:4px;">Extra details (optional — anything not covered above):</div>
-        <div id="naDetailRows"></div>
-        <button type="button" class="secondary" onclick="addNaDetailRow()" style="padding:5px 10px;font-size:12.5px;">+ Add detail</button>
-      </div>
-      <button type="submit">Submit action</button>
-      <span id="naSubmitStatus" class="muted"></span>
+      <button type="submit">Submit activity</button>
+      <span id="aeSubmitStatus" class="muted"></span>
     </form>
+    <details id="aeRecentDetails" style="margin-top:14px;">
+      <summary class="muted" style="cursor:pointer;">Recent entries (all activity types)</summary>
+      <div id="aeRecentWrap" style="margin-top:10px;"></div>
+    </details>
   </div>
 
 </div>
@@ -1280,6 +1314,8 @@ function maybeBuildEnriched(){
 function populateFormReferenceOptions(){
   const zones = [...new Set((tables.deratTahiti||[]).map(s => s.Ligne_stat).filter(Boolean))].sort();
   document.getElementById('drZone').innerHTML = '<option value="">Choose…</option>' + zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join('');
+  const units = [...new Set((tables.managementUnit||[]).map(u => u.Nom).filter(Boolean))].sort();
+  document.getElementById('aeZoneList').innerHTML = units.map(u => `<option value="${escapeHtml(u)}">`).join('');
 }
 
 function onHrValleyChange(){
@@ -1414,51 +1450,308 @@ async function submitDeratisationForm(evt){
   }
 }
 
-/* ---------------- New Action entry form ---------------- */
-let naDetailRowCount = 0;
-function addNaDetailRow(){
-  const wrap = document.getElementById('naDetailRows');
-  const idx = naDetailRowCount++;
-  const div = document.createElement('div');
-  div.className = 'row'; div.style.marginBottom = '6px'; div.id = `naDetailRow${idx}`;
-  div.innerHTML = `
-    <input type="text" class="na-detail-key" placeholder="Detail name (e.g. Depth)" style="width:170px;">
-    <input type="text" class="na-detail-value" placeholder="Value (e.g. 2m)" style="width:170px;">
-    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('naDetailRow${idx}').remove()">×</button>`;
-  wrap.appendChild(div);
+/* ---------------- Activity Types + Log an Activity (generic, team-defined) ----------------
+   Lets the valley management team define brand-new kinds of conservation activity beyond Habitat
+   Restoration/Dératisation (predator control, biosecurity, nest monitoring, translocation, disease
+   surveillance, outreach, etc. — anything the wider LIFE STOP EXTINCTION project needs), then log
+   occurrences of them. Each logged entry stores its field values together with their label/type
+   (not just a bare value) so a future analysis pass can read activity_entries directly without
+   joining back to activity_types even if a type's fields change later — analysis itself is
+   intentionally not built yet. */
+const ACTIVITY_TYPE_PRESETS = [
+  { key: 'cat_control', name: 'Predator control — cats', color: '#b22222',
+    description: 'Feral cat trapping/control, one of the main threats to Tahiti Monarch and other endemic birds.',
+    fields: [
+      { label: 'Trap type', type: 'choice', options: ['Cage trap','Leg-hold trap','Other'], required: true },
+      { label: 'Traps checked', type: 'number', required: true },
+      { label: 'Cats captured', type: 'number', required: false },
+      { label: 'Cats removed/euthanized', type: 'number', required: false },
+      { label: 'Bait used', type: 'text', required: false },
+    ]},
+  { key: 'mosquito_control', name: 'Avian malaria / mosquito control', color: '#6a0dad',
+    description: 'Mosquito-vector control to reduce avian malaria transmission risk to Tahiti Monarch.',
+    fields: [
+      { label: 'Method', type: 'choice', options: ['Larvicide treatment','Mosquito trap','Standing-water removal','Other'], required: true },
+      { label: 'Sites treated', type: 'number', required: false },
+      { label: 'Mosquitoes trapped', type: 'number', required: false },
+      { label: 'Notes', type: 'text', required: false },
+    ]},
+  { key: 'biosecurity', name: 'Biosecurity inspection', color: '#d2691e',
+    description: 'Checks to prevent new invasive species arriving (boats, cargo, equipment, trail entrances).',
+    fields: [
+      { label: 'Inspection point', type: 'text', required: true },
+      { label: 'Items/vehicles inspected', type: 'number', required: false },
+      { label: 'Invasive species detected?', type: 'yesno', required: true },
+      { label: 'Species detected', type: 'text', required: false },
+      { label: 'Action taken', type: 'text', required: false },
+    ]},
+  { key: 'nest_monitoring', name: 'Bird nest / breeding monitoring', color: '#1f77b4',
+    description: 'Nest checks and breeding-success tracking for Tahiti Monarch or other species.',
+    fields: [
+      { label: 'Species', type: 'text', required: true },
+      { label: 'Nest ID', type: 'text', required: false },
+      { label: 'Nest status', type: 'choice', options: ['Active','Empty','Failed','Fledged'], required: true },
+      { label: 'Eggs', type: 'number', required: false },
+      { label: 'Chicks', type: 'number', required: false },
+      { label: 'Fledglings', type: 'number', required: false },
+    ]},
+  { key: 'census', name: 'Population census / point count', color: '#2ca02c',
+    description: 'Bird counts and survey-effort tracking for endangered-species monitoring.',
+    fields: [
+      { label: 'Species', type: 'text', required: true },
+      { label: 'Individuals counted', type: 'number', required: true },
+      { label: 'Survey method', type: 'choice', options: ['Point count','Transect','Call playback','Other'], required: false },
+      { label: 'Habitat type', type: 'text', required: false },
+    ]},
+  { key: 'translocation', name: 'Translocation / release', color: '#8c564b',
+    description: 'Moving or releasing individuals to establish new secure populations.',
+    fields: [
+      { label: 'Species', type: 'text', required: true },
+      { label: 'Individuals moved/released', type: 'number', required: true },
+      { label: 'Origin site', type: 'text', required: false },
+      { label: 'Destination site', type: 'text', required: false },
+      { label: 'Outcome notes', type: 'text', required: false },
+    ]},
+  { key: 'health', name: 'Disease & health monitoring', color: '#e377c2',
+    description: 'Health checks/sampling, including avian malaria surveillance.',
+    fields: [
+      { label: 'Species', type: 'text', required: true },
+      { label: 'Individuals sampled', type: 'number', required: false },
+      { label: 'Test/sample type', type: 'text', required: false },
+      { label: 'Positive cases', type: 'number', required: false },
+    ]},
+  { key: 'education', name: 'Community education / outreach', color: '#17becf',
+    description: 'Awareness and education events with local communities, schools or landowners.',
+    fields: [
+      { label: 'Audience', type: 'choice', options: ['School','General public','Landowners','Volunteers','Other'], required: true },
+      { label: 'Participants', type: 'number', required: false },
+      { label: 'Topic', type: 'text', required: false },
+      { label: 'Materials distributed?', type: 'yesno', required: false },
+    ]},
+  { key: 'maintenance', name: 'Equipment & infrastructure maintenance', color: '#7f7f7f',
+    description: 'Upkeep of traps, stations, signage, trails and other field equipment.',
+    fields: [
+      { label: 'Equipment type', type: 'text', required: true },
+      { label: 'Condition found', type: 'choice', options: ['Good','Worn','Broken'], required: false },
+      { label: 'Action taken', type: 'text', required: false },
+      { label: 'Replacement needed?', type: 'yesno', required: false },
+    ]},
+];
+
+let activityTypes = [];
+let activityEntries = [];
+
+async function fetchActivityTypes(){
+  const { data, error } = await window.sb.from('activity_types').select('*').order('id');
+  if (error){ console.error('Error loading activity_types:', error.message); return; }
+  activityTypes = data || [];
+  renderActivityTypesList();
+  populateActivityTypeDropdown();
+}
+function subscribeActivityTypes(){
+  fetchActivityTypes();
+  window.sb.channel('activity_types_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_types' }, () => fetchActivityTypes())
+    .subscribe();
+}
+async function fetchActivityEntries(){
+  const { data, error } = await window.sb.from('activity_entries').select('*').order('id', { ascending: false }).limit(30);
+  if (error){ console.error('Error loading activity_entries:', error.message); return; }
+  activityEntries = data || [];
+  renderActivityEntriesPreview();
+}
+function subscribeActivityEntries(){
+  fetchActivityEntries();
+  window.sb.channel('activity_entries_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_entries' }, () => fetchActivityEntries())
+    .subscribe();
 }
 
-async function submitNewActionForm(evt){
+function renderActivityTypesList(){
+  const wrap = document.getElementById('atListWrap');
+  if (!activityTypes.length){
+    wrap.innerHTML = '<div class="muted">No custom activity types yet — create the first one below.</div>';
+    return;
+  }
+  wrap.innerHTML = activityTypes.map(t => {
+    const n = (t.fields||[]).length;
+    return `
+    <div class="row" style="align-items:flex-start;margin-bottom:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fafcf9;">
+      <span class="swatch" style="background:${escapeHtml(t.color||'#888')};margin-top:3px;"></span>
+      <div style="flex:1;min-width:180px;">
+        <b>${escapeHtml(t.name)}</b>
+        <span class="badge">${n} custom field${n===1?'':'s'}</span>
+        ${t.description ? `<div class="muted" style="margin-top:2px;">${escapeHtml(t.description)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function populateActivityTypeDropdown(){
+  const sel = document.getElementById('aeType');
+  const form = document.getElementById('aeForm');
+  const hint = document.getElementById('aeNoTypesHint');
+  if (!activityTypes.length){
+    form.style.display = 'none'; hint.style.display = '';
+    return;
+  }
+  hint.style.display = 'none'; form.style.display = '';
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Choose…</option>' + activityTypes.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  if (current && activityTypes.some(t => String(t.id) === current)) sel.value = current;
+}
+
+(function populateActivityPresetDropdown(){
+  const sel = document.getElementById('atPreset');
+  sel.innerHTML = '<option value="">Start from scratch…</option>' +
+    ACTIVITY_TYPE_PRESETS.map(p => `<option value="${p.key}">${escapeHtml(p.name)}</option>`).join('');
+})();
+
+function toggleActivityTypeBuilder(){
+  const form = document.getElementById('atForm');
+  const open = form.style.display !== 'none';
+  form.style.display = open ? 'none' : '';
+  document.getElementById('atToggleBtn').style.display = open ? '' : 'none';
+  if (!open && !document.getElementById('atFieldRows').children.length) addAtFieldRow();
+}
+
+let atFieldRowCount = 0;
+function addAtFieldRow(prefill){
+  const wrap = document.getElementById('atFieldRows');
+  const idx = atFieldRowCount++;
+  const div = document.createElement('div');
+  div.className = 'row'; div.style.marginBottom = '6px'; div.id = `atFieldRow${idx}`;
+  div.innerHTML = `
+    <input type="text" class="at-field-label" placeholder="Field name (e.g. Cats captured)" style="width:180px;" value="${escapeHtml(prefill?.label||'')}">
+    <select class="at-field-type" onchange="onAtFieldTypeChange(this)">
+      <option value="text">Text</option>
+      <option value="number">Number</option>
+      <option value="date">Date</option>
+      <option value="yesno">Yes / No</option>
+      <option value="choice">Choice (dropdown)</option>
+    </select>
+    <input type="text" class="at-field-options" placeholder="Options, comma-separated" style="width:200px;display:none;" value="${escapeHtml((prefill?.options||[]).join(', '))}">
+    <label class="muted" style="gap:4px;"><input type="checkbox" class="at-field-required" ${prefill?.required?'checked':''}> Required</label>
+    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('atFieldRow${idx}').remove()">×</button>`;
+  wrap.appendChild(div);
+  if (prefill?.type){
+    div.querySelector('.at-field-type').value = prefill.type;
+    if (prefill.type === 'choice') div.querySelector('.at-field-options').style.display = '';
+  }
+}
+function onAtFieldTypeChange(selectEl){
+  const optsInput = selectEl.parentElement.querySelector('.at-field-options');
+  optsInput.style.display = selectEl.value === 'choice' ? '' : 'none';
+}
+
+function applyActivityTypePreset(){
+  const key = document.getElementById('atPreset').value;
+  document.getElementById('atFieldRows').innerHTML = '';
+  atFieldRowCount = 0;
+  if (!key){ addAtFieldRow(); return; }
+  const preset = ACTIVITY_TYPE_PRESETS.find(p => p.key === key);
+  if (!preset) return;
+  document.getElementById('atName').value = preset.name;
+  document.getElementById('atDescription').value = preset.description;
+  document.getElementById('atColor').value = preset.color;
+  preset.fields.forEach(f => addAtFieldRow(f));
+}
+
+async function submitActivityTypeForm(evt){
   evt.preventDefault();
-  const statusEl = document.getElementById('naSubmitStatus');
-  statusEl.innerHTML = 'Submitting…';
+  const statusEl = document.getElementById('atSubmitStatus');
+  statusEl.innerHTML = 'Saving…';
   try {
-    const details = [...document.querySelectorAll('#naDetailRows > div')].map(row => {
-      const key = row.querySelector('.na-detail-key').value.trim();
-      const value = row.querySelector('.na-detail-value').value.trim();
-      if (!key && !value) return null;
-      return { key, value };
+    const fields = [...document.querySelectorAll('#atFieldRows > div')].map((row, i) => {
+      const label = row.querySelector('.at-field-label').value.trim();
+      if (!label) return null;
+      const type = row.querySelector('.at-field-type').value;
+      const required = row.querySelector('.at-field-required').checked;
+      const optionsRaw = row.querySelector('.at-field-options').value.trim();
+      const options = type === 'choice' ? optionsRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
+      return { id: `field_${i}`, label, type, options, required };
     }).filter(Boolean);
 
-    const newRow = {
-      date: document.getElementById('naDate').value,
-      name: document.getElementById('naName').value,
-      valley: document.getElementById('naValley').value,
-      zone: document.getElementById('naZone').value,
-      action_name: document.getElementById('naActionName').value,
-      number_of_person: document.getElementById('naPeople').value,
-      comment: document.getElementById('naComment').value,
-      details,
+    const newType = {
+      name: document.getElementById('atName').value.trim(),
+      description: document.getElementById('atDescription').value.trim(),
+      color: document.getElementById('atColor').value,
+      fields,
     };
-    const { error } = await window.sb.from('new_action').insert(newRow);
+    const { error } = await window.sb.from('activity_types').insert(newType);
     if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
-    document.getElementById('naForm').reset();
-    document.getElementById('naDetailRows').innerHTML = '';
-    document.getElementById('naDate').value = new Date().toISOString().slice(0,10);
+    statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
+    document.getElementById('atForm').reset();
+    document.getElementById('atFieldRows').innerHTML = '';
+    atFieldRowCount = 0;
+    toggleActivityTypeBuilder();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
   }
+}
+
+function onActivityTypeChange(){
+  const typeId = document.getElementById('aeType').value;
+  const wrap = document.getElementById('aeCustomFields');
+  wrap.innerHTML = '';
+  const type = activityTypes.find(t => String(t.id) === typeId);
+  if (!type) return;
+  for (const f of (type.fields||[])){
+    const div = document.createElement('div');
+    div.className = 'row'; div.style.marginBottom = '10px';
+    div.dataset.fieldId = f.id; div.dataset.fieldLabel = f.label; div.dataset.fieldType = f.type;
+    let inputHtml;
+    if (f.type === 'number') inputHtml = `<input type="number" class="ae-field-value" ${f.required?'required':''}>`;
+    else if (f.type === 'date') inputHtml = `<input type="date" class="ae-field-value" ${f.required?'required':''}>`;
+    else if (f.type === 'yesno') inputHtml = `<select class="ae-field-value" ${f.required?'required':''}><option value="">Choose…</option><option value="Yes">Yes</option><option value="No">No</option></select>`;
+    else if (f.type === 'choice') inputHtml = `<select class="ae-field-value" ${f.required?'required':''}><option value="">Choose…</option>${(f.options||[]).map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+    else inputHtml = `<input type="text" class="ae-field-value" ${f.required?'required':''}>`;
+    div.innerHTML = `<label class="muted">${escapeHtml(f.label)}${f.required?' *':''}: ${inputHtml}</label>`;
+    wrap.appendChild(div);
+  }
+}
+
+async function submitActivityEntryForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('aeSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const typeId = document.getElementById('aeType').value;
+    const type = activityTypes.find(t => String(t.id) === typeId);
+    const fieldValues = [...document.querySelectorAll('#aeCustomFields > div')].map(div => ({
+      id: div.dataset.fieldId, label: div.dataset.fieldLabel, type: div.dataset.fieldType,
+      value: div.querySelector('.ae-field-value').value,
+    }));
+    const newEntry = {
+      activity_type_id: typeId || null,
+      activity_type_name: type ? type.name : '',
+      date: document.getElementById('aeDate').value,
+      observer: document.getElementById('aeObserver').value,
+      valley: document.getElementById('aeValley').value,
+      zone: document.getElementById('aeZone').value,
+      number_of_person: document.getElementById('aePeople').value,
+      comment: document.getElementById('aeComment').value,
+      field_values: fieldValues,
+    };
+    const { error } = await window.sb.from('activity_entries').insert(newEntry);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
+    document.getElementById('aeForm').reset();
+    document.getElementById('aeCustomFields').innerHTML = '';
+    document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function renderActivityEntriesPreview(){
+  const wrap = document.getElementById('aeRecentWrap');
+  if (!activityEntries.length){ wrap.innerHTML = '<div class="muted">No entries yet.</div>'; return; }
+  const rows = activityEntries.map(e => {
+    const details = (e.field_values||[]).filter(f=>f.value).map(f => `${f.label}: ${f.value}`).join('; ') || '—';
+    return `<tr><td>${escapeHtml((e.date||'').slice(0,10))}</td><td>${escapeHtml(e.activity_type_name||'')}</td><td>${escapeHtml(e.valley||'')}</td><td>${escapeHtml(e.zone||'')}</td><td>${escapeHtml(e.observer||'')}</td><td>${escapeHtml(details)}</td></tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="table-scroll"><table class="preview"><thead><tr><th>Date</th><th>Type</th><th>Valley</th><th>Zone</th><th>Observer</th><th>Details</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 /* ---------------- past-data workbook (.xlsx) parsing ---------------- */
@@ -1519,10 +1812,12 @@ whenSupabaseReady(() => {
   subscribeHabitatRestoration();
   subscribeDeratisation();
   subscribeNewElements();
+  subscribeActivityTypes();
+  subscribeActivityEntries();
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
-document.getElementById('naDate').value = new Date().toISOString().slice(0,10);
+document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
 (function setDefaultDrDate(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
   document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
