@@ -1014,7 +1014,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <div class="card">
     <h2>3. Petite fourmi de feu (PFF)</h2>
-    <div class="hint">Log a Little Fire Ant (Wasmannia auropunctata) survey point — choose its status, tap/click the map to place it, and submit. It appears on "2. Map" (layer "Little Fire Ant (PFF)") and in "3. Chart analysis" for everyone within a few seconds.</div>
+    <div class="hint">Log Little Fire Ant (Wasmannia auropunctata) survey points — choose a status, tap/click the map to add a point (add as many as you like before submitting — handy for logging a whole walk/transect in one go), then submit them all at once. They appear on "2. Map" (layer "Little Fire Ant (PFF)") and in "3. Chart analysis" for everyone within a few seconds.</div>
     <form id="pffForm" onsubmit="submitPffForm(event)">
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Date: <input type="date" id="pffDate" required></label>
@@ -1054,21 +1054,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
         </label>
         <span id="pffUserLocationStatus" class="muted"></span>
       </div>
-      <div class="muted" style="margin-bottom:4px;">Point location — tap/click the map to set it:</div>
+      <div class="muted" style="margin-bottom:4px;">Points — tap/click the map to add one (you can add several):</div>
       <div id="pffPickerMap" class="geo-picker-map"></div>
-      <div class="row" style="margin-top:6px;margin-bottom:10px;align-items:center;">
-        <span class="muted" id="pffPickerReadout">No point selected.</span>
-        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPffPoint()">Clear point</button>
+      <div class="row" style="margin-top:6px;margin-bottom:6px;align-items:center;">
+        <span class="muted" id="pffPickerReadout">Tap/click the map to add a point — you can add several before submitting.</span>
+        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearAllPffPoints()">Clear all points</button>
       </div>
-      <input type="hidden" id="pffLat"><input type="hidden" id="pffLon">
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Value (your own code/reference, optional): <input type="text" id="pffValue" placeholder="e.g. sample/colony code" style="width:180px;"></label>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label class="muted" style="display:block;margin-bottom:4px;">Notes:</label>
-        <textarea id="pffNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
-      </div>
-      <button type="submit">Submit PFF point</button>
+      <div id="pffPendingList" style="margin-bottom:10px;"></div>
+      <button type="submit">Submit PFF point(s)</button>
       <span id="pffSubmitStatus" class="muted"></span>
     </form>
   </div>
@@ -1548,6 +1541,10 @@ async function submitDeratisationForm(evt){
 let pffPickerEntry = null;
 let pffMapValleyFilter = 'all', pffShowStations = false, pffShowZoneNames = false;
 let pffUserLocWatchId = null, pffUserLocFirstFix = true;
+// Multiple points per submission ("a whole walk/transect in one go") — each pending point keeps its
+// own marker + status + value + notes until the whole batch is submitted as one multi-row insert.
+let pffPendingPoints = [];
+let pffPendingIdCounter = 0;
 
 function ensurePffPickerMap(){
   if (pffPickerEntry) return;
@@ -1556,7 +1553,7 @@ function ensurePffPickerMap(){
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
   pffPickerEntry = {
-    map, marker: null,
+    map,
     ctxLayer: L.featureGroup().addTo(map),
     stationsLayer: L.layerGroup().addTo(map),
     zoneNamesLayer: L.layerGroup().addTo(map),
@@ -1566,14 +1563,64 @@ function ensurePffPickerMap(){
 
   map.on('preclick', (e) => {
     L.DomEvent.stopPropagation(e);
+    const status = document.getElementById('pffStatus').value;
+    if (!status){
+      document.getElementById('pffPickerReadout').textContent = 'Choose a status above before adding a point.';
+      return;
+    }
     const { lat, lng } = e.latlng;
-    const color = PFF_STATUS_COLORS[document.getElementById('pffStatus').value] || '#1f77b4';
-    if (pffPickerEntry.marker) pffPickerEntry.marker.setLatLng([lat, lng]).setStyle({ fillColor: color });
-    else pffPickerEntry.marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95 }).addTo(map);
-    document.getElementById('pffLat').value = lat.toFixed(6);
-    document.getElementById('pffLon').value = lng.toFixed(6);
-    document.getElementById('pffPickerReadout').textContent = `Point set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const id = ++pffPendingIdCounter;
+    const marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(map);
+    pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', marker });
+    renderPffPendingList();
   });
+}
+function renderPffPendingList(){
+  const wrap = document.getElementById('pffPendingList');
+  const readout = document.getElementById('pffPickerReadout');
+  if (!pffPendingPoints.length){
+    wrap.innerHTML = '';
+    readout.textContent = 'Tap/click the map to add a point — you can add several before submitting.';
+    return;
+  }
+  readout.textContent = `${pffPendingPoints.length} point${pffPendingPoints.length===1?'':'s'} ready to submit.`;
+  wrap.innerHTML = pffPendingPoints.map(p => `
+    <div class="row" style="align-items:center;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;">
+      <span class="swatch" style="background:${PFF_STATUS_COLORS[p.status]||'#ccc'};"></span>
+      <span class="muted" style="min-width:120px;">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</span>
+      <select onchange="onPffPendingStatusChange(${p.id}, this.value)">
+        <option value="Positive" ${p.status==='Positive'?'selected':''}>Positive</option>
+        <option value="Centre de colonie" ${p.status==='Centre de colonie'?'selected':''}>Centre de colonie</option>
+        <option value="Negative" ${p.status==='Negative'?'selected':''}>Negative</option>
+      </select>
+      <input type="text" placeholder="Value (optional)" style="width:120px;" value="${escapeHtml(p.value||'')}" oninput="onPffPendingFieldInput(${p.id},'value',this.value)">
+      <input type="text" placeholder="Notes (optional)" style="width:160px;" value="${escapeHtml(p.notes||'')}" oninput="onPffPendingFieldInput(${p.id},'notes',this.value)">
+      <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removePffPendingPoint(${p.id})">×</button>
+    </div>`).join('');
+}
+function onPffPendingStatusChange(id, status){
+  const p = pffPendingPoints.find(p => p.id === id);
+  if (!p) return;
+  p.status = status;
+  p.marker.setStyle({ fillColor: PFF_STATUS_COLORS[status] });
+  renderPffPendingList();
+}
+// Mutates the in-memory point only (no re-render) so typing doesn't lose focus/cursor position.
+function onPffPendingFieldInput(id, field, value){
+  const p = pffPendingPoints.find(p => p.id === id);
+  if (p) p[field] = value;
+}
+function removePffPendingPoint(id){
+  const idx = pffPendingPoints.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  pffPickerEntry.map.removeLayer(pffPendingPoints[idx].marker);
+  pffPendingPoints.splice(idx, 1);
+  renderPffPendingList();
+}
+function clearAllPffPoints(){
+  pffPendingPoints.forEach(p => pffPickerEntry.map.removeLayer(p.marker));
+  pffPendingPoints = [];
+  renderPffPendingList();
 }
 
 // Same Valley / "overlay all rat stations" / "show zone names" controls as the main map ("2. Map"),
@@ -1664,36 +1711,23 @@ function onPffUserLocationError(err){
 function onPffStatusChange(){
   const status = document.getElementById('pffStatus').value;
   document.getElementById('pffStatusSwatch').style.background = PFF_STATUS_COLORS[status] || '#ccc';
-  if (pffPickerEntry && pffPickerEntry.marker && status){
-    pffPickerEntry.marker.setStyle({ fillColor: PFF_STATUS_COLORS[status] });
-  }
-}
-function clearPffPoint(){
-  if (pffPickerEntry && pffPickerEntry.marker){ pffPickerEntry.map.removeLayer(pffPickerEntry.marker); pffPickerEntry.marker = null; }
-  document.getElementById('pffLat').value = '';
-  document.getElementById('pffLon').value = '';
-  document.getElementById('pffPickerReadout').textContent = 'No point selected.';
 }
 async function submitPffForm(evt){
   evt.preventDefault();
   const statusEl = document.getElementById('pffSubmitStatus');
   statusEl.innerHTML = 'Submitting…';
   try {
-    const lat = document.getElementById('pffLat').value, lon = document.getElementById('pffLon').value;
-    if (!lat || !lon) throw new Error('Please tap the map to set the point location.');
-    const newRow = {
-      date: document.getElementById('pffDate').value,
-      observer: document.getElementById('pffObserver').value,
-      status: document.getElementById('pffStatus').value,
-      value: document.getElementById('pffValue').value,
-      notes: document.getElementById('pffNotes').value,
-      lat: +lat, lon: +lon,
-    };
-    const { error } = await window.sb.from('pff_observations').insert(newRow);
+    if (!pffPendingPoints.length) throw new Error('Please tap the map to add at least one point.');
+    const date = document.getElementById('pffDate').value;
+    const observer = document.getElementById('pffObserver').value;
+    const newRows = pffPendingPoints.map(p => ({
+      date, observer, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
+    }));
+    const { error } = await window.sb.from('pff_observations').insert(newRows);
     if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
+    statusEl.innerHTML = `<span class="ok">✓ Submitted ${newRows.length} point${newRows.length===1?'':'s'}.</span>`;
     document.getElementById('pffForm').reset();
-    clearPffPoint();
+    clearAllPffPoints();
     document.getElementById('pffStatusSwatch').style.background = '#ccc';
     document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
   } catch (err) {
