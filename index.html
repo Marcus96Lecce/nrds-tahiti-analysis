@@ -928,6 +928,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
 
+  <div id="offlineBanner" class="hint" style="background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:16px;display:none;"></div>
+
   <div class="card">
     <h2>1. Add a new Habitat Restoration action</h2>
     <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
@@ -1207,6 +1209,93 @@ let enriched = null;
 
 let pastData = null;
 
+/* ---------------- Offline submission queue (Habitat Restoration / Dératisation / PFF) ----------------
+   A field worker with no mobile signal can still fill in and "submit" these 3 forms — the row(s) get
+   saved into the browser's own localStorage instead of Supabase, then automatically uploaded the next
+   time the device is back online (a manual "Sync now" button covers the case where the browser's own
+   online/offline detection is wrong, e.g. connected to a wifi captive portal with no real internet).
+   This does NOT make the app itself loadable with zero connectivity from a cold start (that would need
+   a service worker caching index.html/data/*.json, a separate, heavier PWA-style change) — it only
+   covers staying usable for these 3 forms once the page is already open and connectivity drops mid-
+   session, which is what was asked for. Map tiles still won't load while offline (cosmetic only — the
+   zone-polygon/rat-station context layers are drawn from already-fetched in-memory data, not tiles,
+   so the pickers stay fully usable, just without the satellite imagery backdrop). */
+const OFFLINE_QUEUE_KEY = '_nrds_offline_queue';
+function getOfflineQueue(){
+  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); } catch (e) { return []; }
+}
+function saveOfflineQueue(queue){
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  renderOfflineBanner();
+}
+function queueOffline(table, rows){
+  const queue = getOfflineQueue();
+  queue.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2), table, rows, queuedAt: new Date().toISOString() });
+  saveOfflineQueue(queue);
+}
+function isNetworkError(err){
+  if (!navigator.onLine) return true;
+  const msg = (err && err.message || '').toLowerCase();
+  return err instanceof TypeError || msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch');
+}
+// Shared by the 3 submit forms below: returns {queued:true} if saved locally (offline or a network
+// failure even though navigator.onLine said otherwise), {queued:false} if it actually reached
+// Supabase, or throws the original error for a real (non-connectivity) failure like an RLS rejection
+// — left for the caller's own try/catch to display, unchanged from before this feature existed.
+async function insertOrQueue(table, rows){
+  if (!navigator.onLine){
+    queueOffline(table, rows);
+    return { queued: true };
+  }
+  try {
+    const { error } = await window.sb.from(table).insert(rows);
+    if (error) throw error;
+    return { queued: false };
+  } catch (err) {
+    if (isNetworkError(err)){
+      queueOffline(table, rows);
+      return { queued: true };
+    }
+    throw err;
+  }
+}
+async function syncOfflineQueue(){
+  if (!navigator.onLine) return;
+  const queue = getOfflineQueue();
+  if (!queue.length) return;
+  const remaining = [];
+  let syncedTables = new Set();
+  for (const item of queue){
+    try {
+      const { error } = await window.sb.from(item.table).insert(item.rows);
+      if (error) throw error;
+      syncedTables.add(item.table);
+    } catch (err) {
+      remaining.push(item); // keep it queued, retry on the next sync attempt
+    }
+  }
+  saveOfflineQueue(remaining);
+  if (syncedTables.has('habitat_restoration')) fetchHabitatRestoration();
+  if (syncedTables.has('deratisation')) fetchDeratisation();
+  if (syncedTables.has('pff_observations')) fetchPffObservations();
+}
+function renderOfflineBanner(){
+  const banner = document.getElementById('offlineBanner');
+  if (!banner) return;
+  const queue = getOfflineQueue();
+  const online = navigator.onLine;
+  if (online && !queue.length){ banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  const statusTxt = online ? 'Online' : '🔴 Offline — Habitat Restoration / Dératisation / PFF submissions below are being saved on this device only';
+  const queueTxt = queue.length
+    ? `${queue.length} submission${queue.length===1?'':'s'} saved locally, not yet uploaded.`
+    : 'No submissions waiting to upload.';
+  banner.innerHTML = `<b>${statusTxt}</b> — ${queueTxt}` +
+    (queue.length ? ` <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;margin-left:6px;" onclick="syncOfflineQueue()" ${online?'':'disabled'}>Sync now</button>` : '');
+}
+window.addEventListener('online', () => { renderOfflineBanner(); syncOfflineQueue(); });
+window.addEventListener('offline', () => renderOfflineBanner());
+
 /* ---------------- live shared data: static reference JSON + Supabase (replaces CSV upload) ----------------
    Reference tables (Management Unit, Derat Tahiti, Espèce) rarely change and aren't edited via the new
    forms, so they're plain static JSON fetched once. Habitat Restoration and Dératisation are the two
@@ -1482,10 +1571,11 @@ async function submitHabitatForm(evt){
       comment: document.getElementById('hrComment').value,
       species,
     };
-    const { error } = await window.sb.from('habitat_restoration').insert(newRow);
-    if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Submitted — updating the charts and map above…</span>';
-    await fetchHabitatRestoration(); // don't wait on the Realtime echo for the submitter's own update
+    const result = await insertOrQueue('habitat_restoration', [newRow]);
+    statusEl.innerHTML = result.queued
+      ? '<span class="ok">✓ Saved offline — will upload automatically once you\'re back online.</span>'
+      : '<span class="ok">✓ Submitted — updating the charts and map above…</span>';
+    if (!result.queued) await fetchHabitatRestoration(); // don't wait on the Realtime echo for the submitter's own update
     document.getElementById('hrForm').reset();
     document.getElementById('hrSpeciesRows').innerHTML = '';
     document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
@@ -1529,10 +1619,11 @@ async function submitDeratisationForm(evt){
       passage: document.getElementById('drPassage').value,
       checks,
     };
-    const { error } = await window.sb.from('deratisation').insert(newRow);
-    if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
-    await fetchDeratisation(); // don't wait on the Realtime echo for the submitter's own update
+    const result = await insertOrQueue('deratisation', [newRow]);
+    statusEl.innerHTML = result.queued
+      ? '<span class="ok">✓ Saved offline — will upload automatically once you\'re back online.</span>'
+      : '<span class="ok">✓ Submitted.</span>';
+    if (!result.queued) await fetchDeratisation(); // don't wait on the Realtime echo for the submitter's own update
     document.getElementById('drForm').reset();
     document.getElementById('drChecksWrap').innerHTML = '';
     const now = new Date(); const pad = n => String(n).padStart(2,'0');
@@ -1732,9 +1823,10 @@ async function submitPffForm(evt){
     const newRows = pffPendingPoints.map(p => ({
       date, observer, zone, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
     }));
-    const { error } = await window.sb.from('pff_observations').insert(newRows);
-    if (error) throw error;
-    statusEl.innerHTML = `<span class="ok">✓ Submitted ${newRows.length} point${newRows.length===1?'':'s'}.</span>`;
+    const result = await insertOrQueue('pff_observations', newRows);
+    statusEl.innerHTML = result.queued
+      ? `<span class="ok">✓ Saved offline (${newRows.length} point${newRows.length===1?'':'s'}) — will upload automatically once you're back online.</span>`
+      : `<span class="ok">✓ Submitted ${newRows.length} point${newRows.length===1?'':'s'}.</span>`;
     document.getElementById('pffForm').reset();
     clearAllPffPoints();
     document.getElementById('pffStatusSwatch').style.background = '#ccc';
@@ -2169,6 +2261,7 @@ function showSubmitView(){
   window.scrollTo(0,0);
   ensurePffPickerMap();
   if (pffPickerEntry) pffPickerEntry.map.invalidateSize();
+  renderOfflineBanner();
 }
 function showHomeView(){
   document.getElementById('submitView').style.display = 'none';
@@ -2186,6 +2279,7 @@ whenSupabaseReady(() => {
   subscribePffObservations();
   subscribeActivityTypes();
   subscribeActivityEntries();
+  syncOfflineQueue(); // picks up anything queued in a previous session, if we're online now
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
