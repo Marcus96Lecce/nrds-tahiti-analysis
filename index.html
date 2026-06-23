@@ -771,6 +771,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button class="secondary" onclick="startDrawMode('zone')">New Zone (polygon)</button>
         <button class="secondary" onclick="startDrawMode('station')">New Station (point)</button>
         <button class="secondary" onclick="startDrawMode('line')">New Rat Line</button>
+        <button class="secondary" onclick="startNewValleyForm()">New Valley</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -1332,7 +1333,38 @@ function whenSupabaseReady(cb){
 // tables.managementUnit/deratTahiti (the names every other function already reads) without re-fetching
 // the static JSON every time someone draws a new element.
 let staticManagementUnit = [], staticDeratTahiti = [];
-let newZoneRows = [], newStationRows = [], newLineRows = [];
+let newZoneRows = [], newStationRows = [], newLineRows = [], newValleyRows = [];
+// All valleys currently known — the original 3 plus whatever the user has registered via "Add
+// Elements" → New Valley. Used everywhere a Valley dropdown is populated, so a new valley shows up
+// consistently app-wide (Habitat Restoration form, Map/Chart/PFF-map filters, Log an Activity, the
+// draw-form's own Valley picker) the moment it's created, same "full integration for free" pattern
+// already used for user-drawn zones/stations/lines merging into tables.managementUnit/deratTahiti.
+function getAllValleys(){ return ['Papehue', 'Maruapo', 'Hopa', ...newValleyRows]; }
+// New valleys get a deterministic (name-hashed) color, same convention as rat-line coloring, so
+// they're visually distinct and stable across reloads/filters without needing a manual color picker.
+function rebuildValleyHex(){
+  for (const v of newValleyRows){
+    if (!VALLEY_HEX[v]){ VALLEY_HEX[v] = categoricalColor(hashStringToInt(v)); VALLEY_COLOR[v] = VALLEY_HEX[v]; }
+  }
+}
+function populateValleyDropdowns(){
+  const dynamicOptions = newValleyRows.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  const builtIn = '<option value="Papehue">Papehue</option><option value="Maruapo">Maruapo</option><option value="Hopa">Hopa</option>';
+  const targets = [
+    { id: 'mapValley', leading: '<option value="all">All valleys</option>' },
+    { id: 'chartValley', leading: '<option value="all">All valleys</option>' },
+    { id: 'pffMapValley', leading: '<option value="all">All valleys</option>' },
+    { id: 'hrValley', leading: '<option value="">Choose…</option>' },
+    { id: 'aeValley', leading: '<option value="">Choose…</option>' },
+  ];
+  for (const t of targets){
+    const sel = document.getElementById(t.id);
+    if (!sel) continue;
+    const current = sel.value;
+    sel.innerHTML = t.leading + builtIn + dynamicOptions;
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+  }
+}
 function rebuildMergedTables(){
   tables.managementUnit = staticManagementUnit.concat(newZoneRows);
   tables.deratTahiti = staticDeratTahiti.concat(newStationRows);
@@ -1441,7 +1473,7 @@ async function fetchNewElements(){
     console.error('Error loading new_elements:', error.message);
     return;
   }
-  newZoneRows = []; newStationRows = []; newLineRows = [];
+  newZoneRows = []; newStationRows = []; newLineRows = []; newValleyRows = [];
   for (const r of data){
     if (r.type === 'zone' && r.geometry){
       newZoneRows.push({
@@ -1457,10 +1489,14 @@ async function fetchNewElements(){
       });
     } else if (r.type === 'line' && r.geometry){
       newLineRows.push(r);
+    } else if (r.type === 'valley' && r.name){
+      newValleyRows.push(r.name);
     }
   }
   rebuildMergedTables();
+  rebuildValleyHex();
   populateFormReferenceOptions();
+  populateValleyDropdowns();
   if (enriched) onDataUpdated();
   if (leafletMap) renderMap(false);
 }
@@ -3443,7 +3479,7 @@ function showDrawForm(){
     <div class="row" style="margin-bottom:8px;">
       <label class="muted">${nameLabel} <input type="text" id="drawName" placeholder="${namePlaceholder}"></label>
       <label class="muted">Valley:
-        <select id="drawValley"><option value="">Choose…</option><option value="Papehue">Papehue</option><option value="Maruapo">Maruapo</option><option value="Hopa">Hopa</option></select>
+        <select id="drawValley"><option value="">Choose…</option>${getAllValleys().map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}</select>
       </label>`;
   if (drawMode === 'station'){
     html += `<label class="muted">Line (Ligne_stat), optional: <input type="text" id="drawLigneStat" placeholder="e.g. Hopa-A"></label>`;
@@ -3494,6 +3530,49 @@ async function saveDrawnElement(){
     statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
     if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
     drawMode = null; drawPoints = [];
+    await fetchNewElements();
+    setTimeout(() => { document.getElementById('drawFormBox').style.display = 'none'; }, 1200);
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+// "New Valley" has no geometry to draw (a Valley is a plain label in this app's data model, never a
+// shape of its own — even the built-in 3 are only ever inferred from the union of their zones), so it
+// skips the whole click-to-place flow entirely and just shows a name-only form directly.
+function startNewValleyForm(){
+  document.getElementById('addElementsMenu').style.display = 'none';
+  showHomeView();
+  document.getElementById('mapCard').scrollIntoView({ behavior:'smooth' });
+  cancelDrawMode(); // make sure no stray click handler from a previous zone/station/line draw is left bound
+  drawMode = 'valley';
+  showNewValleyForm();
+}
+function showNewValleyForm(){
+  const box = document.getElementById('drawFormBox');
+  box.innerHTML = `
+    <div class="muted" style="margin-bottom:6px;">Register a brand-new Valley name — it becomes a 4th option everywhere Valley is chosen (Habitat Restoration form, Map/Chart/PFF-map filters, Log an Activity, and this same draw tool's own Valley picker), alongside Papehue/Maruapo/Hopa. There's no shape to draw, just a name.</div>
+    <div class="row" style="margin-bottom:8px;">
+      <label class="muted">Valley name: <input type="text" id="newValleyName" placeholder="e.g. Punaruu"></label>
+    </div>
+    <button onclick="saveNewValley()">Save valley</button>
+    <button class="secondary" onclick="discardDrawnElement()">Discard</button>
+    <span id="drawSaveStatus" class="muted"></span>`;
+  box.style.display = '';
+}
+async function saveNewValley(){
+  const statusEl = document.getElementById('drawSaveStatus');
+  const name = document.getElementById('newValleyName').value.trim();
+  if (!name){ statusEl.innerHTML = '<span class="err">Valley name is required.</span>'; return; }
+  if (getAllValleys().some(v => v.toLowerCase() === name.toLowerCase())){
+    statusEl.innerHTML = '<span class="err">A valley with this name already exists.</span>'; return;
+  }
+  statusEl.innerHTML = 'Saving…';
+  try {
+    const { error } = await window.sb.from('new_elements').insert({ type: 'valley', name, valley: null, geometry: null });
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
+    drawMode = null;
     await fetchNewElements();
     setTimeout(() => { document.getElementById('drawFormBox').style.display = 'none'; }, 1200);
   } catch (err) {
