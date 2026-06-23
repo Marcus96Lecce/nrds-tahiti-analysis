@@ -3358,8 +3358,38 @@ function ensureMap(){
   const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, subdomains: 'abc', attribution: '&copy; OpenStreetMap contributors'
   });
+  // Esri's free public basemap gallery (no API key needed, same as World_Imagery above) — maxZoom set
+  // per each service's own native resolution limit (checked directly against its MapServer?f=json
+  // tileInfo.lods before adding, not guessed): Street/Topo go to 19 like World_Imagery, Dark Gray
+  // Canvas and Nat Geo cap at 16, USGS USA Topo Maps at 15. USA Topo Maps is US-territory-only data —
+  // it actually returns a literal "Map data not yet available" placeholder over Tahiti (confirmed by
+  // fetching a real tile here before wiring it in) — included anyway since it was asked for by name,
+  // but it won't show anything useful for this app's area; every other layer here has real coverage.
+  const esriStreet = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  });
+  const esriTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  });
+  const esriDark = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 16, attribution: 'Tiles &copy; Esri'
+  });
+  const natGeo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 16, attribution: 'Tiles &copy; Esri, National Geographic'
+  });
+  const usaTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 15, attribution: 'Tiles &copy; Esri, USGS'
+  });
   satellite.addTo(leafletMap);
-  L.control.layers({ 'Satellite (Esri)': satellite, 'Street map (OSM)': streets }, {}, { collapsed: window.innerWidth < 760, position: 'topright' }).addTo(leafletMap);
+  L.control.layers({
+    'Satellite (Esri)': satellite,
+    'Street map (OSM)': streets,
+    'Esri World Street Map': esriStreet,
+    'Esri World Topo Map': esriTopo,
+    'Esri Dark Gray Canvas': esriDark,
+    'Esri Nat Geo World Map': natGeo,
+    'USGS National Map Topo': usaTopo,
+  }, {}, { collapsed: window.innerWidth < 760, position: 'topright' }).addTo(leafletMap);
   L.control.scale({ metric: true, imperial: false }).addTo(leafletMap);
   unitLayerGroup = L.layerGroup().addTo(leafletMap);
   pointLayerGroup = L.layerGroup().addTo(leafletMap);
