@@ -1059,7 +1059,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         </label>
         <span id="pffUserLocationStatus" class="muted"></span>
       </div>
-      <div class="muted" style="margin-bottom:4px;">Points — tap/click the map to add one (you can add several):</div>
+      <div class="muted" style="margin-bottom:4px;">Points — tap/click the map to add one (you can add several). Small dim dots already on the map are previously submitted PFF points (tap one for details); your new points stand out with a bold white outline:</div>
       <div id="pffPickerMap" class="geo-picker-map"></div>
       <div class="row" style="margin-top:6px;margin-bottom:6px;align-items:center;">
         <span class="muted" id="pffPickerReadout">Tap/click the map to add a point — you can add several before submitting.</span>
@@ -1474,6 +1474,7 @@ async function fetchPffObservations(){
   document.getElementById('pffZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
   if (leafletMap) renderMap(false);
   if (currentChartView === 'pff') renderPffChart();
+  if (pffPickerEntry) renderPffPickerExisting();
 }
 function subscribePffObservations(){
   fetchPffObservations();
@@ -1657,8 +1658,10 @@ function ensurePffPickerMap(){
     stationsLayer: L.layerGroup().addTo(map),
     zoneNamesLayer: L.layerGroup().addTo(map),
     userLocLayer: L.layerGroup().addTo(map),
+    existingLayer: L.layerGroup().addTo(map),
   };
   renderPffPickerContext(true);
+  renderPffPickerExisting();
 
   map.on('preclick', (e) => {
     L.DomEvent.stopPropagation(e);
@@ -1756,6 +1759,29 @@ function renderPffPickerStations(){
       .bindTooltip(`Station ${st['Station']} (${st['Vallee']})`, { sticky: true, direction: 'top' })
       .addTo(entry.stationsLayer);
   });
+}
+// Shows every already-submitted PFF point as a dim reference layer (thin dark stroke, smaller radius)
+// so a user adding new points can see what's already been recorded nearby — deliberately styled
+// differently from the bold white-stroke pending-point markers added by clicking, so the two can never
+// be confused for one another. Always shown regardless of the Valley filter, same reasoning as the
+// main map's PFF layer (this data has no Valley field of its own).
+function renderPffPickerExisting(){
+  if (!pffPickerEntry) return;
+  const layer = pffPickerEntry.existingLayer;
+  layer.clearLayers();
+  for (const r of pffObservations){
+    const lat = +r.lat, lon = +r.lon;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const color = PFF_STATUS_COLORS[r.status] || '#888';
+    const html = `<b>Existing PFF point</b> — ${escapeHtml(r.status || '—')}<br>` +
+      `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>Zone: ${escapeHtml(r.zone || '—')}` +
+      (r.value ? `<br>Value: ${escapeHtml(r.value)}` : '') +
+      (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
+    L.circleMarker([lat, lon], { radius: 6, color: '#333', weight: 1, fillColor: color, fillOpacity: 0.7 })
+      .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
+      .bindPopup(html)
+      .addTo(layer);
+  }
 }
 function onPffMapValleyChange(){
   pffMapValleyFilter = document.getElementById('pffMapValley').value;
