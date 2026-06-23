@@ -1031,6 +1031,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
         </label>
         <span class="swatch" id="pffStatusSwatch" style="background:#ccc;"></span>
       </div>
+      <div class="row" style="margin-bottom:8px;">
+        <label class="muted">Valley:
+          <select id="pffMapValley" onchange="onPffMapValleyChange()">
+            <option value="all">All valleys</option>
+            <option value="Papehue">Papehue</option>
+            <option value="Maruapo">Maruapo</option>
+            <option value="Hopa">Hopa</option>
+          </select>
+        </label>
+        <label class="muted">
+          <input type="checkbox" id="pffStationsOverlayToggle" onchange="togglePffStationsOverlay(this.checked)">
+          Overlay all rat stations
+        </label>
+        <label class="muted">
+          <input type="checkbox" id="pffZoneNamesToggle" onchange="togglePffZoneNames(this.checked)">
+          Show zone names
+        </label>
+        <label class="muted">
+          <input type="checkbox" id="pffUserLocationToggle" onchange="togglePffUserLocation(this.checked)">
+          Show my location
+        </label>
+        <span id="pffUserLocationStatus" class="muted"></span>
+      </div>
       <div class="muted" style="margin-bottom:4px;">Point location — tap/click the map to set it:</div>
       <div id="pffPickerMap" class="geo-picker-map"></div>
       <div class="row" style="margin-top:6px;margin-bottom:10px;align-items:center;">
@@ -1380,6 +1403,10 @@ function populateFormReferenceOptions(){
   document.getElementById('drZone').innerHTML = '<option value="">Choose…</option>' + zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join('');
   const units = [...new Set((tables.managementUnit||[]).map(u => u.Nom).filter(Boolean))].sort();
   document.getElementById('aeZoneList').innerHTML = units.map(u => `<option value="${escapeHtml(u)}">`).join('');
+  // Covers the race where the PFF picker map was created (e.g. a direct #submit deep link) before
+  // loadReferenceData()'s fetch resolved — without this, its zone/station context would stay empty
+  // forever since ensurePffPickerMap() only ever runs once. Also picks up new "Add Elements" zones.
+  if (pffPickerEntry) renderPffPickerContext(true);
 }
 
 function onHrValleyChange(){
@@ -1519,22 +1546,24 @@ async function submitDeratisationForm(evt){
 // created while its container is display:none would size itself to zero, same reason ensureMap()
 // (the main map) is only ever created on first renderMap(), not at page load.
 let pffPickerEntry = null;
+let pffMapValleyFilter = 'all', pffShowStations = false, pffShowZoneNames = false;
+let pffUserLocWatchId = null, pffUserLocFirstFix = true;
+
 function ensurePffPickerMap(){
   if (pffPickerEntry) return;
   const map = L.map('pffPickerMap', { scrollWheelZoom: true });
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
-  const ctxLayer = L.featureGroup().addTo(map);
-  (tables.managementUnit||[]).forEach(u => {
-    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
-      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(ctxLayer);
-    });
-  });
-  const bounds = ctxLayer.getBounds();
-  if (bounds.isValid()) map.fitBounds(bounds); else map.setView([-17.62, -149.45], 11);
+  pffPickerEntry = {
+    map, marker: null,
+    ctxLayer: L.featureGroup().addTo(map),
+    stationsLayer: L.layerGroup().addTo(map),
+    zoneNamesLayer: L.layerGroup().addTo(map),
+    userLocLayer: L.layerGroup().addTo(map),
+  };
+  renderPffPickerContext(true);
 
-  pffPickerEntry = { map, marker: null };
   map.on('preclick', (e) => {
     L.DomEvent.stopPropagation(e);
     const { lat, lng } = e.latlng;
@@ -1546,6 +1575,92 @@ function ensurePffPickerMap(){
     document.getElementById('pffPickerReadout').textContent = `Point set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   });
 }
+
+// Same Valley / "overlay all rat stations" / "show zone names" controls as the main map ("2. Map"),
+// scoped to this picker's own independent Leaflet instance — re-fits bounds only on a Valley change
+// (shouldFit), mirroring how the main map only refits on its own Valley filter, not on toggle clicks.
+function renderPffPickerContext(shouldFit){
+  const entry = pffPickerEntry;
+  entry.ctxLayer.clearLayers();
+  entry.zoneNamesLayer.clearLayers();
+  const units = (tables.managementUnit||[]).filter(u => pffMapValleyFilter === 'all' || u['Vallee'] === pffMapValleyFilter);
+  units.forEach(u => {
+    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
+      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(entry.ctxLayer);
+    });
+    if (pffShowZoneNames){
+      const c = geometryCentroid(u.Geometry);
+      if (c) L.marker([c.lat, c.lon], { icon: smallLabelIcon(u['Nom']), interactive: false }).addTo(entry.zoneNamesLayer);
+    }
+  });
+  renderPffPickerStations();
+  if (shouldFit){
+    const bounds = entry.ctxLayer.getBounds();
+    if (bounds.isValid()) entry.map.fitBounds(bounds); else entry.map.setView([-17.62, -149.45], 11);
+  }
+}
+function renderPffPickerStations(){
+  const entry = pffPickerEntry;
+  entry.stationsLayer.clearLayers();
+  if (!pffShowStations) return;
+  (tables.deratTahiti||[]).filter(s => pffMapValleyFilter === 'all' || s['Vallee'] === pffMapValleyFilter).forEach(st => {
+    const lat = +st['Latitude'], lon = +st['Longitude'];
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    L.circleMarker([lat, lon], { radius: 3.5, color: '#444', weight: 1, fillColor: '#fff', fillOpacity: 0.9 })
+      .bindTooltip(`Station ${st['Station']} (${st['Vallee']})`, { sticky: true, direction: 'top' })
+      .addTo(entry.stationsLayer);
+  });
+}
+function onPffMapValleyChange(){
+  pffMapValleyFilter = document.getElementById('pffMapValley').value;
+  renderPffPickerContext(true);
+}
+function togglePffStationsOverlay(checked){
+  pffShowStations = checked;
+  renderPffPickerStations();
+}
+function togglePffZoneNames(checked){
+  pffShowZoneNames = checked;
+  renderPffPickerContext(false);
+}
+// "Show my location" — independent geolocation.watchPosition, same convention as the main map's
+// toggleUserLocation(): permission prompt only on check, centers on the first fix only, never on
+// later updates (so it doesn't fight the user's own pan/zoom while placing a point).
+function togglePffUserLocation(checked){
+  const statusEl = document.getElementById('pffUserLocationStatus');
+  statusEl.textContent = '';
+  if (checked){
+    if (!navigator.geolocation){
+      statusEl.textContent = 'Geolocation is not supported by this browser.';
+      document.getElementById('pffUserLocationToggle').checked = false;
+      return;
+    }
+    pffUserLocFirstFix = true;
+    pffUserLocWatchId = navigator.geolocation.watchPosition(onPffUserLocationUpdate, onPffUserLocationError,
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+  } else {
+    if (pffUserLocWatchId != null){ navigator.geolocation.clearWatch(pffUserLocWatchId); pffUserLocWatchId = null; }
+    pffPickerEntry.userLocLayer.clearLayers();
+  }
+}
+function onPffUserLocationUpdate(pos){
+  const { latitude, longitude, accuracy } = pos.coords;
+  const entry = pffPickerEntry;
+  entry.userLocLayer.clearLayers();
+  L.circle([latitude, longitude], { radius: accuracy, color: '#4285f4', weight: 1, fillColor: '#4285f4', fillOpacity: 0.12 }).addTo(entry.userLocLayer);
+  L.circleMarker([latitude, longitude], { radius: 7, color: '#fff', weight: 2, fillColor: '#4285f4', fillOpacity: 1 })
+    .bindTooltip('You are here', { direction: 'top' }).addTo(entry.userLocLayer);
+  document.getElementById('pffUserLocationStatus').textContent = `Accuracy: ±${Math.round(accuracy)} m`;
+  if (pffUserLocFirstFix){ entry.map.setView([latitude, longitude], 16); pffUserLocFirstFix = false; }
+}
+function onPffUserLocationError(err){
+  const statusEl = document.getElementById('pffUserLocationStatus');
+  if (err.code === err.PERMISSION_DENIED) statusEl.textContent = 'Location permission denied.';
+  else if (err.code === err.TIMEOUT) statusEl.textContent = 'Location request timed out — try again.';
+  else statusEl.textContent = 'Could not get your location.';
+  document.getElementById('pffUserLocationToggle').checked = false;
+}
+
 function onPffStatusChange(){
   const status = document.getElementById('pffStatus').value;
   document.getElementById('pffStatusSwatch').style.background = PFF_STATUS_COLORS[status] || '#ccc';
