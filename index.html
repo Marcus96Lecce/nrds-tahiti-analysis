@@ -64,6 +64,7 @@
     padding:10px 14px 10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.18);font-size:12.5px;line-height:1.5;max-width:min(300px,86vw);}
   .chart-popup b{color:var(--green-dark);}
   .chart-popup .x{position:absolute;top:5px;right:8px;cursor:pointer;color:var(--muted);font-weight:bold;font-size:14px;padding:4px;}
+  .geo-picker-map{height:220px;width:100%;border:1px solid var(--border);border-radius:8px;margin-top:2px;cursor:crosshair;}
   .map-flex-row{display:flex;gap:12px;align-items:flex-start;margin-top:8px;}
   .map-container{flex:1;min-width:0;height:560px;border:1px solid var(--border);border-radius:8px;}
   .map-combined-box{flex:0 0 360px;max-height:560px;overflow-y:auto;background:#f7faf6;border:1px solid var(--border);border-radius:8px;padding:12px;}
@@ -1629,6 +1630,7 @@ function addAtFieldRow(prefill){
       <option value="date">Date</option>
       <option value="yesno">Yes / No</option>
       <option value="choice">Choice (dropdown)</option>
+      <option value="geolocation">Geolocation (pick on map)</option>
     </select>
     <input type="text" class="at-field-options" placeholder="Options, comma-separated" style="width:200px;display:none;" value="${escapeHtml((prefill?.options||[]).join(', '))}">
     <label class="muted" style="gap:4px;"><input type="checkbox" class="at-field-required" ${prefill?.required?'checked':''}> Required</label>
@@ -1690,7 +1692,56 @@ async function submitActivityTypeForm(evt){
   }
 }
 
+// Geolocation custom fields render their own small Leaflet map instead of a plain input — the user
+// taps/clicks a point and its lat/lon is captured into a hidden .ae-field-value input, so the rest of
+// the entry-collection code (submitActivityEntryForm) doesn't need to know this type is special.
+// Map instances are tracked here (keyed by their container id) so they can be properly .remove()'d
+// before re-rendering — otherwise switching activity types repeatedly would leak Leaflet instances.
+let geoPickerRegistry = {};
+function clearGeoPickerMaps(){
+  Object.values(geoPickerRegistry).forEach(entry => { try { entry.map.remove(); } catch (e) {} });
+  geoPickerRegistry = {};
+}
+function initGeoPickerMap(mapId, hiddenId){
+  const map = L.map(mapId, { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  // Light context layer (existing management-unit zones) just for orientation — not interactive.
+  // featureGroup (not layerGroup) is needed here specifically because it adds getBounds(), used below.
+  const ctxLayer = L.featureGroup().addTo(map);
+  (tables.managementUnit||[]).forEach(u => {
+    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
+      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(ctxLayer);
+    });
+  });
+  const bounds = ctxLayer.getBounds();
+  if (bounds.isValid()) map.fitBounds(bounds); else map.setView([-17.62, -149.45], 11);
+
+  const entry = { map, marker: null };
+  geoPickerRegistry[mapId] = entry;
+  // preclick (not click) fires before the context polygons above can swallow it — same fix as the
+  // "Add Elements" draw tool needed after points clicked inside an existing zone were silently lost.
+  map.on('preclick', (e) => {
+    L.DomEvent.stopPropagation(e);
+    const { lat, lng } = e.latlng;
+    // circleMarker, not L.marker() — this single-file app never bundles Leaflet's default marker-icon
+    // images, so a plain L.marker() would 404 on them and render with no visible icon at all.
+    if (entry.marker) entry.marker.setLatLng([lat, lng]);
+    else entry.marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: '#d62728', fillOpacity: 0.95 }).addTo(map);
+    document.getElementById(hiddenId).value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    document.getElementById(mapId + '_readout').textContent = `Point set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  });
+}
+function clearGeoPickerPoint(mapId, hiddenId){
+  const entry = geoPickerRegistry[mapId];
+  if (entry && entry.marker){ entry.map.removeLayer(entry.marker); entry.marker = null; }
+  document.getElementById(hiddenId).value = '';
+  document.getElementById(mapId + '_readout').textContent = 'No point selected.';
+}
+
 function onActivityTypeChange(){
+  clearGeoPickerMaps();
   const typeId = document.getElementById('aeType').value;
   const wrap = document.getElementById('aeCustomFields');
   wrap.innerHTML = '';
@@ -1698,8 +1749,24 @@ function onActivityTypeChange(){
   if (!type) return;
   for (const f of (type.fields||[])){
     const div = document.createElement('div');
-    div.className = 'row'; div.style.marginBottom = '10px';
     div.dataset.fieldId = f.id; div.dataset.fieldLabel = f.label; div.dataset.fieldType = f.type;
+    if (f.type === 'geolocation'){
+      div.style.marginBottom = '14px';
+      const mapId = `geoPickerMap_${f.id}_${Math.random().toString(36).slice(2)}`;
+      const hiddenId = `${mapId}_value`;
+      div.innerHTML = `
+        <div class="muted" style="margin-bottom:4px;">${escapeHtml(f.label)}${f.required?' *':''} — tap/click the map to set the point:</div>
+        <div id="${mapId}" class="geo-picker-map"></div>
+        <div class="row" style="margin-top:6px;align-items:center;">
+          <span class="muted" id="${mapId}_readout">No point selected.</span>
+          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearGeoPickerPoint('${mapId}','${hiddenId}')">Clear point</button>
+        </div>
+        <input type="hidden" class="ae-field-value" id="${hiddenId}">`;
+      wrap.appendChild(div);
+      initGeoPickerMap(mapId, hiddenId);
+      continue;
+    }
+    div.className = 'row'; div.style.marginBottom = '10px';
     let inputHtml;
     if (f.type === 'number') inputHtml = `<input type="number" class="ae-field-value" ${f.required?'required':''}>`;
     else if (f.type === 'date') inputHtml = `<input type="date" class="ae-field-value" ${f.required?'required':''}>`;
@@ -1722,6 +1789,14 @@ async function submitActivityEntryForm(evt){
       id: div.dataset.fieldId, label: div.dataset.fieldLabel, type: div.dataset.fieldType,
       value: div.querySelector('.ae-field-value').value,
     }));
+    // Geolocation fields use a hidden input, which browsers exempt from native required-field
+    // validation — so a required map point needs its own explicit check here.
+    for (const fv of fieldValues){
+      const def = (type?.fields||[]).find(f => f.id === fv.id);
+      if (def?.type === 'geolocation' && def.required && !fv.value){
+        throw new Error(`Please tap the map to set a point for "${def.label}".`);
+      }
+    }
     const newEntry = {
       activity_type_id: typeId || null,
       activity_type_name: type ? type.name : '',
@@ -1737,6 +1812,7 @@ async function submitActivityEntryForm(evt){
     if (error) throw error;
     statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
     document.getElementById('aeForm').reset();
+    clearGeoPickerMaps();
     document.getElementById('aeCustomFields').innerHTML = '';
     document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
   } catch (err) {
