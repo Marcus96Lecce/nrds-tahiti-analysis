@@ -811,6 +811,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="secondary map-layer-btn" data-layer="species" onclick="setMapLayer('species')">Planted species</button>
       <button class="secondary map-layer-btn" data-layer="cleaning" onclick="setMapLayer('cleaning')">Cleaning status by zone</button>
       <button class="secondary map-layer-btn" data-layer="derat" onclick="setMapLayer('derat')">Bait consumption (Checks)</button>
+      <button class="secondary map-layer-btn" data-layer="pff" onclick="setMapLayer('pff')">Little Fire Ant (PFF)</button>
       <label class="muted" style="margin-left:auto;">
         <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
         Overlay all rat stations
@@ -894,6 +895,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="secondary" onclick="renderSpecies()">Most-planted species</button>
       <button class="secondary" onclick="renderWorkforce()">People involved (volunteer vs routine)</button>
       <button class="secondary" onclick="renderDeratChart()">Bait consumption (Checks)</button>
+      <button class="secondary" onclick="renderPffChart()">Little Fire Ant (PFF)</button>
     </div>
     <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis to run.</span></div>
     <div id="chartPopup" class="chart-popup" style="display:none;"></div>
@@ -1011,8 +1013,46 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
-    <h2>3. Activity Types</h2>
-    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "4. Log an Activity" below.</div>
+    <h2>3. Petite fourmi de feu (PFF)</h2>
+    <div class="hint">Log a Little Fire Ant (Wasmannia auropunctata) survey point — choose its status, tap/click the map to place it, and submit. It appears on "2. Map" (layer "Little Fire Ant (PFF)") and in "3. Chart analysis" for everyone within a few seconds.</div>
+    <form id="pffForm" onsubmit="submitPffForm(event)">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="pffDate" required></label>
+        <label class="muted">Observer name: <input type="text" id="pffObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;align-items:center;">
+        <label class="muted">Status:
+          <select id="pffStatus" onchange="onPffStatusChange()" required>
+            <option value="">Choose…</option>
+            <option value="Positive">Positive</option>
+            <option value="Centre de colonie">Centre de colonie</option>
+            <option value="Negative">Negative</option>
+          </select>
+        </label>
+        <span class="swatch" id="pffStatusSwatch" style="background:#ccc;"></span>
+      </div>
+      <div class="muted" style="margin-bottom:4px;">Point location — tap/click the map to set it:</div>
+      <div id="pffPickerMap" class="geo-picker-map"></div>
+      <div class="row" style="margin-top:6px;margin-bottom:10px;align-items:center;">
+        <span class="muted" id="pffPickerReadout">No point selected.</span>
+        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPffPoint()">Clear point</button>
+      </div>
+      <input type="hidden" id="pffLat"><input type="hidden" id="pffLon">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Value (your own code/reference, optional): <input type="text" id="pffValue" placeholder="e.g. sample/colony code" style="width:180px;"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Notes:</label>
+        <textarea id="pffNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
+      </div>
+      <button type="submit">Submit PFF point</button>
+      <span id="pffSubmitStatus" class="muted"></span>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>4. Activity Types</h2>
+    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "5. Log an Activity" below.</div>
     <div id="atListWrap"></div>
     <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
     <form id="atForm" onsubmit="submitActivityTypeForm(event)" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
@@ -1041,9 +1081,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
-    <h2>4. Log an Activity</h2>
+    <h2>5. Log an Activity</h2>
     <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
-    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "3. Activity Types" above first.</div>
+    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "4. Activity Types" above first.</div>
     <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Activity type:
@@ -1306,6 +1346,29 @@ function subscribeNewElements(){
     .subscribe();
 }
 
+/* ---------------- Petite fourmi de feu (PFF / Little Fire Ant) survey points ----------------
+   A dedicated, fixed-schema activity (like Habitat Restoration/Dératisation, not the generic
+   Activity Types builder), since Marco asked for it to work exactly like those two. Each point has
+   a status — Positive/Centre de colonie/Negative — that fixes its color everywhere (map, chart,
+   the picker marker itself), tracking Little Fire Ant detection/colony-center/clearance survey
+   points across the LIFE STOP EXTINCTION work area. */
+const PFF_STATUS_COLORS = { 'Positive': '#d62728', 'Centre de colonie': '#ff7f0e', 'Negative': '#000000' };
+
+let pffObservations = [];
+async function fetchPffObservations(){
+  const { data, error } = await window.sb.from('pff_observations').select('*').order('id');
+  if (error){ console.error('Error loading pff_observations:', error.message); return; }
+  pffObservations = data || [];
+  if (leafletMap) renderMap(false);
+  if (currentChartView === 'pff') renderPffChart();
+}
+function subscribePffObservations(){
+  fetchPffObservations();
+  window.sb.channel('pff_observations_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pff_observations' }, () => fetchPffObservations())
+    .subscribe();
+}
+
 function maybeBuildEnriched(){
   if (!dataLoaded.ref || !dataLoaded.habitat) return;
   onDataUpdated();
@@ -1446,6 +1509,78 @@ async function submitDeratisationForm(evt){
     document.getElementById('drChecksWrap').innerHTML = '';
     const now = new Date(); const pad = n => String(n).padStart(2,'0');
     document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+/* ---------------- Petite fourmi de feu (PFF) entry form ---------------- */
+// Lazily created the first time the Submit page becomes visible (showSubmitView()) — a Leaflet map
+// created while its container is display:none would size itself to zero, same reason ensureMap()
+// (the main map) is only ever created on first renderMap(), not at page load.
+let pffPickerEntry = null;
+function ensurePffPickerMap(){
+  if (pffPickerEntry) return;
+  const map = L.map('pffPickerMap', { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  const ctxLayer = L.featureGroup().addTo(map);
+  (tables.managementUnit||[]).forEach(u => {
+    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
+      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(ctxLayer);
+    });
+  });
+  const bounds = ctxLayer.getBounds();
+  if (bounds.isValid()) map.fitBounds(bounds); else map.setView([-17.62, -149.45], 11);
+
+  pffPickerEntry = { map, marker: null };
+  map.on('preclick', (e) => {
+    L.DomEvent.stopPropagation(e);
+    const { lat, lng } = e.latlng;
+    const color = PFF_STATUS_COLORS[document.getElementById('pffStatus').value] || '#1f77b4';
+    if (pffPickerEntry.marker) pffPickerEntry.marker.setLatLng([lat, lng]).setStyle({ fillColor: color });
+    else pffPickerEntry.marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95 }).addTo(map);
+    document.getElementById('pffLat').value = lat.toFixed(6);
+    document.getElementById('pffLon').value = lng.toFixed(6);
+    document.getElementById('pffPickerReadout').textContent = `Point set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  });
+}
+function onPffStatusChange(){
+  const status = document.getElementById('pffStatus').value;
+  document.getElementById('pffStatusSwatch').style.background = PFF_STATUS_COLORS[status] || '#ccc';
+  if (pffPickerEntry && pffPickerEntry.marker && status){
+    pffPickerEntry.marker.setStyle({ fillColor: PFF_STATUS_COLORS[status] });
+  }
+}
+function clearPffPoint(){
+  if (pffPickerEntry && pffPickerEntry.marker){ pffPickerEntry.map.removeLayer(pffPickerEntry.marker); pffPickerEntry.marker = null; }
+  document.getElementById('pffLat').value = '';
+  document.getElementById('pffLon').value = '';
+  document.getElementById('pffPickerReadout').textContent = 'No point selected.';
+}
+async function submitPffForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('pffSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const lat = document.getElementById('pffLat').value, lon = document.getElementById('pffLon').value;
+    if (!lat || !lon) throw new Error('Please tap the map to set the point location.');
+    const newRow = {
+      date: document.getElementById('pffDate').value,
+      observer: document.getElementById('pffObserver').value,
+      status: document.getElementById('pffStatus').value,
+      value: document.getElementById('pffValue').value,
+      notes: document.getElementById('pffNotes').value,
+      lat: +lat, lon: +lon,
+    };
+    const { error } = await window.sb.from('pff_observations').insert(newRow);
+    if (error) throw error;
+    statusEl.innerHTML = '<span class="ok">✓ Submitted.</span>';
+    document.getElementById('pffForm').reset();
+    clearPffPoint();
+    document.getElementById('pffStatusSwatch').style.background = '#ccc';
+    document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
   }
@@ -1874,6 +2009,8 @@ function showSubmitView(){
   document.getElementById('submitView').style.display = '';
   if (location.hash !== '#submit') location.hash = 'submit';
   window.scrollTo(0,0);
+  ensurePffPickerMap();
+  if (pffPickerEntry) pffPickerEntry.map.invalidateSize();
 }
 function showHomeView(){
   document.getElementById('submitView').style.display = 'none';
@@ -1888,11 +2025,13 @@ whenSupabaseReady(() => {
   subscribeHabitatRestoration();
   subscribeDeratisation();
   subscribeNewElements();
+  subscribePffObservations();
   subscribeActivityTypes();
   subscribeActivityEntries();
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
 (function setDefaultDrDate(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
@@ -2245,6 +2384,7 @@ function rerenderCurrentChart(){
   else if (currentChartView === 'species') renderSpecies();
   else if (currentChartView === 'workforce') renderWorkforce();
   else if (currentChartView === 'derat') renderDeratChart();
+  else if (currentChartView === 'pff') renderPffChart();
 }
 
 function renderPreview(mainRows){
@@ -2638,6 +2778,69 @@ function renderDeratChart(){
     <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the per-station breakdown. Only Valley and the date range above apply here — Zone/Station use Habitat Restoration zone codes, which don't match dératisation's own zone naming.</span>
   </div>`;
   const hint = `<div class="hint" style="margin-bottom:6px;">Bait consumption (Checks) per dératisation patrol over time — high Conso means more rat activity was found, so red/orange bars are the patrols that found the most.</div>`;
+  area.innerHTML = hint + summary + svg + legend;
+}
+
+// Like the dératisation chart above, PFF points have no Valley/Zone field of their own (the
+// geolocation point is the only location data), so this chart only respects the date range filter.
+// One bar per survey point, chronological, colored by status — the map's own PFF layer already
+// shows the spatial distribution, so this chart's job is the complementary "when" view: is the
+// detection rate (and colony-center count) going up or down over time.
+function renderPffChart(){
+  currentChartView = 'pff';
+  hideChartPopup();
+  const area = document.getElementById('chartArea');
+
+  const rows = (pffObservations||[])
+    .filter(r => r.date && inDateRange(r.date, chartDateFrom, chartDateTo))
+    .map(r => ({ ...r, ts: new Date(r.date).getTime() }))
+    .sort((a,b) => a.ts - b.ts);
+
+  if (!rows.length){ area.innerHTML = '<span class="muted">No Little Fire Ant (PFF) survey points for this date range.</span>'; return; }
+  chartPopupData = [];
+
+  const W = Math.max(700, rows.length*45), H = 320, mL = 50, mR = 20, mT = 20, mB = 80;
+  const slotW = (W-mL-mR)/rows.length;
+  const xCenter = i => mL + (i+0.5)*slotW;
+  const barW = Math.min(30, slotW*0.6);
+  const barH = H-mT-mB;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  rows.forEach((r,i) => {
+    const x = xCenter(i), color = PFF_STATUS_COLORS[r.status] || '#888';
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)}</div>
+      <div><b>Status:</b> ${escapeHtml(r.status||'—')}</div>
+      <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
+      ${r.value ? `<div><b>Value:</b> ${escapeHtml(r.value)}</div>` : ''}
+      ${r.notes ? `<div><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}
+      <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>`) - 1;
+    svg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
+    svg += svgEl('title',{},`${r.date} — ${r.status}\nClick for full details`);
+    svg += svgEl('rect',{x:x-barW/2,y:mT,width:barW,height:barH,fill:color});
+    svg += svgEl('text',{x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, r.date);
+    svg += `</g>`;
+  });
+  svg += `</svg>`;
+
+  const total = rows.length;
+  const positiveCount = rows.filter(r => r.status === 'Positive').length;
+  const centreCount = rows.filter(r => r.status === 'Centre de colonie').length;
+  const pctPositive = total ? (positiveCount/total*100).toFixed(1) : '0.0';
+  const summary = `<div class="grid3" style="margin-bottom:10px;">
+    <div class="stat"><div class="num">${total}</div><div class="lbl">survey points recorded</div></div>
+    <div class="stat"><div class="num">${positiveCount}</div><div class="lbl">positive (${pctPositive}% of total)</div></div>
+    <div class="stat"><div class="num">${centreCount}</div><div class="lbl">colony centers (Centre de colonie)</div></div>
+  </div>`;
+  const legend = `<div style="margin-top:8px;">
+    <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Positive']}"></span>Positive</span>
+    <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Centre de colonie']}"></span>Centre de colonie</span>
+    <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Negative']}"></span>Negative</span>
+    <span class="legend-item">Each bar = one survey point, in chronological order, colored by status</span>
+    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the full record. Only the date range above applies here — Valley/Zone/Station don't apply, since PFF points aren't tied to a fixed valley/zone.</span>
+  </div>`;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time across the LIFE STOP EXTINCTION work area — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when.</div>`;
   area.innerHTML = hint + summary + svg + legend;
 }
 
@@ -3291,6 +3494,26 @@ function renderMap(shouldFit){
     }
   }
 
+  if (mapLayer === 'pff'){
+    // PFF points have no Valley field of their own (the geolocation point is the only location data),
+    // so unlike every other layer this one deliberately ignores the map's Valley filter — same
+    // precedent as the user-drawn "Add Elements" lines, which also have no valley to filter by.
+    for (const r of pffObservations){
+      const lat = +r.lat, lon = +r.lon;
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const color = PFF_STATUS_COLORS[r.status] || '#888';
+      const html = `<b>Petite fourmi de feu (PFF)</b> — ${escapeHtml(r.status || '—')}<br>` +
+        `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}` +
+        (r.value ? `<br>Value: ${escapeHtml(r.value)}` : '') +
+        (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
+      const marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
+      marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+      marker.bindPopup(html);
+      marker.addTo(pointLayerGroup);
+      boundsLatLngs.push([lat, lon]);
+    }
+  }
+
   if (mapLayer === 'all_obs' || mapLayer === 'species'){
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
     if (mapLayer === 'species') rows = rows.filter(r => r.Species_Planted);
@@ -3386,6 +3609,12 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>2</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>4 — fully consumed</span>
       <span class="legend-item">dots = latest Checks (bait consumption) reading per rat station</span>`;
+  } else if (mapLayer === 'pff'){
+    legend += `
+      <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Positive']}"></span>Positive</span>
+      <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Centre de colonie']}"></span>Centre de colonie</span>
+      <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Negative']}"></span>Negative</span>
+      <span class="legend-item">Little Fire Ant (PFF) survey points — shown regardless of the Valley filter above (this layer has no valley scoping of its own)</span>`;
   } else {
     legend += `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
       <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
