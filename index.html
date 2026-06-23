@@ -29,6 +29,7 @@
   .wrap{max-width:1000px;margin:0 auto;padding:20px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
   .card h2{margin:0 0 6px;font-size:16px;color:var(--green-dark);}
+  .card > details > summary{cursor:pointer;margin-bottom:8px;}
   .card .hint{font-size:12.5px;color:var(--muted);margin-bottom:12px;}
   button{background:var(--green);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13.5px;cursor:pointer;}
   button:hover{background:var(--green-dark);}
@@ -786,10 +787,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="hint">Data loads automatically from the shared online database — every visitor sees the same up-to-date actions, no upload needed. Tap the + button above to add a new action; it appears here, in the charts, and on the map for everyone within a few seconds.</div>
     <div id="liveDataStatus" class="muted">Connecting…</div>
     <div id="deratDataStatus" class="muted"></div>
-    <div class="row" style="margin-top:10px;">
-      <button class="secondary" onclick="downloadOriginalFormat('habitat')">⬇ Habitat Restoration data (original NRDS format)</button>
-      <button class="secondary" onclick="downloadOriginalFormat('derat')">⬇ Dératisation data (original NRDS format)</button>
-    </div>
     <div id="buildSummary"></div>
   </div>
 
@@ -922,6 +919,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="table-scroll"><table class="preview" id="previewTable"></table></div>
   </div>
 
+  <div class="card" id="downloadsCard" style="display:none;">
+    <h2>Downloads</h2>
+    <div class="hint">Export the shared data as CSV — either in the original NRDS format, or as the enriched/analysis-ready tables this app builds.</div>
+    <div class="row" style="margin-bottom:8px;">
+      <button class="secondary" onclick="downloadOriginalFormat('habitat')">⬇ Habitat Restoration data (original NRDS format)</button>
+      <button class="secondary" onclick="downloadOriginalFormat('derat')">⬇ Dératisation data (original NRDS format)</button>
+    </div>
+    <div class="row" id="enrichedDownloadButtons"></div>
+  </div>
+
 </div>
 
 <div class="wrap" id="submitView" style="display:none;">
@@ -931,7 +938,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div id="offlineBanner" class="hint" style="background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:16px;display:none;"></div>
 
   <div class="card">
-    <h2>1. Add a new Habitat Restoration action</h2>
+    <details>
+    <summary><h2 style="display:inline;margin:0;">1. Add a new Habitat Restoration action</h2></summary>
     <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
     <form id="hrForm" onsubmit="submitHabitatForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -992,10 +1000,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button type="submit">Submit action</button>
       <span id="hrSubmitStatus" class="muted"></span>
     </form>
+    </details>
   </div>
 
   <div class="card">
-    <h2>2. Add a new Dératisation patrol</h2>
+    <details>
+    <summary><h2 style="display:inline;margin:0;">2. Add a new Dératisation patrol</h2></summary>
     <div class="hint">Pick the patrol's zone (a line of rat-control stations); every known station in that zone appears below so you can record its bait-consumption reading. Submitting writes directly to the shared database.</div>
     <form id="drForm" onsubmit="submitDeratisationForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -1012,10 +1022,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button type="submit">Submit patrol</button>
       <span id="drSubmitStatus" class="muted"></span>
     </form>
+    </details>
   </div>
 
   <div class="card">
-    <h2>3. Petite fourmi de feu (PFF)</h2>
+    <details id="pffDetails" ontoggle="onPffDetailsToggle(this.open)">
+    <summary><h2 style="display:inline;margin:0;">3. Petite fourmi de feu (PFF)</h2></summary>
     <div class="hint">Log Little Fire Ant (Wasmannia auropunctata) survey points — choose a status, tap/click the map to add a point (add as many as you like before submitting — handy for logging a whole walk/transect in one go), then submit them all at once. They appear on "2. Map" (layer "Little Fire Ant (PFF)") and in "3. Chart analysis" for everyone within a few seconds.</div>
     <form id="pffForm" onsubmit="submitPffForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -1069,10 +1081,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button type="submit">Submit PFF point(s)</button>
       <span id="pffSubmitStatus" class="muted"></span>
     </form>
+    </details>
   </div>
 
   <div class="card">
-    <h2>4. Activity Types</h2>
+    <details>
+    <summary><h2 style="display:inline;margin:0;">4. Activity Types</h2></summary>
     <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "5. Log an Activity" below.</div>
     <div id="atListWrap"></div>
     <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
@@ -1099,10 +1113,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button type="button" class="secondary" onclick="toggleActivityTypeBuilder()">Cancel</button>
       <span id="atSubmitStatus" class="muted"></span>
     </form>
+    </details>
   </div>
 
   <div class="card">
-    <h2>5. Log an Activity</h2>
+    <details>
+    <summary><h2 style="display:inline;margin:0;">5. Log an Activity</h2></summary>
     <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
     <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "4. Activity Types" above first.</div>
     <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
@@ -1139,6 +1155,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <details id="aeRecentDetails" style="margin-top:14px;">
       <summary class="muted" style="cursor:pointer;">Recent entries (all activity types)</summary>
       <div id="aeRecentWrap" style="margin-top:10px;"></div>
+    </details>
     </details>
   </div>
 
@@ -2285,9 +2302,18 @@ function showSubmitView(){
   document.getElementById('submitView').style.display = '';
   if (location.hash !== '#submit') location.hash = 'submit';
   window.scrollTo(0,0);
+  // The PFF picker map is created/resized from #pffDetails' own ontoggle instead (see
+  // onPffDetailsToggle) — each of the 5 submission sections is now a collapsed-by-default <details>,
+  // so creating a Leaflet map here unconditionally would size it against a still display:none parent.
+  if (document.getElementById('pffDetails').open) onPffDetailsToggle(true);
+  renderOfflineBanner();
+}
+// Leaflet needs a visible (non-zero-size) container at creation time, so the PFF picker map is only
+// ever created/resized once its own <details> is actually open, not just whenever the Submit page is.
+function onPffDetailsToggle(open){
+  if (!open) return;
   ensurePffPickerMap();
   if (pffPickerEntry) pffPickerEntry.map.invalidateSize();
-  renderOfflineBanner();
 }
 function showHomeView(){
   document.getElementById('submitView').style.display = 'none';
@@ -2296,6 +2322,15 @@ function showHomeView(){
   window.scrollTo(0,0);
 }
 if (location.hash === '#submit') showSubmitView();
+// Covers navigating to/from #submit via a same-document hash change (e.g. typing the URL with
+// #submit while the app is already running) — the check above only ever runs once, at initial
+// script evaluation, so without this a hash-only navigation (no full reload) would silently do
+// nothing, leaving the wrong view shown despite the URL/hash being correct.
+window.addEventListener('hashchange', () => {
+  const onSubmit = document.getElementById('submitView').style.display !== 'none';
+  if (location.hash === '#submit' && !onSubmit) showSubmitView();
+  else if (location.hash !== '#submit' && onSubmit) showHomeView();
+});
 
 /* ---------------- bootstrap: kick off the automatic live-data load ---------------- */
 whenSupabaseReady(() => {
@@ -2578,12 +2613,12 @@ function onDataUpdated(){
     <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(topZones)}</div>
     <div class="map-combined-box" id="priorityCalcBox" style="display:${priorityDetailsOpen?'':'none'};">${renderPriorityCalcBox(topZones)}</div>
   </div>`;
-  html += `<div class="row" style="margin-top:12px;">
+  document.getElementById('buildSummary').innerHTML = html;
+  document.getElementById('enrichedDownloadButtons').innerHTML = `
     <button class="secondary" onclick="downloadCSV('habitat_restoration_enriched.csv', enriched.mainRows, Object.keys(enriched.mainRows[0]))">⬇ habitat_restoration_enriched.csv</button>
     <button class="secondary" onclick="downloadCSV('habitat_restoration_stations_long.csv', enriched.stationRows, ['Identifier','Valley','Station','Latitude','Longitude'])">⬇ stations_long.csv</button>
-    <button class="secondary" onclick="downloadCSV('habitat_restoration_species_long.csv', enriched.speciesRows, ['Identifier','Species_Name','Common_Name','Species_Type','Number'])">⬇ species_long.csv</button>
-  </div>`;
-  document.getElementById('buildSummary').innerHTML = html;
+    <button class="secondary" onclick="downloadCSV('habitat_restoration_species_long.csv', enriched.speciesRows, ['Identifier','Species_Name','Common_Name','Species_Type','Number'])">⬇ species_long.csv</button>`;
+  document.getElementById('downloadsCard').style.display = '';
 
   document.getElementById('analysisCard').style.display = '';
   document.getElementById('mapCard').style.display = '';
