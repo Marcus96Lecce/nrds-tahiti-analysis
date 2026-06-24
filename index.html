@@ -1063,6 +1063,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
           Overlay all rat stations
         </label>
         <label class="muted">
+          <input type="checkbox" id="pffColoniesOverlayToggle" onchange="togglePffColoniesOverlay(this.checked)">
+          Show colony areas (with buffer)
+        </label>
+        <label class="muted">
           <input type="checkbox" id="pffZoneNamesToggle" onchange="togglePffZoneNames(this.checked)">
           Show zone names
         </label>
@@ -1649,7 +1653,7 @@ async function fetchPffObservations(){
   document.getElementById('pffZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
   if (leafletMap) renderMap(false);
   if (currentChartView === 'pff') renderPffChart();
-  if (pffPickerEntry) renderPffPickerExisting();
+  if (pffPickerEntry){ renderPffPickerColonies(); renderPffPickerExisting(); }
 }
 function subscribePffObservations(){
   fetchPffObservations();
@@ -1814,7 +1818,7 @@ async function submitDeratisationForm(evt){
 // created while its container is display:none would size itself to zero, same reason ensureMap()
 // (the main map) is only ever created on first renderMap(), not at page load.
 let pffPickerEntry = null;
-let pffMapValleyFilter = 'all', pffShowStations = false, pffShowZoneNames = false;
+let pffMapValleyFilter = 'all', pffShowStations = false, pffShowZoneNames = false, pffShowColonies = false;
 let pffUserLocWatchId = null, pffUserLocFirstFix = true;
 // Multiple points per submission ("a whole walk/transect in one go") — each pending point keeps its
 // own marker + status + value + notes until the whole batch is submitted as one multi-row insert.
@@ -1833,9 +1837,13 @@ function ensurePffPickerMap(){
     stationsLayer: L.layerGroup().addTo(map),
     zoneNamesLayer: L.layerGroup().addTo(map),
     userLocLayer: L.layerGroup().addTo(map),
+    coloniesLayer: L.layerGroup().addTo(map),
     existingLayer: L.layerGroup().addTo(map),
   };
   renderPffPickerContext(true);
+  // colonies are drawn, then existing-point dots redrawn right after, so the dots always end up
+  // appended (and therefore stacked) on top of the colony polygons regardless of toggle order later
+  renderPffPickerColonies();
   renderPffPickerExisting();
 
   map.on('preclick', (e) => {
@@ -2014,6 +2022,45 @@ function renderPffPickerExisting(){
       .bindPopup(html)
       .addTo(layer);
   }
+}
+// Optional overlay (off by default, #pffColoniesOverlayToggle) showing the same colony hull +
+// containment-buffer visualization as the main map's "Little Fire Ant (PFF)" layer (see
+// buildPffColonies() and its main-map rendering for the full explanation) — lets a user picking a
+// new point's location see existing colony extents for context. Always shown regardless of the
+// Valley filter, same reasoning as renderPffPickerExisting() (PFF data has no Valley field of its own).
+function renderPffPickerColonies(){
+  const entry = pffPickerEntry;
+  if (!entry) return;
+  entry.coloniesLayer.clearLayers();
+  if (!pffShowColonies) return;
+  for (const col of buildPffColonies()){
+    const ringColor = col.hasCentre ? '#d62728' : '#ff7f0e';
+    const fillColor = col.hasCentre ? '#ff7f0e' : '#fdae6b';
+    const html = `<b>Potential colony</b> (${col.total} detection${col.total===1?'':'s'})<br>` +
+      `Positive: ${col.positiveCount} · Centre de colonie: ${col.centreCount}` +
+      (col.areaHa != null
+        ? `<br>Estimated extent: ${col.areaHa < 0.01 ? Math.round(col.areaHa*10000)+' m²' : col.areaHa.toFixed(3)+' ha'}`
+        : '<br>Extent unconfirmed (1-2 detections)');
+    if (col.hull){
+      const latlngs = col.hull.map(p => [p.lat, p.lon]);
+      const bufferLatLngs = bufferHullOutward(col.hull, PFF_CONTAINMENT_BUFFER_M).map(p => [p.lat, p.lon]);
+      L.polygon(bufferLatLngs, { color: ringColor, weight: 1.5, dashArray: '5,5', fill: false, opacity: 0.6 })
+        .bindTooltip(`Recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (SOP)`, { sticky: true, direction: 'top' })
+        .addTo(entry.coloniesLayer);
+      L.polygon(latlngs, { color: ringColor, weight: 2, fillColor, fillOpacity: 0.3 })
+        .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
+        .addTo(entry.coloniesLayer);
+    } else {
+      L.circle([col.lat, col.lon], { radius: PFF_CLUSTER_LINK_M/2, color: ringColor, weight: 2, fillColor, fillOpacity: 0.2, dashArray: '3,3' })
+        .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
+        .addTo(entry.coloniesLayer);
+    }
+  }
+}
+function togglePffColoniesOverlay(checked){
+  pffShowColonies = checked;
+  renderPffPickerColonies();
+  renderPffPickerExisting(); // redrawn right after so existing-point dots stay stacked on top of the colony polygons
 }
 function onPffMapValleyChange(){
   pffMapValleyFilter = document.getElementById('pffMapValley').value;
