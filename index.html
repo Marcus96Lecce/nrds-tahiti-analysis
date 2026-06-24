@@ -4027,6 +4027,7 @@ function renderMap(shouldFit){
   const pastUnitLookup = pastUnitLookupMap();
   const boundsLatLngs = [...lineBoundsLatLngs];
   const combinedBreakdown = [];
+  let pffColoniesForBox = [];
 
   for (const u of units){
     if (!u.Geometry) continue;
@@ -4148,7 +4149,8 @@ function renderMap(shouldFit){
     // Colony-extent polygons (Vanderwoude 2008 LFA delimiting SOP — see buildPffColonies()): the
     // boundary of a "colony" is the area enclosing nearby POSITIVE/Centre de colonie detections, not
     // the raw points themselves. Drawn first so the individual point markers below stay on top/clickable.
-    for (const col of buildPffColonies()){
+    pffColoniesForBox = buildPffColonies();
+    for (const col of pffColoniesForBox){
       const ringColor = col.hasCentre ? '#d62728' : '#ff7f0e';
       const fillColor = col.hasCentre ? '#ff7f0e' : '#fdae6b';
       const daysTxt = col.daysSinceLast == null ? '—' : `${col.daysSinceLast} day${col.daysSinceLast===1?'':'s'} ago`;
@@ -4338,6 +4340,9 @@ function renderMap(shouldFit){
   } else if (histZoneMode === 'plantingActivity'){
     combinedBox.style.display = '';
     combinedBox.innerHTML = renderPlantingActivityBox(combinedBreakdown);
+  } else if (mapLayer === 'pff'){
+    combinedBox.style.display = '';
+    combinedBox.innerHTML = renderPffColonyCalcBox(pffColoniesForBox);
   } else {
     combinedBox.style.display = 'none';
     combinedBox.innerHTML = '';
@@ -4804,6 +4809,54 @@ function renderPlantingActivityBox(breakdown){
         : (b.hv ? 'no activity recorded since the historical survey' : '—');
       html += `<tr><td>${b.unit}</td><td>${b.valley}</td><td>${histTxt}</td><td>${nrdsTxt}</td></tr>`;
     }
+    html += '</tbody></table></div>';
+  }
+  return html;
+}
+
+// Box for the "Little Fire Ant (PFF)" map layer — explains how colony boundaries, the containment
+// buffer and area-freedom eligibility are derived from buildPffColonies(), same "explain the
+// calculation" side-box pattern as renderCombinedCalcBox()/renderPlantingActivityBox() above.
+function renderPffColonyCalcBox(colonies){
+  let html = `<b>How "potential colonies" are delimited:</b>
+    Grounded in Vanderwoude (2008)'s Little Fire Ant delimiting SOP, which defines an outbreak's
+    boundary by surveying outward from a detection and placing bait vials at 10m intervals (15m /
+    ~30-per-hectare for ongoing monitoring grids) — the colony is the area enclosing the resulting
+    detections.<br><br>
+    <b>Clustering:</b> every Positive/Centre de colonie point is linked to every other point within
+    <code>${PFF_CLUSTER_LINK_M} m</code> (single-linkage / union-find — twice the SOP's monitoring grid
+    spacing, so adjacent survey cells join into one outbreak instead of splitting into many). Negative
+    checks don't define a colony's presence, only its absence, so they're excluded from clustering
+    itself.<br><br>
+    <b>Boundary polygon:</b> for clusters of 3+ points, the boundary is their convex hull (hand-rolled
+    monotone-chain hull, no external geometry library) — the smallest shape enclosing the actual
+    detections, the same idea as the hand-drawn polygons in the SOP's own delimiting figures. Estimated
+    extent (ha) is that hull's real-world area, via the same equirectangular-projection + shoelace method
+    already used elsewhere in this app for management-unit areas. Clusters of only 1-2 points can't form
+    a hull, so they're shown instead as a buffer circle of radius <code>${PFF_CLUSTER_LINK_M/2} m</code> —
+    a "potential micro-colony, extent unconfirmed" marker.<br><br>
+    <b>Containment buffer:</b> the dashed outer ring is the hull pushed outward by
+    <code>${PFF_CONTAINMENT_BUFFER_M} m</code> — the SOP's own recommended 10-15m treated buffer between
+    a known infestation and the surrounding uninfested area.<br><br>
+    <b>Area-freedom eligibility:</b> the SOP requires regular monitoring for
+    <b>${PFF_AREA_FREEDOM_DAYS} days (2 years)</b> after the last detection before an area can be
+    confirmed eradicated — colonies past that mark are flagged ✓ below. <b>Nearby negative checks</b>
+    counts Negative readings within the same ${PFF_CLUSTER_LINK_M}m link distance, as a rough
+    confirmation of where the boundary actually stops. ${colonies.length} potential colon${colonies.length===1?'y':'ies'}
+    currently identified.`;
+  if (colonies.length){
+    html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
+      <th>Colony</th><th>Detections</th><th>Estimated extent</th><th>First → last detected</th><th>Days since last</th><th>Nearby negatives</th><th>Status</th>
+      </tr></thead><tbody>`;
+    colonies.forEach((c,i) => {
+      const areaTxt = c.areaHa != null ? (c.areaHa < 0.01 ? Math.round(c.areaHa*10000)+' m²' : c.areaHa.toFixed(2)+' ha') : 'unconfirmed (1-2 pts)';
+      const cleared = c.daysSinceLast != null && c.daysSinceLast >= PFF_AREA_FREEDOM_DAYS;
+      const statusTxt = cleared ? '✓ area-freedom eligible' : (c.hasCentre ? 'active — confirmed centre' : 'active');
+      html += `<tr><td>#${i+1}${c.zones.length?' ('+escapeHtml(c.zones.join(', '))+')':''}</td>` +
+        `<td>${c.total} (P ${c.positiveCount} / C ${c.centreCount})</td>` +
+        `<td>${areaTxt}</td><td>${escapeHtml(c.firstDate||'—')} → ${escapeHtml(c.lastDate||'—')}</td>` +
+        `<td>${c.daysSinceLast ?? '—'}</td><td>${c.nearbyNegatives}</td><td>${statusTxt}</td></tr>`;
+    });
     html += '</tbody></table></div>';
   }
   return html;
