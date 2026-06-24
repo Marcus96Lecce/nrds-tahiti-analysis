@@ -1078,6 +1078,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <span class="muted" id="pffPickerReadout">Tap/click the map to add a point — you can add several before submitting.</span>
         <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearAllPffPoints()">Clear all points</button>
       </div>
+      <div class="row" style="margin-bottom:6px;align-items:center;">
+        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('pffGpxInput').click()">📥 Import GPX waypoints</button>
+        <input type="file" id="pffGpxInput" accept=".gpx" onchange="onPffGpxFileSelected(event)" style="display:none;">
+        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65) — every saved waypoint in the file is added as a pending point below, using the Status chosen above. Track logs aren't supported, only individually saved waypoints.</span>
+      </div>
       <div id="pffPendingList" style="margin-bottom:10px;"></div>
       <button type="submit">Submit PFF point(s)</button>
       <span id="pffSubmitStatus" class="muted"></span>
@@ -1898,6 +1903,57 @@ function clearAllPffPoints(){
   pffPendingPoints.forEach(p => pffPickerEntry.map.removeLayer(p.marker));
   pffPendingPoints = [];
   renderPffPendingList();
+}
+
+// Imports waypoints from a GPX file (e.g. exported from a Garmin GPSMAP 65/65s or similar handheld
+// GPS unit) as pending points — they go through the exact same status/value/notes/survey-method
+// editing flow as a manually-clicked point, just added in bulk. Deliberately only reads <wpt>
+// (individually saved survey points), never <trkpt> (the continuous breadcrumb trail of a walked
+// path) — importing a track log as if every breadcrumb were its own LFA detection would be wrong;
+// a PFF point should be a deliberate check, not a step along the way.
+function parseGpxWaypoints(xmlText){
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('Could not parse this file as GPX/XML.');
+  return [...doc.getElementsByTagName('wpt')].map(el => {
+    const lat = parseFloat(el.getAttribute('lat')), lon = parseFloat(el.getAttribute('lon'));
+    const name = el.getElementsByTagName('name')[0]?.textContent || '';
+    const cmt = el.getElementsByTagName('cmt')[0]?.textContent || '';
+    const desc = el.getElementsByTagName('desc')[0]?.textContent || '';
+    const time = el.getElementsByTagName('time')[0]?.textContent || '';
+    return { lat, lon, name, cmt, desc, time };
+  }).filter(w => isFinite(w.lat) && isFinite(w.lon));
+}
+async function onPffGpxFileSelected(event){
+  const file = event.target.files[0];
+  const statusEl = document.getElementById('pffGpxStatus');
+  event.target.value = ''; // clears the picked filename so the same file can be re-imported later
+  if (!file) return;
+  const status = document.getElementById('pffStatus').value;
+  if (!status){
+    statusEl.innerHTML = '<span class="err">Choose a Status above first — it will be applied to every imported point (fine-tune individual points in the list below afterward).</span>';
+    return;
+  }
+  try {
+    const waypoints = parseGpxWaypoints(await file.text());
+    if (!waypoints.length){
+      statusEl.innerHTML = '<span class="err">No waypoints (&lt;wpt&gt;) found in this file — only individually saved waypoints are imported, not track logs.</span>';
+      return;
+    }
+    ensurePffPickerMap();
+    for (const w of waypoints){
+      const id = ++pffPendingIdCounter;
+      const marker = L.circleMarker([w.lat, w.lon], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(pffPickerEntry.map);
+      const label = [w.name, w.cmt, w.desc].filter(Boolean).join(' — ');
+      const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '');
+      pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, surveyMethod: '', marker });
+    }
+    renderPffPendingList();
+    const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
+    if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
+    statusEl.innerHTML = `<span class="ok">✓ Imported ${waypoints.length} waypoint${waypoints.length===1?'':'s'} as "${escapeHtml(status)}" — review/edit them below before submitting.</span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
 }
 
 // Same Valley / "overlay all rat stations" / "show zone names" controls as the main map ("2. Map"),
