@@ -1515,6 +1515,123 @@ function subscribeNewElements(){
    points across the LIFE STOP EXTINCTION work area. */
 const PFF_STATUS_COLORS = { 'Positive': '#d62728', 'Centre de colonie': '#ff7f0e', 'Negative': '#000000' };
 
+/* ---------------- PFF colony-extent estimation (Vanderwoude 2008 LFA delimiting SOP) ----------------
+   The SOP delimits a newly discovered Little Fire Ant outbreak by walking radii outward from a
+   detection and placing peanut-butter bait vials at 10m intervals (15m / ~30-per-hectare for ongoing
+   monitoring grids) — "the colony" is the area enclosing the resulting POSITIVE/Centre de colonie
+   detections, with NEGATIVE checks confirming where it stops. These constants translate that into a
+   clustering radius and a containment-buffer width; adjust here if real survey spacing differs.
+   - PFF_CLUSTER_LINK_M: max gap (m) between two detections still considered the same colony — 2x the
+     SOP's 15m monitoring grid spacing, so adjacent grid cells link into one outbreak rather than many.
+   - PFF_CONTAINMENT_BUFFER_M: the SOP's own recommended 10-15m treated buffer around a known boundary.
+   - PFF_AREA_FREEDOM_DAYS: the SOP's monitoring rule — 2 years clear of detections before an area can
+     be confirmed eradicated. */
+const PFF_CLUSTER_LINK_M = 30;
+const PFF_CONTAINMENT_BUFFER_M = 12.5;
+const PFF_AREA_FREEDOM_DAYS = 730;
+
+function pffMetersBetween(a, b){ return haversineKm(a.lat, a.lon, b.lat, b.lon) * 1000; }
+
+// Hand-rolled convex hull (Andrew's monotone chain) — consistent with this app's existing no-heavy-
+// geometry-library convention (geometryToPolygonParts/pointInRing etc. are hand-rolled too).
+function convexHull(points){
+  const pts = [...points].sort((a,b) => a.lon - b.lon || a.lat - b.lat);
+  if (pts.length < 3) return pts;
+  const cross = (o,a,b) => (a.lon-o.lon)*(b.lat-o.lat) - (a.lat-o.lat)*(b.lon-o.lon);
+  const lower = [];
+  for (const p of pts){
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length-1; i >= 0; i--){
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop(); lower.pop();
+  return lower.concat(upper);
+}
+
+// Pushes each hull vertex outward from the polygon's own centroid by `meters` — an approximation of a
+// Minkowski/offset buffer (exact for a circle; visually reasonable for the roughly-round point clusters
+// a delimiting survey produces, though not a true geometric offset for very elongated hulls). Used to
+// draw the SOP's recommended containment buffer around an estimated colony boundary.
+function bufferHullOutward(hull, meters){
+  if (hull.length < 3) return hull;
+  const clat = hull.reduce((s,p)=>s+p.lat,0)/hull.length;
+  const clon = hull.reduce((s,p)=>s+p.lon,0)/hull.length;
+  const mPerDegLat = 111320, mPerDegLon = 111320 * Math.cos(clat*Math.PI/180);
+  return hull.map(p => {
+    const dy = (p.lat-clat)*mPerDegLat, dx = (p.lon-clon)*mPerDegLon;
+    const dist = Math.hypot(dx,dy) || 1;
+    const scale = (dist+meters)/dist;
+    return { lat: clat + (dy*scale)/mPerDegLat, lon: clon + (dx*scale)/mPerDegLon };
+  });
+}
+
+// Single-linkage spatial clustering: groups points where every point is within `linkM` metres of at
+// least one other point in the same group (union-find) — the same "is this one outbreak or two"
+// question the SOP answers by walking radii outward from a detection point.
+function clusterByLinkage(points, linkM){
+  const n = points.length;
+  const parent = points.map((_,i)=>i);
+  const find = i => { while (parent[i]!==i) i = parent[i]; return i; };
+  for (let i=0;i<n;i++) for (let j=i+1;j<n;j++){
+    if (pffMetersBetween(points[i], points[j]) <= linkM){
+      const ri = find(i), rj = find(j);
+      if (ri !== rj) parent[ri] = rj;
+    }
+  }
+  const groups = new Map();
+  for (let i=0;i<n;i++){
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(points[i]);
+  }
+  return [...groups.values()];
+}
+
+// Builds the "potential colony" list shown on the map and in Chart analysis: clusters nearby
+// POSITIVE/Centre de colonie detections (NEGATIVE checks don't define a colony's presence, only its
+// absence, so they're excluded from clustering itself but counted nearby as boundary confirmation).
+// sourceRows defaults to the live pffObservations (used by the map); the chart passes its own
+// date-filtered rows so the colony list there respects the chart's date-range filter.
+function buildPffColonies(sourceRows){
+  const all = (sourceRows || pffObservations || []).filter(r => isFinite(+r.lat) && isFinite(+r.lon));
+  const detections = all.filter(r => r.status === 'Positive' || r.status === 'Centre de colonie').map(r => ({ ...r, lat:+r.lat, lon:+r.lon }));
+  const negatives = all.filter(r => r.status === 'Negative').map(r => ({ ...r, lat:+r.lat, lon:+r.lon }));
+  if (!detections.length) return [];
+  const groups = clusterByLinkage(detections, PFF_CLUSTER_LINK_M);
+  const today = new Date();
+  return groups.map(pts => {
+    let hull = null;
+    if (pts.length >= 3){ const h = convexHull(pts); if (h.length >= 3) hull = h; }
+    const dates = pts.map(p=>p.date).filter(Boolean).sort();
+    const firstDate = dates[0] || null, lastDate = dates[dates.length-1] || null;
+    const daysSinceLast = lastDate ? Math.round((today - new Date(lastDate)) / 86400000) : null;
+    const clat = pts.reduce((s,p)=>s+p.lat,0)/pts.length;
+    const clon = pts.reduce((s,p)=>s+p.lon,0)/pts.length;
+    let areaHa = null;
+    if (hull){
+      const ring = hull.map(p=>[p.lon,p.lat]); ring.push(ring[0]);
+      areaHa = computePolygonAreaM2(ring) / 10000;
+    }
+    const nearbyNegatives = negatives.filter(neg => pts.some(p => pffMetersBetween(p, neg) <= PFF_CLUSTER_LINK_M)).length;
+    return {
+      points: pts, hull, lat: clat, lon: clon, areaHa,
+      hasCentre: pts.some(p => p.status === 'Centre de colonie'),
+      positiveCount: pts.filter(p=>p.status==='Positive').length,
+      centreCount: pts.filter(p=>p.status==='Centre de colonie').length,
+      total: pts.length, firstDate, lastDate, daysSinceLast, nearbyNegatives,
+      zones: [...new Set(pts.map(p=>p.zone).filter(Boolean))],
+    };
+  }).sort((a,b) => {
+    if (a.hasCentre !== b.hasCentre) return a.hasCentre ? -1 : 1;
+    return b.total - a.total;
+  });
+}
+
 let pffObservations = [];
 async function fetchPffObservations(){
   const { data, error } = await window.sb.from('pff_observations').select('*').order('id');
@@ -1726,7 +1843,7 @@ function ensurePffPickerMap(){
     const { lat, lng } = e.latlng;
     const id = ++pffPendingIdCounter;
     const marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(map);
-    pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', marker });
+    pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', surveyMethod: '', marker });
     renderPffPendingList();
   });
 }
@@ -1747,6 +1864,11 @@ function renderPffPendingList(){
         <option value="Positive" ${p.status==='Positive'?'selected':''}>Positive</option>
         <option value="Centre de colonie" ${p.status==='Centre de colonie'?'selected':''}>Centre de colonie</option>
         <option value="Negative" ${p.status==='Negative'?'selected':''}>Negative</option>
+      </select>
+      <select onchange="onPffPendingFieldInput(${p.id},'surveyMethod',this.value)" title="LFA delimiting SOP distinguishes visual search from the systematic bait-vial grid — only the latter reliably confirms a negative for boundary purposes">
+        <option value="" ${!p.surveyMethod?'selected':''}>Method: unspecified</option>
+        <option value="Visual inspection" ${p.surveyMethod==='Visual inspection'?'selected':''}>Visual inspection</option>
+        <option value="Bait vial (grid survey)" ${p.surveyMethod==='Bait vial (grid survey)'?'selected':''}>Bait vial (grid survey)</option>
       </select>
       <input type="text" placeholder="Value (optional)" style="width:120px;" value="${escapeHtml(p.value||'')}" oninput="onPffPendingFieldInput(${p.id},'value',this.value)">
       <input type="text" placeholder="Notes (optional)" style="width:160px;" value="${escapeHtml(p.notes||'')}" oninput="onPffPendingFieldInput(${p.id},'notes',this.value)">
@@ -1828,6 +1950,7 @@ function renderPffPickerExisting(){
     const color = PFF_STATUS_COLORS[r.status] || '#888';
     const html = `<b>Existing PFF point</b> — ${escapeHtml(r.status || '—')}<br>` +
       `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>Zone: ${escapeHtml(r.zone || '—')}` +
+      (r.survey_method ? `<br>Method: ${escapeHtml(r.survey_method)}` : '') +
       (r.value ? `<br>Value: ${escapeHtml(r.value)}` : '') +
       (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
     L.circleMarker([lat, lon], { radius: 6, color: '#333', weight: 1, fillColor: color, fillOpacity: 0.7 })
@@ -1901,6 +2024,7 @@ async function submitPffForm(evt){
     const zone = document.getElementById('pffZone').value;
     const newRows = pffPendingPoints.map(p => ({
       date, observer, zone, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
+      survey_method: p.surveyMethod || null,
     }));
     const result = await insertOrQueue('pff_observations', newRows);
     statusEl.innerHTML = result.queued
@@ -3135,6 +3259,40 @@ function renderDeratChart(){
 // One bar per survey point, chronological, colored by status — the map's own PFF layer already
 // shows the spatial distribution, so this chart's job is the complementary "when" view: is the
 // detection rate (and colony-center count) going up or down over time.
+// Per-colony list shown above the chronological chart in renderPffChart() — same dirtiest/most-
+// concerning-first ranking as buildPffColonies()'s own sort (centre-confirmed colonies first, then
+// largest by detection count). Each row is click-to-pin (shares chartPopupData/pinPopup with every
+// other chart in the app), so the caller must clear chartPopupData before calling this.
+function renderPffColonySummary(colonies){
+  if (!colonies.length){
+    return '<div class="muted" style="margin-bottom:10px;">No Positive/Centre de colonie detections in this date range — no colonies to delimit yet.</div>';
+  }
+  const freedomEligible = colonies.filter(c => c.daysSinceLast != null && c.daysSinceLast >= PFF_AREA_FREEDOM_DAYS).length;
+  const rows = colonies.map((c,i) => {
+    const color = c.hasCentre ? '#d62728' : '#ff7f0e';
+    const cleared = c.daysSinceLast != null && c.daysSinceLast >= PFF_AREA_FREEDOM_DAYS;
+    const areaTxt = c.areaHa != null ? (c.areaHa < 0.01 ? Math.round(c.areaHa*10000)+' m²' : c.areaHa.toFixed(2)+' ha') : 'extent unconfirmed (1-2 detections)';
+    const html = `<div style="font-weight:600;margin-bottom:4px;">Potential colony #${i+1}</div>
+      <div><b>Detections:</b> ${c.total} (Positive ${c.positiveCount}, Centre de colonie ${c.centreCount})</div>
+      <div><b>Estimated extent:</b> ${areaTxt}</div>
+      <div><b>First → last detected:</b> ${escapeHtml(c.firstDate||'—')} → ${escapeHtml(c.lastDate||'—')}</div>
+      <div><b>Days since last detection:</b> ${c.daysSinceLast ?? '—'}${cleared ? ' — eligible for area-freedom confirmation' : ''}</div>
+      <div><b>Nearby negative checks:</b> ${c.nearbyNegatives}</div>
+      ${c.zones.length ? `<div><b>Zone(s):</b> ${escapeHtml(c.zones.join(', '))}</div>` : ''}`;
+    const popupIdx = chartPopupData.push(html) - 1;
+    return `<div onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid ${color};border-radius:0 6px 6px 0;">
+      <span class="muted" style="width:22px;">#${i+1}</span>
+      <span style="flex:1;font-size:13px;">${c.total} detection${c.total===1?'':'s'}${c.hasCentre?' · confirmed centre':''}${c.zones.length?' · '+escapeHtml(c.zones[0])+(c.zones.length>1?` +${c.zones.length-1}`:''):''}</span>
+      <span class="muted" style="font-size:12px;">${c.daysSinceLast==null?'—':c.daysSinceLast+'d since last detection'}</span>
+      ${cleared ? '<span style="color:#2a8f2a;font-size:12px;">✓ area-freedom eligible</span>' : ''}
+    </div>`;
+  }).join('');
+  return `<div style="margin-bottom:14px;">
+    <div class="muted" style="margin-bottom:6px;">${colonies.length} potential colon${colonies.length===1?'y':'ies'} identified (detections within ${PFF_CLUSTER_LINK_M}m of each other grouped as one, per the LFA delimiting SOP) — ${freedomEligible} clear ${PFF_AREA_FREEDOM_DAYS}+ days, eligible for area-freedom confirmation. Click a row for the full breakdown; see the map's "Little Fire Ant (PFF)" layer for the actual boundary polygons.</div>
+    ${rows}
+  </div>`;
+}
+
 function renderPffChart(){
   currentChartView = 'pff';
   hideChartPopup();
@@ -3147,6 +3305,8 @@ function renderPffChart(){
 
   if (!rows.length){ area.innerHTML = '<span class="muted">No Little Fire Ant (PFF) survey points for this date range.</span>'; return; }
   chartPopupData = [];
+  const colonies = buildPffColonies(rows);
+  const colonyHtml = renderPffColonySummary(colonies);
 
   const W = Math.max(700, rows.length*45), H = 320, mL = 50, mR = 20, mT = 20, mB = 80;
   const slotW = (W-mL-mR)/rows.length;
@@ -3163,6 +3323,7 @@ function renderPffChart(){
       <div><b>Status:</b> ${escapeHtml(r.status||'—')}</div>
       <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
       <div><b>Zone:</b> ${escapeHtml(r.zone||'—')}</div>
+      ${r.survey_method ? `<div><b>Method:</b> ${escapeHtml(r.survey_method)}</div>` : ''}
       ${r.value ? `<div><b>Value:</b> ${escapeHtml(r.value)}</div>` : ''}
       ${r.notes ? `<div><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}
       <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>`) - 1;
@@ -3178,10 +3339,13 @@ function renderPffChart(){
   const positiveCount = rows.filter(r => r.status === 'Positive').length;
   const centreCount = rows.filter(r => r.status === 'Centre de colonie').length;
   const pctPositive = total ? (positiveCount/total*100).toFixed(1) : '0.0';
+  const freedomEligible = colonies.filter(c => c.daysSinceLast != null && c.daysSinceLast >= PFF_AREA_FREEDOM_DAYS).length;
   const summary = `<div class="grid3" style="margin-bottom:10px;">
     <div class="stat"><div class="num">${total}</div><div class="lbl">survey points recorded</div></div>
     <div class="stat"><div class="num">${positiveCount}</div><div class="lbl">positive (${pctPositive}% of total)</div></div>
     <div class="stat"><div class="num">${centreCount}</div><div class="lbl">colony centers (Centre de colonie)</div></div>
+    <div class="stat"><div class="num">${colonies.length}</div><div class="lbl">potential colonies identified</div></div>
+    <div class="stat"><div class="num">${freedomEligible}</div><div class="lbl">colonies clear ${PFF_AREA_FREEDOM_DAYS}+ days (area-freedom eligible)</div></div>
   </div>`;
   const legend = `<div style="margin-top:8px;">
     <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Positive']}"></span>Positive</span>
@@ -3190,8 +3354,8 @@ function renderPffChart(){
     <span class="legend-item">Each bar = one survey point, in chronological order, colored by status</span>
     <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the full record. Only the date range above applies here — Valley/Zone/Station don't apply, since PFF points aren't tied to a fixed valley/zone.</span>
   </div>`;
-  const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time across the LIFE STOP EXTINCTION work area — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when.</div>`;
-  area.innerHTML = hint + summary + svg + legend;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time across the LIFE STOP EXTINCTION work area — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when. Colony delimiting follows Vanderwoude (2008)'s LFA SOP.</div>`;
+  area.innerHTML = hint + colonyHtml + '<hr style="margin:14px 0;border-color:var(--border);">' + summary + svg + legend;
 }
 
 function pctColor(pct){
@@ -3980,12 +4144,56 @@ function renderMap(shouldFit){
     // PFF points have no Valley field of their own (the geolocation point is the only location data),
     // so unlike every other layer this one deliberately ignores the map's Valley filter — same
     // precedent as the user-drawn "Add Elements" lines, which also have no valley to filter by.
+
+    // Colony-extent polygons (Vanderwoude 2008 LFA delimiting SOP — see buildPffColonies()): the
+    // boundary of a "colony" is the area enclosing nearby POSITIVE/Centre de colonie detections, not
+    // the raw points themselves. Drawn first so the individual point markers below stay on top/clickable.
+    for (const col of buildPffColonies()){
+      const ringColor = col.hasCentre ? '#d62728' : '#ff7f0e';
+      const fillColor = col.hasCentre ? '#ff7f0e' : '#fdae6b';
+      const daysTxt = col.daysSinceLast == null ? '—' : `${col.daysSinceLast} day${col.daysSinceLast===1?'':'s'} ago`;
+      const freedomTxt = col.daysSinceLast == null ? ''
+        : col.daysSinceLast >= PFF_AREA_FREEDOM_DAYS
+          ? `<br><b style="color:#2a8f2a;">✓ ${(col.daysSinceLast/365).toFixed(1)} yr clear — eligible for area-freedom confirmation</b>`
+          : `<br>Area-freedom needs ${PFF_AREA_FREEDOM_DAYS} days clear (SOP rule) — ${PFF_AREA_FREEDOM_DAYS - col.daysSinceLast} to go`;
+      const html = `<b>Potential colony</b> (${col.total} detection${col.total===1?'':'s'})<br>` +
+        `Positive: ${col.positiveCount} · Centre de colonie: ${col.centreCount}<br>` +
+        (col.areaHa != null
+          ? `Estimated extent: ${col.areaHa < 0.01 ? Math.round(col.areaHa*10000)+' m²' : col.areaHa.toFixed(3)+' ha'}<br>`
+          : 'Estimated extent: only 1-2 detections, no surveyed boundary yet<br>') +
+        `First detected: ${escapeHtml(col.firstDate || '—')} · Last detected: ${escapeHtml(col.lastDate || '—')} (${daysTxt})<br>` +
+        `Nearby negative checks (within ${PFF_CLUSTER_LINK_M}m): ${col.nearbyNegatives}` +
+        (col.zones.length ? `<br>Zone(s): ${escapeHtml(col.zones.join(', '))}` : '') +
+        freedomTxt;
+      if (col.hull){
+        const latlngs = col.hull.map(p => [p.lat, p.lon]);
+        const bufferLatLngs = bufferHullOutward(col.hull, PFF_CONTAINMENT_BUFFER_M).map(p => [p.lat, p.lon]);
+        const bufferPoly = L.polygon(bufferLatLngs, { color: ringColor, weight: 1.5, dashArray: '5,5', fill: false, opacity: 0.6 });
+        bufferPoly.bindTooltip(`Recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (SOP)`, { sticky: true, direction: 'top' });
+        bufferPoly.addTo(pointLayerGroup);
+        const poly = L.polygon(latlngs, { color: ringColor, weight: 2, fillColor, fillOpacity: 0.35 });
+        poly.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+        poly.bindPopup(html);
+        poly.addTo(pointLayerGroup);
+        latlngs.forEach(ll => boundsLatLngs.push(ll));
+      } else {
+        // 1-2 detections: not enough points for a hull — a buffer circle (radius = half the cluster
+        // link distance) marks a "potential micro-colony, extent unconfirmed" instead.
+        const circle = L.circle([col.lat, col.lon], { radius: PFF_CLUSTER_LINK_M/2, color: ringColor, weight: 2, fillColor, fillOpacity: 0.25, dashArray: '3,3' });
+        circle.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+        circle.bindPopup(html);
+        circle.addTo(pointLayerGroup);
+        boundsLatLngs.push([col.lat, col.lon]);
+      }
+    }
+
     for (const r of pffObservations){
       const lat = +r.lat, lon = +r.lon;
       if (!isFinite(lat) || !isFinite(lon)) continue;
       const color = PFF_STATUS_COLORS[r.status] || '#888';
       const html = `<b>Petite fourmi de feu (PFF)</b> — ${escapeHtml(r.status || '—')}<br>` +
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>Zone: ${escapeHtml(r.zone || '—')}` +
+        (r.survey_method ? `<br>Method: ${escapeHtml(r.survey_method)}` : '') +
         (r.value ? `<br>Value: ${escapeHtml(r.value)}` : '') +
         (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
       const marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
@@ -4096,7 +4304,11 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Positive']}"></span>Positive</span>
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Centre de colonie']}"></span>Centre de colonie</span>
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Negative']}"></span>Negative</span>
-      <span class="legend-item">Little Fire Ant (PFF) survey points — shown regardless of the Valley filter above (this layer has no valley scoping of its own)</span>`;
+      <span class="legend-item">Little Fire Ant (PFF) survey points — shown regardless of the Valley filter above (this layer has no valley scoping of its own)</span>
+      <br><span class="legend-item"><span class="swatch" style="background:#fdae6b;border:2px solid #ff7f0e;"></span>estimated colony (≥3 nearby detections)</span>
+      <span class="legend-item"><span class="swatch" style="background:#ff7f0e;border:2px solid #d62728;"></span>colony with a confirmed centre</span>
+      <span class="legend-item">dashed outer ring = recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (LFA delimiting SOP)</span>
+      <span class="legend-item">Colony boundaries follow Vanderwoude (2008)'s LFA delimiting SOP — detections within ${PFF_CLUSTER_LINK_M}m of each other are grouped as one colony</span>`;
   } else {
     legend += `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
       <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
