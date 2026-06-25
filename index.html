@@ -939,7 +939,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div id="offlineBanner" class="hint" style="background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:16px;display:none;"></div>
 
   <div class="card">
-    <details>
+    <details id="hrDetails" ontoggle="onHrDetailsToggle(this.open)">
     <summary><h2 style="display:inline;margin:0;">1. Add a new Habitat Restoration action</h2></summary>
     <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
     <form id="hrForm" onsubmit="submitHabitatForm(event)">
@@ -997,6 +997,51 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="muted" style="margin-bottom:4px;">Species planted:</div>
         <div id="hrSpeciesRows"></div>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
+      </div>
+      <div id="hrPepiniereSection" style="margin-bottom:10px;display:none;">
+        <div style="font-weight:600;margin-bottom:6px;">Pépinière <span class="muted">(optional — nursery source for these plantings)</span></div>
+        <div class="row" style="margin-bottom:8px;">
+          <label class="muted">Valley:
+            <select id="pepMapValley" onchange="onPepMapValleyChange()">
+              <option value="all">All valleys</option>
+              <option value="Papehue">Papehue</option>
+              <option value="Maruapo">Maruapo</option>
+              <option value="Hopa">Hopa</option>
+            </select>
+          </label>
+          <label class="muted">
+            <input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)">
+            Show other pépinières
+          </label>
+          <label class="muted">
+            <input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)">
+            Show zone names
+          </label>
+          <label class="muted">
+            <input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)">
+            Show my location
+          </label>
+          <span id="pepUserLocationStatus" class="muted"></span>
+        </div>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery location:</div>
+        <div id="pepPickerMap" class="geo-picker-map"></div>
+        <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
+          <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
+          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
+          <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01, Nursery-Maruapo" style="width:200px;"></label>
+          <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
+          <label class="muted">Date: <input type="date" id="pepDate"></label>
+          <label class="muted">Observer: <input type="text" id="pepObserver" placeholder="e.g. Marco Elia" style="width:160px;"></label>
+          <label class="muted">Zone: <input type="text" id="pepZone" list="pepZoneList" placeholder="nursery zone/area" style="width:160px;"></label>
+          <datalist id="pepZoneList"></datalist>
+        </div>
+        <div style="margin-bottom:6px;">
+          <label class="muted">Notes (optional): <input type="text" id="pepNotes" style="width:100%;"></label>
+        </div>
       </div>
       <button type="submit">Submit action</button>
       <span id="hrSubmitStatus" class="muted"></span>
@@ -1363,6 +1408,7 @@ function populateValleyDropdowns(){
     { id: 'mapValley', leading: '<option value="all">All valleys</option>' },
     { id: 'chartValley', leading: '<option value="all">All valleys</option>' },
     { id: 'pffMapValley', leading: '<option value="all">All valleys</option>' },
+    { id: 'pepMapValley', leading: '<option value="all">All valleys</option>' },
     { id: 'hrValley', leading: '<option value="">Choose…</option>' },
     { id: 'aeValley', leading: '<option value="">Choose…</option>' },
   ];
@@ -1677,6 +1723,7 @@ function populateFormReferenceOptions(){
   // loadReferenceData()'s fetch resolved — without this, its zone/station context would stay empty
   // forever since ensurePffPickerMap() only ever runs once. Also picks up new "Add Elements" zones.
   if (pffPickerEntry) renderPffPickerContext(true);
+  if (pepPickerEntry) renderPepPickerContext(true);
 }
 
 function onHrValleyChange(){
@@ -1696,8 +1743,21 @@ function onHrActionChange(){
   document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
   document.getElementById('hrEvalRow').style.display = isPlantation ? '' : 'none';
   document.getElementById('hrSpeciesSection').style.display = isPlantation ? '' : 'none';
+  document.getElementById('hrPepiniereSection').style.display = isPlantation ? '' : 'none';
   if (!isCleaningType){ document.getElementById('hrPctArrival').value = ''; document.getElementById('hrPctEnd').value = ''; }
-  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; }
+  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; clearPepPoint(); }
+  if (isPlantation){
+    // Pre-fill pépinière date/observer from the parent HR form as a convenience default
+    const hrDate = document.getElementById('hrDate').value;
+    const hrObserver = document.getElementById('hrName').value;
+    if (!document.getElementById('pepDate').value && hrDate) document.getElementById('pepDate').value = hrDate;
+    if (!document.getElementById('pepObserver').value && hrObserver) document.getElementById('pepObserver').value = hrObserver;
+    // Create the picker map lazily if the HR <details> is already open (it has a visible container then)
+    if (document.getElementById('hrDetails').open){
+      ensurePepPickerMap();
+      if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
+    }
+  }
 }
 
 let hrSpeciesRowCount = 0;
@@ -1735,6 +1795,25 @@ async function submitHabitatForm(evt){
       statusEl.innerHTML = '<span class="err">Add at least one planted species — required for a Plantation action.</span>';
       return;
     }
+    // Pépinière validation (optional section — only require if user started filling it)
+    let pepRow = null;
+    if (action === 'Plantation'){
+      const pepName = document.getElementById('pepName').value.trim();
+      if (pepName || pepPickedLat != null){
+        if (!pepName) throw new Error('Enter a Name/ID for the Pépinière (required when a location is set).');
+        if (pepPickedLat == null) throw new Error('Tap/click the map to record the Pépinière location (required when a name is entered).');
+        const pepPlantsVal = document.getElementById('pepPlants').value;
+        if (!pepPlantsVal || +pepPlantsVal < 0) throw new Error('Enter a valid number of plants for the Pépinière.');
+        pepRow = {
+          name: pepName, lat: pepPickedLat, lon: pepPickedLon,
+          number_of_plants: parseInt(pepPlantsVal, 10),
+          date: document.getElementById('pepDate').value,
+          observer: document.getElementById('pepObserver').value,
+          zone: document.getElementById('pepZone').value,
+          notes: document.getElementById('pepNotes').value,
+        };
+      }
+    }
 
     const newRow = {
       date: document.getElementById('hrDate').value,
@@ -1752,18 +1831,164 @@ async function submitHabitatForm(evt){
       species,
     };
     const result = await insertOrQueue('habitat_restoration', [newRow]);
+    if (pepRow) await insertOrQueue('pepinieres', [pepRow]);
     statusEl.innerHTML = result.queued
-      ? '<span class="ok">✓ Saved offline — will upload automatically once you\'re back online.</span>'
-      : '<span class="ok">✓ Submitted — updating the charts and map above…</span>';
-    if (!result.queued) await fetchHabitatRestoration(); // don't wait on the Realtime echo for the submitter's own update
+      ? `<span class="ok">✓ Saved offline${pepRow ? ' (including Pépinière data)' : ''} — will upload automatically once you're back online.</span>`
+      : `<span class="ok">✓ Submitted${pepRow ? ' — Pépinière saved too' : ''} — updating the charts and map above…</span>`;
+    if (!result.queued) await fetchHabitatRestoration();
     document.getElementById('hrForm').reset();
     document.getElementById('hrSpeciesRows').innerHTML = '';
     document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
     document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+    clearPepPoint();
+    ['pepName','pepPlants','pepDate','pepObserver','pepZone','pepNotes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     onHrActionChange();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
   }
+}
+
+/* ---------------- Pépinière picker (inside HR Plantation form) ----------------
+   A small Leaflet picker map (same pattern as the PFF picker) embedded within the Plantation
+   action form, letting the user record the nursery source location for a planting action.
+   The pépinière section is optional — if Name/ID and map location are left blank, no row is
+   written to the `pepinieres` Supabase table; but if either is touched, both are required. */
+let pepPickerEntry = null;
+let pepMapValleyFilter = 'all', pepShowOthers = false, pepShowZoneNames = false;
+let pepUserLocWatchId = null, pepUserLocFirstFix = true;
+let pepPickedLat = null, pepPickedLon = null, pepPickedMarker = null;
+
+function ensurePepPickerMap(){
+  if (pepPickerEntry) return;
+  const map = L.map('pepPickerMap', { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  pepPickerEntry = {
+    map,
+    ctxLayer: L.featureGroup().addTo(map),
+    zoneNamesLayer: L.layerGroup().addTo(map),
+    othersLayer: L.layerGroup().addTo(map),
+    userLocLayer: L.layerGroup().addTo(map),
+  };
+  renderPepPickerContext(true);
+  renderPepPickerOthers();
+  map.on('preclick', (e) => {
+    L.DomEvent.stopPropagation(e);
+    const { lat, lng } = e.latlng;
+    pepPickedLat = lat; pepPickedLon = lng;
+    if (pepPickedMarker) map.removeLayer(pepPickedMarker);
+    pepPickedMarker = L.circleMarker([lat, lng], { radius: 9, color: '#fff', weight: 2.5, fillColor: '#2ca02c', fillOpacity: 0.95 })
+      .bindTooltip('Nursery location', { direction: 'top' }).addTo(map);
+    document.getElementById('pepPickerReadout').textContent = `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  });
+}
+function renderPepPickerContext(shouldFit){
+  const entry = pepPickerEntry;
+  if (!entry) return;
+  entry.ctxLayer.clearLayers();
+  entry.zoneNamesLayer.clearLayers();
+  const units = (tables.managementUnit||[]).filter(u => pepMapValleyFilter === 'all' || u['Vallee'] === pepMapValleyFilter);
+  units.forEach(u => {
+    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
+      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(entry.ctxLayer);
+    });
+    if (pepShowZoneNames){
+      const c = geometryCentroid(u.Geometry);
+      if (c) L.marker([c.lat, c.lon], { icon: smallLabelIcon(u['Nom']), interactive: false }).addTo(entry.zoneNamesLayer);
+    }
+  });
+  renderPepPickerOthers();
+  if (shouldFit){
+    const bounds = entry.ctxLayer.getBounds();
+    if (bounds.isValid()) entry.map.fitBounds(bounds); else entry.map.setView([-17.62, -149.45], 11);
+  }
+}
+// Shows existing pépinières from the live `pepinieres` table as green markers — so the user can see
+// other registered nurseries nearby while picking a new one's location.
+function renderPepPickerOthers(){
+  const entry = pepPickerEntry;
+  if (!entry) return;
+  entry.othersLayer.clearLayers();
+  if (!pepShowOthers) return;
+  for (const p of pepinieres){
+    const lat = +p.lat, lon = +p.lon;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const html = `<b>Pépinière: ${escapeHtml(p.name)}</b><br>` +
+      `Plants: ${p.number_of_plants ?? '—'}<br>Date: ${escapeHtml(p.date||'—')}<br>` +
+      `Observer: ${escapeHtml(p.observer||'—')}<br>Zone: ${escapeHtml(p.zone||'—')}` +
+      (p.notes ? `<br>Notes: ${escapeHtml(p.notes)}` : '');
+    L.circleMarker([lat, lon], { radius: 8, color: '#1a7a1a', weight: 2, fillColor: '#2ca02c', fillOpacity: 0.85 })
+      .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
+      .bindPopup(html)
+      .addTo(entry.othersLayer);
+  }
+}
+function clearPepPoint(){
+  if (pepPickedMarker && pepPickerEntry) pepPickerEntry.map.removeLayer(pepPickedMarker);
+  pepPickedMarker = null; pepPickedLat = null; pepPickedLon = null;
+  const el = document.getElementById('pepPickerReadout');
+  if (el) el.textContent = 'Tap/click the map to record the nursery location.';
+}
+function onPepMapValleyChange(){
+  pepMapValleyFilter = document.getElementById('pepMapValley').value;
+  renderPepPickerContext(true);
+}
+function togglePepOthers(checked){ pepShowOthers = checked; renderPepPickerOthers(); }
+function togglePepZoneNames(checked){ pepShowZoneNames = checked; renderPepPickerContext(false); }
+function togglePepUserLocation(checked){
+  const statusEl = document.getElementById('pepUserLocationStatus');
+  statusEl.textContent = '';
+  if (checked){
+    if (!navigator.geolocation){
+      statusEl.textContent = 'Geolocation not supported.';
+      document.getElementById('pepUserLocationToggle').checked = false; return;
+    }
+    pepUserLocFirstFix = true;
+    pepUserLocWatchId = navigator.geolocation.watchPosition(pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const e = pepPickerEntry; if (!e) return;
+      e.userLocLayer.clearLayers();
+      L.circle([latitude, longitude], { radius: accuracy, color: '#4285f4', weight: 1, fillColor: '#4285f4', fillOpacity: 0.12 }).addTo(e.userLocLayer);
+      L.circleMarker([latitude, longitude], { radius: 7, color: '#fff', weight: 2, fillColor: '#4285f4', fillOpacity: 1 })
+        .bindTooltip('You are here', { direction: 'top' }).addTo(e.userLocLayer);
+      statusEl.textContent = `Accuracy: ±${Math.round(accuracy)} m`;
+      if (pepUserLocFirstFix){ e.map.setView([latitude, longitude], 16); pepUserLocFirstFix = false; }
+    }, err => {
+      statusEl.textContent = err.code === err.PERMISSION_DENIED ? 'Location permission denied.' : 'Could not get location.';
+      document.getElementById('pepUserLocationToggle').checked = false;
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+  } else {
+    if (pepUserLocWatchId != null){ navigator.geolocation.clearWatch(pepUserLocWatchId); pepUserLocWatchId = null; }
+    if (pepPickerEntry) pepPickerEntry.userLocLayer.clearLayers();
+  }
+}
+// Same lazy-creation pattern as onPffDetailsToggle: the Leaflet map needs a visible (non-zero-size)
+// container. Created when the HR <details> opens (if action=Plantation) OR when the action changes
+// to Plantation (if HR <details> is already open). See onHrActionChange() for the second trigger.
+function onHrDetailsToggle(open){
+  if (!open) return;
+  if (document.getElementById('hrAction').value === 'Plantation'){
+    ensurePepPickerMap();
+    if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
+  }
+}
+
+/* ---------------- Pépinière live data (nursery registry) ---------------- */
+let pepinieres = [];
+async function fetchPepinieres(){
+  const { data, error } = await window.sb.from('pepinieres').select('*').order('id');
+  if (error){ console.error('Error loading pepinieres:', error.message); return; }
+  pepinieres = data || [];
+  const zones = [...new Set(pepinieres.map(r => r.zone).filter(Boolean))].sort();
+  document.getElementById('pepZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
+  if (pepPickerEntry) renderPepPickerOthers();
+}
+function subscribePepinieres(){
+  fetchPepinieres();
+  window.sb.channel('pepinieres_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pepinieres' }, () => fetchPepinieres())
+    .subscribe();
 }
 
 /* ---------------- Dératisation entry form ---------------- */
@@ -2569,6 +2794,7 @@ function showSubmitView(){
   // onPffDetailsToggle) — each of the 5 submission sections is now a collapsed-by-default <details>,
   // so creating a Leaflet map here unconditionally would size it against a still display:none parent.
   if (document.getElementById('pffDetails').open) onPffDetailsToggle(true);
+  if (document.getElementById('hrDetails').open) onHrDetailsToggle(true);
   renderOfflineBanner();
 }
 // Leaflet needs a visible (non-zero-size) container at creation time, so the PFF picker map is only
@@ -2601,6 +2827,7 @@ whenSupabaseReady(() => {
   subscribeDeratisation();
   subscribeNewElements();
   subscribePffObservations();
+  subscribePepinieres();
   subscribeActivityTypes();
   subscribeActivityEntries();
   syncOfflineQueue(); // picks up anything queued in a previous session, if we're online now
