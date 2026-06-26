@@ -957,8 +957,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
           </select>
         </label>
         <label class="muted">Zone (management unit):
-          <select id="hrUnit" required><option value="">Choose a valley first</option></select>
+          <select id="hrUnit" onchange="onHrUnitChange()" required><option value="">Choose a valley first</option></select>
         </label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Or select the zone by clicking directly on the map:</div>
+        <div class="row" style="margin-bottom:6px;">
+          <label class="muted"><input type="checkbox" id="hrZoneNamesToggle" onchange="toggleHrZoneNames(this.checked)"> Show zone names</label>
+          <label class="muted"><input type="checkbox" id="hrZoneUserLocToggle" onchange="toggleHrZoneUserLoc(this.checked)"> Show my location</label>
+          <span id="hrZoneUserLocStatus" class="muted"></span>
+        </div>
+        <div id="hrZonePickerMap" class="geo-picker-map"></div>
       </div>
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Action:
@@ -1722,6 +1731,7 @@ function populateFormReferenceOptions(){
   // Covers the race where the PFF picker map was created (e.g. a direct #submit deep link) before
   // loadReferenceData()'s fetch resolved — without this, its zone/station context would stay empty
   // forever since ensurePffPickerMap() only ever runs once. Also picks up new "Add Elements" zones.
+  if (hrZonePickerEntry) renderHrZonePicker(true);
   if (pffPickerEntry) renderPffPickerContext(true);
   if (pepPickerEntry) renderPepPickerContext(true);
 }
@@ -1729,11 +1739,15 @@ function populateFormReferenceOptions(){
 function onHrValleyChange(){
   const valley = document.getElementById('hrValley').value;
   const unitSel = document.getElementById('hrUnit');
-  if (!valley){ unitSel.innerHTML = '<option value="">Choose a valley first</option>'; document.getElementById('hrStationList').innerHTML = ''; return; }
-  const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
-  unitSel.innerHTML = '<option value="">Choose…</option>' + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
-  document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  if (!valley){ unitSel.innerHTML = '<option value="">Choose a valley first</option>'; document.getElementById('hrStationList').innerHTML = ''; }
+  else {
+    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+    unitSel.innerHTML = '<option value="">Choose…</option>' + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+    const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
+    document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  }
+  // Refit the zone picker map to the selected valley's zones (or all zones if none selected)
+  if (hrZonePickerEntry) renderHrZonePicker(true);
 }
 
 function onHrActionChange(){
@@ -1840,11 +1854,127 @@ async function submitHabitatForm(evt){
     document.getElementById('hrSpeciesRows').innerHTML = '';
     document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
     document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+    hrZoneSelectedUnit = null;
+    if (hrZonePickerEntry) renderHrZonePicker(false);
     clearPepPoint();
     ['pepName','pepPlants','pepDate','pepObserver','pepZone','pepNotes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     onHrActionChange();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+/* ---------------- Zone picker map (HR form — all actions) ----------------
+   Lets the user click a management-unit polygon on a small satellite map to select both Valley
+   and Zone at once, in addition to the dropdown menus. Two-way sync: dropdown changes also
+   re-highlight the selected polygon (via renderHrZonePicker/onHrUnitChange). */
+let hrZonePickerEntry = null;
+let hrZoneSelectedUnit = null, hrZoneShowNames = false;
+let hrZoneUserLocWatchId = null, hrZoneUserLocFirstFix = true;
+
+function ensureHrZonePickerMap(){
+  if (hrZonePickerEntry) return;
+  const map = L.map('hrZonePickerMap', { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  hrZonePickerEntry = {
+    map,
+    zonesLayer: L.layerGroup().addTo(map),
+    labelsLayer: L.layerGroup().addTo(map),
+    userLocLayer: L.layerGroup().addTo(map),
+  };
+  renderHrZonePicker(true);
+}
+
+function renderHrZonePicker(shouldFit){
+  const entry = hrZonePickerEntry;
+  if (!entry) return;
+  const valleyFilter = document.getElementById('hrValley')?.value || '';
+  const units = (tables.managementUnit||[]).filter(u => !valleyFilter || u['Vallee'] === valleyFilter);
+  entry.zonesLayer.clearLayers();
+  entry.labelsLayer.clearLayers();
+  const boundsLatLngs = [];
+  for (const u of units){
+    if (!u.Geometry) continue;
+    const isSelected = u['Nom'] === hrZoneSelectedUnit;
+    const rings = polygonPartsToLatLngRings(u.Geometry);
+    const poly = L.polygon(rings, {
+      color: isSelected ? '#1b5e20' : '#2e5e2c', weight: isSelected ? 2.5 : 1,
+      fillColor: isSelected ? '#2e7d32' : '#ffffff',
+      fillOpacity: isSelected ? 0.45 : 0.07
+    });
+    const html = `<b>${escapeHtml(u['Nom'])}</b> (${escapeHtml(u['Vallee'])})`
+      + (u['Surface'] ? `<br>Surface: ${Math.round(+u['Surface'])} m²` : '')
+      + `<br><i>Click to select this zone</i>`;
+    poly.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+    const valley = u['Vallee'], unitName = u['Nom'];
+    poly.on('click', () => hrZoneClickHandler(valley, unitName));
+    poly.addTo(entry.zonesLayer);
+    rings.forEach(rs => rs.forEach(ring => ring.forEach(ll => boundsLatLngs.push(ll))));
+    if (hrZoneShowNames){
+      const c = geometryCentroid(u.Geometry);
+      if (c) L.marker([c.lat, c.lon], { icon: smallLabelIcon(u['Nom']), interactive: false }).addTo(entry.labelsLayer);
+    }
+  }
+  if (shouldFit && boundsLatLngs.length) entry.map.fitBounds(boundsLatLngs, { padding: [10, 10] });
+}
+
+// Called when user clicks a zone polygon on the map — updates the Valley+Zone dropdowns and
+// re-highlights the polygon without refitting the map view (user just interacted there).
+function hrZoneClickHandler(valley, unitName){
+  const valSel = document.getElementById('hrValley');
+  if (valSel.value !== valley){
+    valSel.value = valley;
+    // Replicate the dropdown-population part of onHrValleyChange() without triggering a map
+    // refit — the valley just changed because the user clicked a zone on the map, not because
+    // they want the view to jump somewhere else.
+    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+    document.getElementById('hrUnit').innerHTML = '<option value="">Choose…</option>'
+      + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+    const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
+    document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  }
+  document.getElementById('hrUnit').value = unitName;
+  hrZoneSelectedUnit = unitName;
+  renderHrZonePicker(false); // re-highlight only, no refit
+}
+
+// Called when the #hrUnit dropdown changes — syncs the map highlight.
+function onHrUnitChange(){
+  hrZoneSelectedUnit = document.getElementById('hrUnit').value || null;
+  renderHrZonePicker(false);
+}
+
+function toggleHrZoneNames(checked){
+  hrZoneShowNames = checked;
+  renderHrZonePicker(false);
+}
+function toggleHrZoneUserLoc(checked){
+  const statusEl = document.getElementById('hrZoneUserLocStatus');
+  statusEl.textContent = '';
+  if (checked){
+    if (!navigator.geolocation){
+      statusEl.textContent = 'Geolocation not supported.';
+      document.getElementById('hrZoneUserLocToggle').checked = false; return;
+    }
+    hrZoneUserLocFirstFix = true;
+    hrZoneUserLocWatchId = navigator.geolocation.watchPosition(pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const e = hrZonePickerEntry; if (!e) return;
+      e.userLocLayer.clearLayers();
+      L.circle([latitude, longitude], { radius: accuracy, color: '#4285f4', weight: 1, fillColor: '#4285f4', fillOpacity: 0.12 }).addTo(e.userLocLayer);
+      L.circleMarker([latitude, longitude], { radius: 7, color: '#fff', weight: 2, fillColor: '#4285f4', fillOpacity: 1 })
+        .bindTooltip('You are here', { direction: 'top' }).addTo(e.userLocLayer);
+      statusEl.textContent = `Accuracy: ±${Math.round(accuracy)} m`;
+      if (hrZoneUserLocFirstFix){ e.map.setView([latitude, longitude], 16); hrZoneUserLocFirstFix = false; }
+    }, err => {
+      statusEl.textContent = err.code === err.PERMISSION_DENIED ? 'Location permission denied.' : 'Could not get location.';
+      document.getElementById('hrZoneUserLocToggle').checked = false;
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+  } else {
+    if (hrZoneUserLocWatchId != null){ navigator.geolocation.clearWatch(hrZoneUserLocWatchId); hrZoneUserLocWatchId = null; }
+    if (hrZonePickerEntry) hrZonePickerEntry.userLocLayer.clearLayers();
   }
 }
 
@@ -1968,6 +2098,8 @@ function togglePepUserLocation(checked){
 // to Plantation (if HR <details> is already open). See onHrActionChange() for the second trigger.
 function onHrDetailsToggle(open){
   if (!open) return;
+  ensureHrZonePickerMap();
+  if (hrZonePickerEntry) hrZonePickerEntry.map.invalidateSize();
   if (document.getElementById('hrAction').value === 'Plantation'){
     ensurePepPickerMap();
     if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
