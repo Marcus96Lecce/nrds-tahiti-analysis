@@ -805,11 +805,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <option value="Hopa">Hopa</option>
         </select>
       </label>
-      <button class="secondary map-layer-btn active" data-layer="all_obs" onclick="setMapLayer('all_obs')">All observations</button>
-      <button class="secondary map-layer-btn" data-layer="species" onclick="setMapLayer('species')">Planted species</button>
-      <button class="secondary map-layer-btn" data-layer="cleaning" onclick="setMapLayer('cleaning')">Cleaning status by zone</button>
-      <button class="secondary map-layer-btn" data-layer="derat" onclick="setMapLayer('derat')">Bait consumption (Checks)</button>
-      <button class="secondary map-layer-btn" data-layer="pff" onclick="setMapLayer('pff')">Little Fire Ant (PFF)</button>
+      <div style="position:relative;display:inline-block;">
+        <button class="secondary" id="mapLayersBtn" onclick="toggleMapLayersDropdown()" style="padding:5px 14px;font-size:13px;">
+          Layers <span id="mapLayersCount" style="opacity:.7;">(1)</span> ▾
+        </button>
+        <div id="mapLayersPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_all_obs" checked onchange="toggleMapLayer('all_obs',this.checked)"> All observations</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_species" onchange="toggleMapLayer('species',this.checked)"> Planted species</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
+        </div>
+      </div>
       <label class="muted" style="margin-left:auto;">
         <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
         Overlay all rat stations
@@ -3960,7 +3967,8 @@ function speciesSummaryByAction(){
 }
 
 let mapValleyFilter = 'all';
-let mapLayer = 'all_obs';
+let mapLayers = new Set(['all_obs']); // which data layers are currently shown — one or more at once
+let mapLayersDropdownOpen = false;
 let showStationsOverlay = false;
 let showRatLines = false;
 let showZoneNames = false;
@@ -4308,17 +4316,37 @@ function resetMapDateFilter(){
   document.getElementById('mapDateTo').value = '';
   renderMap(false);
 }
-function setMapLayer(l){
-  mapLayer = l;
-  document.querySelectorAll('.map-layer-btn').forEach(b=>b.classList.toggle('active', b.dataset.layer===l));
-  histZoneMode = null;
-  ['histCleaningToggle','histCombinedToggle','histPlantingToggle','histPlantingActivityToggle'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.checked = false;
-  });
-  document.getElementById('cleaningHistRow').style.display = l === 'cleaning' ? '' : 'none';
-  document.getElementById('plantingHistRow').style.display = l === 'species' ? '' : 'none';
+// Multi-layer dropdown: toggle one layer on or off independently, update the count badge, and
+// re-render. Hist rows (contextual controls for the "cleaning" and "species" layers) are shown
+// whenever their layer is active — hidden (and hist mode reset) whenever it's deactivated.
+function toggleMapLayer(key, checked){
+  if (checked) mapLayers.add(key); else mapLayers.delete(key);
+  // reset histZoneMode if the layer that owns it was turned off
+  const cleaningHist = ['cleaning','combined'];
+  const plantingHist = ['planting','plantingActivity'];
+  if (!mapLayers.has('cleaning') && cleaningHist.includes(histZoneMode)){
+    histZoneMode = null;
+    ['histCleaningToggle','histCombinedToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
+  }
+  if (!mapLayers.has('species') && plantingHist.includes(histZoneMode)){
+    histZoneMode = null;
+    ['histPlantingToggle','histPlantingActivityToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
+  }
+  document.getElementById('cleaningHistRow').style.display = mapLayers.has('cleaning') ? '' : 'none';
+  document.getElementById('plantingHistRow').style.display = mapLayers.has('species') ? '' : 'none';
+  document.getElementById('mapLayersCount').textContent = `(${mapLayers.size})`;
   renderMap(false);
 }
+function toggleMapLayersDropdown(){
+  mapLayersDropdownOpen = !mapLayersDropdownOpen;
+  document.getElementById('mapLayersPanel').style.display = mapLayersDropdownOpen ? '' : 'none';
+}
+document.addEventListener('click', e => {
+  if (mapLayersDropdownOpen && !e.target.closest('#mapLayersPanel') && !e.target.closest('#mapLayersBtn')){
+    mapLayersDropdownOpen = false;
+    document.getElementById('mapLayersPanel').style.display = 'none';
+  }
+});
 function toggleStationsOverlay(checked){
   showStationsOverlay = checked;
   renderMap(false);
@@ -4483,9 +4511,9 @@ function renderMap(shouldFit){
 
   // plain live-cleaning layer respects the map's own date-range filter; the "combined" historical+NRDS
   // estimate keeps using the unfiltered latest reading — its own recency-weighting already handles time
-  const statusMap = (mapLayer === 'cleaning' && !histZoneMode) ? latestUnitStatus(mapDateFrom, mapDateTo) : null;
+  const statusMap = (mapLayers.has('cleaning') && !histZoneMode) ? latestUnitStatus(mapDateFrom, mapDateTo) : null;
   const statusMapForCombined = histZoneMode === 'combined' ? latestUnitStatus() : null;
-  const speciesMap = mapLayer === 'species' ? speciesSummaryByAction() : null;
+  const speciesMap = mapLayers.has('species') ? speciesSummaryByAction() : null;
   const pastUnitLookup = pastUnitLookupMap();
   const boundsLatLngs = [...lineBoundsLatLngs];
   const combinedBreakdown = [];
@@ -4542,7 +4570,7 @@ function renderMap(shouldFit){
       fillColor = hv ? pctColor(hv.pct) : '#d8d8d8';
       fillOpacity = 0.75;
       html += hv ? `<br>${label} (historical, ${HIST_PERIOD_LABEL[hv.period]}): <b>${hv.raw}</b> (${hv.pct}%)` : '<br><i>no historical data for this unit</i>';
-    } else if (mapLayer === 'cleaning'){
+    } else if (mapLayers.has('cleaning')){
       const st = statusMap.get(u['Nom']);
       fillColor = st ? pctColor(st.pct) : '#d8d8d8';
       fillOpacity = 0.75;
@@ -4561,7 +4589,7 @@ function renderMap(shouldFit){
     }
   }
 
-  if (mapLayer === 'cleaning'){
+  if (mapLayers.has('cleaning')){
     // station-level color points, where the data is precise enough — drawn on top of the zone choropleth.
     // These represent live NRDS readings, so the date filter applies here regardless of histZoneMode
     // (the choropleth underneath may be showing a recency-weighted blend unaffected by the date range).
@@ -4582,7 +4610,7 @@ function renderMap(shouldFit){
     }
   }
 
-  if (mapLayer === 'derat'){
+  if (mapLayers.has('derat')){
     // discrete colored station dots, same visual language as the cleaning layer above — not a true
     // blurred heat-density layer (no extra library needed for that), just per-station latest-Conso
     // color, which already reads as a "where's the activity" map at this station density.
@@ -4603,7 +4631,7 @@ function renderMap(shouldFit){
     }
   }
 
-  if (mapLayer === 'pff'){
+  if (mapLayers.has('pff')){
     // PFF points have no Valley field of their own (the geolocation point is the only location data),
     // so unlike every other layer this one deliberately ignores the map's Valley filter — same
     // precedent as the user-drawn "Add Elements" lines, which also have no valley to filter by.
@@ -4668,14 +4696,17 @@ function renderMap(shouldFit){
     }
   }
 
-  if (mapLayer === 'all_obs' || mapLayer === 'species'){
+  if (mapLayers.has('all_obs') || mapLayers.has('species')){
+    const showAll = mapLayers.has('all_obs'), showSpecies = mapLayers.has('species');
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
-    if (mapLayer === 'species') rows = rows.filter(r => r.Species_Planted);
+    if (!showAll) rows = rows.filter(r => r.Species_Planted); // species-only: only show planted rows
     rows.forEach(r => {
       const lat = +r.Centroid_Latitude, lon = +r.Centroid_Longitude;
       const approx = r.Location_Precision === 'management_unit';
+      // When both layers active, rows with species data use species coloring; others use valley coloring
+      const useSpecies = showSpecies && !!r.Species_Planted;
       let color, radius = approx ? 7 : 6;
-      if (mapLayer === 'species'){
+      if (useSpecies){
         const sp = speciesMap.get(r.Identifier);
         color = sp && sp.hasIntroduced ? (sp.hasNative ? '#9467bd' : TYPE_HEX.Introduced) : TYPE_HEX.Native;
         radius = Math.max(5, Math.min(16, 5 + Math.sqrt((sp && sp.total) || 1)*2));
@@ -4741,9 +4772,24 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
       <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no historical data</span><br>`;
   }
-  if (mapLayer === 'cleaning'){
+  // Per-layer legend entries: each active layer adds its own section (multiple can be shown together)
+  const sep = () => legend.length ? '<br>' : '';
+  if (mapLayers.has('all_obs')){
+    if (!mapLayers.has('species') || !histZoneMode){
+      legend += sep() + `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
+        <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
+    }
+  }
+  if (mapLayers.has('species')){
+    legend += sep() + `
+      <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Native}"></span>Native only</span>
+      <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Introduced}"></span>Introduced only</span>
+      <span class="legend-item"><span class="swatch" style="background:#9467bd"></span>Native + introduced</span>
+      <span class="legend-item">point size ∝ number of individuals planted</span>`;
+  }
+  if (mapLayers.has('cleaning')){
     if (!histZoneMode){
-      legend += `
+      legend += sep() + `
         <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>0%</span>
         <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>50%</span>
         <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
@@ -4751,31 +4797,26 @@ function renderMap(shouldFit){
         <span class="legend-item">zones = latest "end of day" % recorded for the management unit</span>`;
     }
     legend += `<span class="legend-item">● (dark outline) = single rat station, when data precision allows it</span>`;
-  } else if (mapLayer === 'species'){
-    legend += `
-      <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Native}"></span>Native only</span>
-      <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Introduced}"></span>Introduced only</span>
-      <span class="legend-item"><span class="swatch" style="background:#9467bd"></span>Native + introduced</span>
-      <span class="legend-item">point size ∝ number of individuals planted</span>`;
-  } else if (mapLayer === 'derat'){
-    legend += `
+  }
+  if (mapLayers.has('derat')){
+    legend += sep() + `
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>0 — no activity</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>2</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>4 — fully consumed</span>
       <span class="legend-item">dots = latest Checks (bait consumption) reading per rat station</span>`;
-  } else if (mapLayer === 'pff'){
-    legend += `
+  }
+  if (mapLayers.has('pff')){
+    legend += sep() + `
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Positive']}"></span>Positive</span>
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Centre de colonie']}"></span>Centre de colonie</span>
       <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Negative']}"></span>Negative</span>
-      <span class="legend-item">Little Fire Ant (PFF) survey points — shown regardless of the Valley filter above (this layer has no valley scoping of its own)</span>
+      <span class="legend-item">Little Fire Ant (PFF) survey points — no valley scoping</span>
       <br><span class="legend-item"><span class="swatch" style="background:#fdae6b;border:2px solid #ff7f0e;"></span>estimated colony (≥3 nearby detections)</span>
       <span class="legend-item"><span class="swatch" style="background:#ff7f0e;border:2px solid #d62728;"></span>colony with a confirmed centre</span>
-      <span class="legend-item">dashed outer ring = recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (LFA delimiting SOP)</span>
-      <span class="legend-item">Colony boundaries follow Vanderwoude (2008)'s LFA delimiting SOP — detections within ${PFF_CLUSTER_LINK_M}m of each other are grouped as one colony</span>`;
-  } else {
-    legend += `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
-      <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
+      <span class="legend-item">dashed outer ring = recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (LFA delimiting SOP)</span>`;
+  }
+  if (!mapLayers.size){
+    legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
   }
   if (showStationsOverlay){
     legend += `<br><span class="legend-item"><span class="swatch" style="background:#fff;border:1px solid #444;border-radius:50%;width:8px;height:8px;display:inline-block;"></span>small gray dot = registered rat station (all of them, regardless of the chosen map layer)</span>`;
@@ -4802,7 +4843,7 @@ function renderMap(shouldFit){
   } else if (histZoneMode === 'plantingActivity'){
     combinedBox.style.display = '';
     combinedBox.innerHTML = renderPlantingActivityBox(combinedBreakdown);
-  } else if (mapLayer === 'pff'){
+  } else if (mapLayers.has('pff')){
     combinedBox.style.display = '';
     combinedBox.innerHTML = renderPffColonyCalcBox(pffColoniesForBox);
   } else {
