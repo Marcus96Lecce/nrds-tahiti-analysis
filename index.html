@@ -895,14 +895,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label class="muted date-label">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
       <button class="secondary date-reset-btn" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
     </div>
-    <div class="tabs">
-      <button class="secondary" onclick="renderCleaning()">Cleaning % trend over time</button>
-      <button class="secondary" onclick="renderSpecies()">Most-planted species</button>
-      <button class="secondary" onclick="renderWorkforce()">People involved (volunteer vs routine)</button>
-      <button class="secondary" onclick="renderDeratChart()">Bait consumption (Checks)</button>
-      <button class="secondary" onclick="renderPffChart()">Little Fire Ant (PFF)</button>
+    <div style="margin-bottom:10px;">
+      <div style="position:relative;display:inline-block;">
+        <button class="secondary" id="chartChartsBtn" onclick="toggleChartDropdown()" style="padding:5px 14px;font-size:13px;">
+          Charts <span id="chartChartsCount" style="opacity:.7;">(0)</span> ▾
+        </button>
+        <div id="chartChartsPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_cleaning" onchange="toggleChart('cleaning',this.checked)"> Cleaning % trend over time</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_species" onchange="toggleChart('species',this.checked)"> Most-planted species</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_workforce" onchange="toggleChart('workforce',this.checked)"> People involved (volunteer vs routine)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_derat" onchange="toggleChart('derat',this.checked)"> Bait consumption (Checks)</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
+        </div>
+      </div>
     </div>
-    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis to run.</span></div>
+    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis above.</span></div>
     <div id="chartPopup" class="chart-popup" style="display:none;"></div>
   </div>
 
@@ -1714,7 +1721,7 @@ async function fetchPffObservations(){
   const zones = [...new Set(pffObservations.map(r => r.zone).filter(Boolean))].sort();
   document.getElementById('pffZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
   if (leafletMap) renderMap(false);
-  if (currentChartView === 'pff') renderPffChart();
+  if (currentChartViews.has('pff')) renderAllCharts();
   if (pffPickerEntry){ renderPffPickerColonies(); renderPffPickerExisting(); }
 }
 function subscribePffObservations(){
@@ -3257,7 +3264,7 @@ function onDataUpdated(){
   if ([...document.getElementById('chartStation').options].some(o => o.value === prevStation)) document.getElementById('chartStation').value = prevStation;
   renderPreview(mainRows);
   renderMap();
-  if (currentChartView) rerenderCurrentChart();
+  if (currentChartViews.size) rerenderAllCharts();
 
   document.getElementById('pastDataCard').style.display = '';
   const pdStatus = document.getElementById('pastDataStatus');
@@ -3320,14 +3327,66 @@ function onChartZoneChange(){
   rerenderCurrentChart();
 }
 function onChartStationChange(){ rerenderCurrentChart(); }
-let currentChartView = null;
-function rerenderCurrentChart(){
-  if (currentChartView === 'cleaning') renderCleaning();
-  else if (currentChartView === 'species') renderSpecies();
-  else if (currentChartView === 'workforce') renderWorkforce();
-  else if (currentChartView === 'derat') renderDeratChart();
-  else if (currentChartView === 'pff') renderPffChart();
+let currentChartViews = new Set(); // which analysis charts are currently shown (can be multiple)
+let chartDropdownOpen = false;
+
+// Fixed display order for stacked multi-chart rendering — each active chart renders into its own
+// sub-div in this order (top to bottom), separated by a divider and a section header when ≥2 active
+const CHART_DEFS = [
+  { key: 'cleaning',  label: 'Cleaning % trend over time',          render: c => renderCleaning(c) },
+  { key: 'species',   label: 'Most-planted species',                  render: c => renderSpecies(c) },
+  { key: 'workforce', label: 'People involved (volunteer vs routine)', render: c => renderWorkforce(c) },
+  { key: 'derat',     label: 'Bait consumption (Checks)',             render: c => renderDeratChart(c) },
+  { key: 'pff',       label: 'Little Fire Ant (PFF)',                 render: c => renderPffChart(c) },
+];
+
+function renderAllCharts(){
+  const area = document.getElementById('chartArea');
+  if (!currentChartViews.size){
+    area.innerHTML = '<span class="muted">Choose an analysis above.</span>';
+    return;
+  }
+  hideChartPopup();
+  chartPopupData = []; // reset once here; individual render functions no longer reset it
+  const active = CHART_DEFS.filter(d => currentChartViews.has(d.key));
+  area.innerHTML = '';
+  const multi = active.length > 1;
+  active.forEach((def, i) => {
+    if (i > 0){
+      const hr = document.createElement('hr');
+      hr.style.cssText = 'margin:20px 0;border-color:var(--border);';
+      area.appendChild(hr);
+    }
+    if (multi){
+      const h = document.createElement('div');
+      h.style.cssText = 'font-weight:600;margin-bottom:8px;font-size:13.5px;color:var(--green-dark);border-bottom:1px solid var(--border);padding-bottom:4px;';
+      h.textContent = def.label;
+      area.appendChild(h);
+    }
+    const section = document.createElement('div');
+    area.appendChild(section);
+    def.render(section);
+  });
 }
+// Alias so existing callers (filter changes, onChartDateChange, etc.) keep working unchanged
+function rerenderCurrentChart(){ renderAllCharts(); }
+function rerenderAllCharts(){ renderAllCharts(); }
+
+function toggleChart(key, checked){
+  if (checked) currentChartViews.add(key); else currentChartViews.delete(key);
+  document.getElementById('chartChartsCount').textContent = `(${currentChartViews.size})`;
+  renderAllCharts();
+}
+function toggleChartDropdown(){
+  chartDropdownOpen = !chartDropdownOpen;
+  document.getElementById('chartChartsPanel').style.display = chartDropdownOpen ? '' : 'none';
+}
+document.addEventListener('click', e => {
+  if (chartDropdownOpen && !e.target.closest('#chartChartsPanel') && !e.target.closest('#chartChartsBtn')){
+    chartDropdownOpen = false;
+    document.getElementById('chartChartsPanel').style.display = 'none';
+  }
+});
 
 function renderPreview(mainRows){
   const cols = ['Identifier','Date','Valley','Unit_Name','Action','Pct_cleaned_arrival','Pct_cleaned_end_of_day','Location_Precision','Species_Planted','Total_Individuals'];
@@ -3358,13 +3417,12 @@ function hashStringToInt(s){
   return h;
 }
 
-function renderCleaning(){
-  currentChartView = 'cleaning';
+function renderCleaning(container){
   hideChartPopup();
   const valley = document.getElementById('chartValley').value;
   const zone = document.getElementById('chartZone').value;
   const station = document.getElementById('chartStation').value;
-  const area = document.getElementById('chartArea');
+  const area = container || document.getElementById('chartArea');
   // the ranked zone-priority view only makes sense when comparing *across* zones, i.e. before
   // the user has drilled into one specific zone or station
   const showPriority = zone === 'all' && station === 'all';
@@ -3405,7 +3463,6 @@ function renderCleaning(){
   const xScale = i => rows.length===1 ? mL+(W-mL-mR)/2 : mL + i/(rows.length-1)*(W-mL-mR);
   const yScale = pct => H-mB - pct/100*(H-mT-mB);
 
-  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   // gridlines
   for (let p=0;p<=100;p+=20){
@@ -3449,8 +3506,7 @@ function renderCleaning(){
   area.innerHTML = svg + legend;
 }
 
-function renderSpecies(){
-  currentChartView = 'species';
+function renderSpecies(container){
   hideChartPopup();
   const valley = document.getElementById('chartValley').value;
   const zone = document.getElementById('chartZone').value;
@@ -3469,7 +3525,7 @@ function renderSpecies(){
     if (r.Number > 0) e.actions.push({date:mainRow.Date, unit:mainRow.Unit_Name||'(no unit)', valley:mainRow.Valley, number:r.Number});
   }
   const data = [...agg.entries()].map(([name,v])=>({name,...v})).sort((a,b)=>b.total-a.total);
-  const area = document.getElementById('chartArea');
+  const area = container || document.getElementById('chartArea');
   if (!data.length){ area.innerHTML = '<span class="muted">No planted-species data for this selection.</span>'; return; }
 
   const barH = 26, gap = 10, mL = 170, mR = 50, mT = 10, mB = 10;
@@ -3477,7 +3533,6 @@ function renderSpecies(){
   const maxTotal = Math.max(...data.map(d=>d.total));
   const xScale = v => v/maxTotal*(W-mL-mR);
 
-  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   data.forEach((d,i) => {
     const y = mT + i*(barH+gap);
@@ -3559,13 +3614,12 @@ function pinPopup(evt, idx){
   showChartPopup(chartPopupData[idx], evt.clientX, evt.clientY);
 }
 
-function renderWorkforce(){
-  currentChartView = 'workforce';
+function renderWorkforce(container){
   hideChartPopup();
   const valley = document.getElementById('chartValley').value;
   const zone = document.getElementById('chartZone').value;
   const station = document.getElementById('chartStation').value;
-  const area = document.getElementById('chartArea');
+  const area = container || document.getElementById('chartArea');
 
   // date range is the shared filter above the tabs now (chartDateFrom/chartDateTo, applied inside
   // getFilteredMainRows) — this chart no longer has its own scoped date picker
@@ -3574,7 +3628,6 @@ function renderWorkforce(){
     .filter(r => r.people > 0)
     .sort((a,b) => a.ts - b.ts);
   if (!rows.length){ area.innerHTML = '<span class="muted">No action with a recorded headcount for this selection.</span>'; return; }
-  chartPopupData = [];
 
   // always one bar per individual NRDS session, in chronological order — same ordinal-axis
   // convention as the cleaning-trend chart, at every filter depth (all valleys down to one
@@ -3645,11 +3698,10 @@ function renderWorkforce(){
 // average Conso (0-4) across its checked stations; color reuses pctColor() but inverted, since high
 // Conso (lots of bait eaten = more rat activity) is the "bad" end here, unlike cleaning % where high
 // is "good".
-function renderDeratChart(){
-  currentChartView = 'derat';
+function renderDeratChart(container){
   hideChartPopup();
   const valley = document.getElementById('chartValley').value;
-  const area = document.getElementById('chartArea');
+  const area = container || document.getElementById('chartArea');
 
   const checksByIdent = new Map();
   for (const c of tables.sectionChecks||[]){
@@ -3668,7 +3720,6 @@ function renderDeratChart(){
     .sort((a,b) => a.ts - b.ts);
 
   if (!rows.length){ area.innerHTML = '<span class="muted">No dératisation patrol with a recorded check for this valley/date range.</span>'; return; }
-  chartPopupData = [];
 
   const W = Math.max(700, rows.length*55), H = 360, mL = 50, mR = 20, mT = 20, mB = 90;
   const slotW = (W-mL-mR)/rows.length;
@@ -3762,10 +3813,9 @@ function renderPffColonySummary(colonies){
   </div>`;
 }
 
-function renderPffChart(){
-  currentChartView = 'pff';
+function renderPffChart(container){
   hideChartPopup();
-  const area = document.getElementById('chartArea');
+  const area = container || document.getElementById('chartArea');
 
   const rows = (pffObservations||[])
     .filter(r => r.date && inDateRange(r.date, chartDateFrom, chartDateTo))
@@ -3773,7 +3823,6 @@ function renderPffChart(){
     .sort((a,b) => a.ts - b.ts);
 
   if (!rows.length){ area.innerHTML = '<span class="muted">No Little Fire Ant (PFF) survey points for this date range.</span>'; return; }
-  chartPopupData = [];
   const colonies = buildPffColonies(rows);
   const colonyHtml = renderPffColonySummary(colonies);
 
@@ -5139,7 +5188,6 @@ function renderZonePriority(valley, rows){
   const plotW = W - mL - mR, H = mT+mB + withData.length*(barH+gap);
   const labelFontSize = narrow ? 10 : 11.5;
   const xScale = pct => pct/100*plotW;
-  chartPopupData = [];
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   [0,25,50,75,100].forEach(p => {
     const x = mL + xScale(p);
