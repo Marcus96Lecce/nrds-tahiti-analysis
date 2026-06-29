@@ -4410,12 +4410,22 @@ function renderPffChart(container){
   hideChartPopup();
   const area = container || document.getElementById('chartArea');
 
+  const chartValley = document.getElementById('chartValley').value;
   const rows = (pffObservations||[])
-    .filter(r => r.date && inDateRange(r.date, chartDateFrom, chartDateTo))
+    .filter(r => {
+      if (!r.date) return false;
+      if (!inDateRange(r.date, chartDateFrom, chartDateTo)) return false;
+      if (chartValley !== 'all'){
+        const v = r.valley || inferPffValley(+r.lat, +r.lon);
+        if (v !== chartValley) return false;
+      }
+      return true;
+    })
     .map(r => ({ ...r, ts: new Date(r.date).getTime() }))
     .sort((a,b) => a.ts - b.ts);
 
-  if (!rows.length){ area.innerHTML = '<span class="muted">No Little Fire Ant (PFF) survey points for this date range.</span>'; return; }
+  const valleyLabel = chartValley === 'all' ? 'all valleys' : chartValley;
+  if (!rows.length){ area.innerHTML = `<span class="muted">No Little Fire Ant (PFF) survey points for ${escapeHtml(valleyLabel)} in this date range.</span>`; return; }
   const colonies = buildPffColonies(rows);
   const colonyHtml = renderPffColonySummary(colonies);
 
@@ -4463,9 +4473,9 @@ function renderPffChart(container){
     <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Centre de colonie']}"></span>Centre de colonie</span>
     <span class="legend-item"><span class="swatch" style="background:${PFF_STATUS_COLORS['Negative']}"></span>Negative</span>
     <span class="legend-item">Each bar = one survey point, in chronological order, colored by status</span>
-    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the full record. Only the date range above applies here — Valley/Zone/Station don't apply, since PFF points aren't tied to a fixed valley/zone.</span>
+    <br><span class="muted">Hover a bar for a quick peek — click to pin a popup with the full record. Valley filter is applied via GPS point-in-polygon lookup against management-unit zones${chartValley !== 'all' ? ` — showing <b>${escapeHtml(valleyLabel)}</b> only` : ''}. Zone and Station filters do not apply to PFF data.</span>
   </div>`;
-  const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time across the LIFE STOP EXTINCTION work area — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when. Colony delimiting follows Vanderwoude (2008)'s LFA SOP.</div>`;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time${chartValley !== 'all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ' across the LIFE STOP EXTINCTION work area'} — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when. Colony delimiting follows Vanderwoude (2008)'s LFA SOP.</div>`;
   area.innerHTML = hint + colonyHtml + '<hr style="margin:14px 0;border-color:var(--border);">' + summary + svg + legend;
 }
 
@@ -4529,6 +4539,22 @@ function latestStationConso(dateFrom, dateTo){
 // Ray-casting point-in-polygon, plain Cartesian on raw lon/lat — fine at the scale of a single Tahiti
 // valley (no projection distortion worth correcting for). `parts`/`ring` use the same [lon,lat] point
 // structure as geometryToPolygonParts().
+// Infer which valley a GPS point belongs to by testing it against management-unit polygons.
+// Used to filter PFF observations by the chart valley selector (pff_observations has no valley column).
+let _pffValleyCache = new Map();
+function inferPffValley(lat, lon){
+  const key = `${lat},${lon}`;
+  if (_pffValleyCache.has(key)) return _pffValleyCache.get(key);
+  let found = null;
+  for (const u of (tables.managementUnit || [])){
+    if (!u['Geometry']) continue;
+    const parts = geometryToPolygonParts(u['Geometry']);
+    if (pointInPolygonParts(lon, lat, parts)){ found = u['Vallee']; break; }
+  }
+  _pffValleyCache.set(key, found);
+  return found;
+}
+
 function pointInRing(x, y, ring){
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
@@ -4552,7 +4578,7 @@ function pointInPolygonParts(x, y, parts){
 // that station has ever been mentioned in a Habitat Restoration action. This is what lets the "combined"
 // estimate know how many stations a zone *has*, not just how many happened to report data.
 let unitStationsCache = null;
-function resetUnitStationsCache(){ unitStationsCache = null; }
+function resetUnitStationsCache(){ unitStationsCache = null; _pffValleyCache = new Map(); }
 function unitStationsLookup(){
   if (unitStationsCache) return unitStationsCache;
   const map = new Map(); // Unit_Name -> [{code, valley}]
