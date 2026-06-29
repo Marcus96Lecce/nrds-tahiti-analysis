@@ -1086,13 +1086,42 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card" id="downloadsCard" style="display:none;">
-    <h2>Downloads</h2>
-    <div class="hint">Export the shared data as CSV — either in the original NRDS format, or as the enriched/analysis-ready tables this app builds.</div>
-    <div class="row" style="margin-bottom:8px;">
-      <button class="secondary" onclick="downloadOriginalFormat('habitat')">⬇ Habitat Restoration data (original NRDS format)</button>
-      <button class="secondary" onclick="downloadOriginalFormat('derat')">⬇ Dératisation data (original NRDS format)</button>
+    <details id="downloadsDetails">
+    <summary style="cursor:pointer;"><h2 style="display:inline;margin:0;">Downloads</h2></summary>
+    <div class="hint" style="margin-top:8px;">Export any dataset as CSV. Each button downloads the data currently loaded in the app — open the relevant section first if a table appears empty.</div>
+
+    <div style="margin-top:14px;">
+      <div style="font-weight:600;font-size:12.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Original NRDS format</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+        <button class="secondary" onclick="downloadOriginalFormat('habitat')">⬇ Habitat Restoration (NRDS)</button>
+        <button class="secondary" onclick="downloadOriginalFormat('derat')">⬇ Dératisation (NRDS)</button>
+      </div>
     </div>
-    <div class="row" id="enrichedDownloadButtons"></div>
+
+    <div style="margin-top:14px;">
+      <div style="font-weight:600;font-size:12.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Analysis-ready (enriched)</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;" id="enrichedDownloadButtons"></div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="font-weight:600;font-size:12.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">App-collected data</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;">
+        <button class="secondary" onclick="downloadBirdSurveys()">⬇ Invasive Bird Surveys</button>
+        <button class="secondary" onclick="downloadPffObservations()">⬇ PFF Observations</button>
+        <button class="secondary" onclick="downloadPepinieres()">⬇ Pépinières</button>
+        <button class="secondary" onclick="downloadAllActivityEntries()">⬇ Activity Entries</button>
+        <button class="secondary" onclick="downloadAllActivityTypes()">⬇ Activity Types (definitions)</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div style="font-weight:600;font-size:12.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Reference data</div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;">
+        <button class="secondary" onclick="downloadManagementUnits()">⬇ Management Units (zones)</button>
+        <button class="secondary" onclick="downloadRatStations()">⬇ Rat Stations</button>
+      </div>
+    </div>
+    </details>
   </div>
 
 </div>
@@ -2834,9 +2863,10 @@ let ibsUserLocWatchId = null, ibsUserLocFirstFix = true;
 
 async function fetchBirdSurveys(){
   try {
-    const { data, error } = await window.sb.from('bird_surveys').select('station_id').order('id');
+    const { data, error } = await window.sb.from('bird_surveys').select('*').order('id');
     if (error) return;
-    const ids = [...new Set((data||[]).map(r => r.station_id).filter(Boolean))].sort();
+    birdSurveys = data || [];
+    const ids = [...new Set(birdSurveys.map(r => r.station_id).filter(Boolean))].sort();
     const dl = document.getElementById('ibsStationList');
     if (dl) dl.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">`).join('');
   } catch(e){ /* table may not exist yet */ }
@@ -3110,6 +3140,7 @@ const ACTIVITY_TYPE_PRESETS = [
 
 let activityTypes = [];
 let activityEntries = [];
+let birdSurveys = [];
 
 async function fetchActivityTypes(){
   const { data, error } = await window.sb.from('activity_types').select('*').order('id');
@@ -3689,6 +3720,53 @@ function downloadOriginalFormat(which){
     downloadCSV('Dératisation.csv', tables.deratisation||[], ['Identifier','Date','Observer','Zone','Passage']);
     downloadCSV('Section - Checks.csv', tables.sectionChecks||[], ['Identifier','Derat','Conso']);
   }
+}
+
+/* ---------------- per-dataset download helpers ---------------- */
+function downloadBirdSurveys(){
+  const rows = birdSurveys;
+  if (!rows.length){ alert('No bird survey records loaded yet.'); return; }
+  const fields = ['id','date','time_start','observer','valley','zone','station_id','lat','lon',
+    'duration_min','myna_seen','myna_heard','bulbul_seen','bulbul_heard',
+    'vegetation_type','pomarea_detected','interaction','weather','notes','created_at'];
+  downloadCSV('bird_surveys.csv', rows, fields);
+}
+function downloadPffObservations(){
+  const rows = pffObservations;
+  if (!rows.length){ alert('No PFF observation records loaded yet.'); return; }
+  const fields = ['id','date','observer','zone','status','value','notes','lat','lon','survey_method','created_at'];
+  downloadCSV('pff_observations.csv', rows, fields);
+}
+function downloadPepinieres(){
+  const rows = pepinieres;
+  if (!rows.length){ alert('No pépinière records loaded yet.'); return; }
+  const fields = ['id','name','lat','lon','number_of_plants','date','observer','zone','notes','created_at'];
+  downloadCSV('pepinieres.csv', rows, fields);
+}
+function downloadAllActivityEntries(){
+  const rows = activityEntries.map(r => ({ ...r, field_values: JSON.stringify(r.field_values||[]) }));
+  if (!rows.length){ alert('No activity entry records loaded yet.'); return; }
+  const fields = ['id','activity_type_id','activity_type_name','date','observer','valley','zone',
+    'number_of_person','comment','field_values','created_at'];
+  downloadCSV('activity_entries.csv', rows, fields);
+}
+function downloadAllActivityTypes(){
+  const rows = activityTypes.map(r => ({ ...r, fields: JSON.stringify(r.fields||[]) }));
+  if (!rows.length){ alert('No activity types loaded yet.'); return; }
+  const fields = ['id','name','description','color','fields','created_at'];
+  downloadCSV('activity_types.csv', rows, fields);
+}
+function downloadManagementUnits(){
+  const rows = tables.managementUnit||[];
+  if (!rows.length){ alert('Reference data not loaded yet.'); return; }
+  const allKeys = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  downloadCSV('management_units.csv', rows, allKeys);
+}
+function downloadRatStations(){
+  const rows = tables.deratTahiti||[];
+  if (!rows.length){ alert('Reference data not loaded yet.'); return; }
+  const allKeys = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  downloadCSV('rat_stations.csv', rows, allKeys);
 }
 
 /* ---------------- build button ---------------- */
