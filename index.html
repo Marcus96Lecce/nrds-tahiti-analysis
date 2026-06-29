@@ -1105,7 +1105,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <div class="card">
     <details id="hrDetails" ontoggle="onHrDetailsToggle(this.open)">
-    <summary><h2 style="display:inline;margin:0;">1. Add a new Habitat Restoration action</h2></summary>
+    <summary style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;">
+      <h2 style="margin:0;flex:1;">1. Add a new Habitat Restoration action</h2>
+      <a href="https://marcus96lecce.github.io/tahiti-field-guide/"
+         target="_blank" rel="noopener"
+         onclick="event.stopPropagation()"
+         title="Open the Tahiti plant recognition guide in a new tab"
+         style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;
+                background:#fff;color:var(--green-dark);border:1.5px solid var(--green);
+                border-radius:8px;padding:6px 13px;font-size:12.5px;font-weight:500;
+                text-decoration:none;white-space:nowrap;
+                box-shadow:0 1px 4px rgba(46,125,50,.12);
+                transition:background .15s,box-shadow .15s;">
+        🌿 Tahiti Plant Guide
+      </a>
+    </summary>
     <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
     <form id="hrForm" onsubmit="submitHabitatForm(event)">
       <div class="row" style="margin-bottom:10px;">
