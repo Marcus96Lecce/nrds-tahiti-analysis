@@ -1143,6 +1143,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="muted" style="margin-bottom:4px;">Or select the zone by clicking directly on the map:</div>
         <div class="row" style="margin-bottom:6px;">
           <label class="muted"><input type="checkbox" id="hrZoneNamesToggle" onchange="toggleHrZoneNames(this.checked)"> Show zone names</label>
+          <label class="muted"><input type="checkbox" id="hrStationsOverlayToggle" onchange="toggleHrStationsOverlay(this.checked)"> Overlay all rat stations</label>
           <label class="muted"><input type="checkbox" id="hrZoneUserLocToggle" onchange="toggleHrZoneUserLoc(this.checked)"> Show my location</label>
           <span id="hrZoneUserLocStatus" class="muted"></span>
         </div>
@@ -2050,6 +2051,7 @@ async function submitHabitatForm(evt){
 let hrZonePickerEntry = null;
 let hrZoneSelectedUnit = null, hrZoneShowNames = false;
 let hrZoneUserLocWatchId = null, hrZoneUserLocFirstFix = true;
+let hrShowStations = false;
 
 function ensureHrZonePickerMap(){
   if (hrZonePickerEntry) return;
@@ -2061,6 +2063,7 @@ function ensureHrZonePickerMap(){
     map,
     zonesLayer: L.layerGroup().addTo(map),
     labelsLayer: L.layerGroup().addTo(map),
+    stationsLayer: L.layerGroup().addTo(map),
     userLocLayer: L.layerGroup().addTo(map),
   };
   renderHrZonePicker(true);
@@ -2128,6 +2131,28 @@ function onHrUnitChange(){
 function toggleHrZoneNames(checked){
   hrZoneShowNames = checked;
   renderHrZonePicker(false);
+}
+function toggleHrStationsOverlay(checked){
+  hrShowStations = checked;
+  renderHrStations();
+}
+function renderHrStations(){
+  const entry = hrZonePickerEntry;
+  if (!entry) return;
+  entry.stationsLayer.clearLayers();
+  if (!hrShowStations) return;
+  for (const st of (tables.deratTahiti||[])){
+    const lat = +st['Latitude'], lon = +st['Longitude'];
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const html = `<b>Station ${escapeHtml(st['Station']||'?')}</b> (${escapeHtml(st['Vallee']||'?')})<br>` +
+      `Zone: ${escapeHtml(st['Zone']||'—')}<br>Vegetation: ${escapeHtml(st['Vegetation']||'—')}<br>` +
+      `Understory: ${escapeHtml(st['Sous bois']||'—')}<br>Last check: ${escapeHtml(st['Last Check']||'—')}` +
+      (st['Date'] ? ` (survey on ${escapeHtml(st['Date'])})` : '');
+    const marker = L.circleMarker([lat, lon], { radius:3.5, color:'#444', weight:1, fillColor:'#fff', fillOpacity:0.9 });
+    marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+    marker.bindPopup(html);
+    marker.addTo(entry.stationsLayer);
+  }
 }
 function toggleHrZoneUserLoc(checked){
   const statusEl = document.getElementById('hrZoneUserLocStatus');
