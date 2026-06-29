@@ -1329,83 +1329,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
-    <details>
-    <summary><h2 style="display:inline;margin:0;">4. Activity Types</h2></summary>
-    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "5. Log an Activity" below.</div>
-    <div id="atListWrap"></div>
-    <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
-    <form id="atForm" onsubmit="submitActivityTypeForm(event)" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Quick start:
-          <select id="atPreset" onchange="applyActivityTypePreset()"><option value="">Start from scratch…</option></select>
-        </label>
-      </div>
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Name: <input type="text" id="atName" placeholder="e.g. Predator control — cats" required style="width:240px;"></label>
-        <label class="muted">Color: <input type="color" id="atColor" value="#2e7d32"></label>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label class="muted" style="display:block;margin-bottom:4px;">Description:</label>
-        <textarea id="atDescription" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="What is this activity for? Helps whoever logs it later."></textarea>
-      </div>
-      <div style="margin-bottom:10px;">
-        <div class="muted" style="margin-bottom:4px;">Custom fields (in addition to Date, Observer, Valley, Zone, People, Comment which every activity already has):</div>
-        <div id="atFieldRows"></div>
-        <button type="button" class="secondary" onclick="addAtFieldRow()" style="padding:5px 10px;font-size:12.5px;">+ Add field</button>
-      </div>
-      <button type="submit">Save activity type</button>
-      <button type="button" class="secondary" onclick="toggleActivityTypeBuilder()">Cancel</button>
-      <span id="atSubmitStatus" class="muted"></span>
-    </form>
-    </details>
-  </div>
-
-  <div class="card">
-    <details>
-    <summary><h2 style="display:inline;margin:0;">5. Log an Activity</h2></summary>
-    <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
-    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "4. Activity Types" above first.</div>
-    <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Activity type:
-          <select id="aeType" onchange="onActivityTypeChange()" required><option value="">Choose…</option></select>
-        </label>
-      </div>
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Date: <input type="date" id="aeDate" required></label>
-        <label class="muted">Observer name: <input type="text" id="aeObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
-      </div>
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Valley:
-          <select id="aeValley" required>
-            <option value="">Choose…</option>
-            <option value="Papehue">Papehue</option>
-            <option value="Maruapo">Maruapo</option>
-            <option value="Hopa">Hopa</option>
-          </select>
-        </label>
-        <label class="muted">Zone/Location: <input type="text" id="aeZone" list="aeZoneList" placeholder="e.g. PGC, or a free description"></label>
-        <datalist id="aeZoneList"></datalist>
-        <label class="muted">Number of people: <input type="number" id="aePeople" min="0" step="1" style="width:80px;"></label>
-      </div>
-      <div id="aeCustomFields"></div>
-      <div style="margin-bottom:10px;">
-        <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
-        <textarea id="aeComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
-      </div>
-      <button type="submit">Submit activity</button>
-      <span id="aeSubmitStatus" class="muted"></span>
-    </form>
-    <details id="aeRecentDetails" style="margin-top:14px;">
-      <summary class="muted" style="cursor:pointer;">Recent entries (all activity types)</summary>
-      <div id="aeRecentWrap" style="margin-top:10px;"></div>
-    </details>
-    </details>
-  </div>
-
-  <div class="card">
     <details id="ibsDetails" ontoggle="onIbsDetailsToggle(this.open)">
-    <summary><h2 style="display:inline;margin:0;">6. Invasive Bird Survey (point count)</h2></summary>
+    <summary><h2 style="display:inline;margin:0;">4. Invasive Bird Survey (point count)</h2></summary>
     <div class="hint">Standardised 10-minute point count for Common Myna (<i>Acridotheres tristis</i>) and Red-vented Bulbul (<i>Pycnonotus cafer</i>). Always use the same Station ID and return to the same GPS point each visit to build a comparable time series. Data feed the habitat–invasive bird interaction analysis (Blanvillain et al. 2003; 2020).</div>
     <form id="ibsForm" onsubmit="submitBirdSurveyForm(event)">
       <div class="row" style="margin-bottom:10px;">
@@ -1431,6 +1356,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="margin-bottom:10px;">
         <div class="muted" style="margin-bottom:4px;">Tap/click the map to record survey point GPS (return to the exact same spot every visit):</div>
         <div class="row" style="margin-bottom:6px;">
+          <label class="muted"><input type="checkbox" id="ibsStationsOverlayToggle" onchange="toggleIbsStationsOverlay(this.checked)"> Overlay all rat stations</label>
           <label class="muted"><input type="checkbox" id="ibsZoneNamesToggle" onchange="toggleIbsZoneNames(this.checked)"> Show zone names</label>
           <label class="muted"><input type="checkbox" id="ibsUserLocToggle" onchange="toggleIbsUserLoc(this.checked)"> Show my location</label>
           <span id="ibsUserLocStatus" class="muted"></span>
@@ -1511,6 +1437,83 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
     </details>
   </div>
+
+  <div class="card">
+    <details>
+    <summary><h2 style="display:inline;margin:0;">5. Activity Types</h2></summary>
+    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "6. Log an Activity" below.</div>
+    <div id="atListWrap"></div>
+    <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
+    <form id="atForm" onsubmit="submitActivityTypeForm(event)" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Quick start:
+          <select id="atPreset" onchange="applyActivityTypePreset()"><option value="">Start from scratch…</option></select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Name: <input type="text" id="atName" placeholder="e.g. Predator control — cats" required style="width:240px;"></label>
+        <label class="muted">Color: <input type="color" id="atColor" value="#2e7d32"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Description:</label>
+        <textarea id="atDescription" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="What is this activity for? Helps whoever logs it later."></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Custom fields (in addition to Date, Observer, Valley, Zone, People, Comment which every activity already has):</div>
+        <div id="atFieldRows"></div>
+        <button type="button" class="secondary" onclick="addAtFieldRow()" style="padding:5px 10px;font-size:12.5px;">+ Add field</button>
+      </div>
+      <button type="submit">Save activity type</button>
+      <button type="button" class="secondary" onclick="toggleActivityTypeBuilder()">Cancel</button>
+      <span id="atSubmitStatus" class="muted"></span>
+    </form>
+    </details>
+  </div>
+
+  <div class="card">
+    <details>
+    <summary><h2 style="display:inline;margin:0;">6. Log an Activity</h2></summary>
+    <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
+    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "5. Activity Types" above first.</div>
+    <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Activity type:
+          <select id="aeType" onchange="onActivityTypeChange()" required><option value="">Choose…</option></select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="aeDate" required></label>
+        <label class="muted">Observer name: <input type="text" id="aeObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Valley:
+          <select id="aeValley" required>
+            <option value="">Choose…</option>
+            <option value="Papehue">Papehue</option>
+            <option value="Maruapo">Maruapo</option>
+            <option value="Hopa">Hopa</option>
+          </select>
+        </label>
+        <label class="muted">Zone/Location: <input type="text" id="aeZone" list="aeZoneList" placeholder="e.g. PGC, or a free description"></label>
+        <datalist id="aeZoneList"></datalist>
+        <label class="muted">Number of people: <input type="number" id="aePeople" min="0" step="1" style="width:80px;"></label>
+      </div>
+      <div id="aeCustomFields"></div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Comment:</label>
+        <textarea id="aeComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
+      </div>
+      <button type="submit">Submit activity</button>
+      <span id="aeSubmitStatus" class="muted"></span>
+    </form>
+    <details id="aeRecentDetails" style="margin-top:14px;">
+      <summary class="muted" style="cursor:pointer;">Recent entries (all activity types)</summary>
+      <div id="aeRecentWrap" style="margin-top:10px;"></div>
+    </details>
+    </details>
+  </div>
+
+
 
 </div>
 
@@ -2826,6 +2829,7 @@ async function submitPffForm(evt){
 let ibsPickerEntry = null;
 let ibsSurveyPoint = null;
 let ibsShowZoneNames = false;
+let ibsShowStations = false;
 let ibsUserLocWatchId = null, ibsUserLocFirstFix = true;
 
 async function fetchBirdSurveys(){
@@ -2854,10 +2858,11 @@ function ensureIbsPickerMap(){
   }).addTo(map);
   ibsPickerEntry = {
     map,
-    zonesLayer: L.layerGroup().addTo(map),
-    labelsLayer: L.layerGroup().addTo(map),
-    pointLayer:  L.layerGroup().addTo(map),
-    userLocLayer: L.layerGroup().addTo(map),
+    zonesLayer:    L.layerGroup().addTo(map),
+    labelsLayer:   L.layerGroup().addTo(map),
+    pointLayer:    L.layerGroup().addTo(map),
+    stationsLayer: L.layerGroup().addTo(map),
+    userLocLayer:  L.layerGroup().addTo(map),
   };
   map.on('click', e => {
     ibsSurveyPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
@@ -2925,6 +2930,28 @@ function onIbsValleyChange(){
   if (ibsPickerEntry) renderIbsZones(true);
 }
 
+function toggleIbsStationsOverlay(checked){
+  ibsShowStations = checked;
+  renderIbsStations();
+}
+function renderIbsStations(){
+  const entry = ibsPickerEntry;
+  if (!entry) return;
+  entry.stationsLayer.clearLayers();
+  if (!ibsShowStations) return;
+  for (const st of (tables.deratTahiti||[])){
+    const lat = +st['Latitude'], lon = +st['Longitude'];
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const html = `<b>Station ${escapeHtml(st['Station']||'?')}</b> (${escapeHtml(st['Vallee']||'?')})<br>` +
+      `Zone: ${escapeHtml(st['Zone']||'—')}<br>Vegetation: ${escapeHtml(st['Vegetation']||'—')}<br>` +
+      `Understory: ${escapeHtml(st['Sous bois']||'—')}<br>Last check: ${escapeHtml(st['Last Check']||'—')}` +
+      (st['Date'] ? ` (survey on ${escapeHtml(st['Date'])})` : '');
+    const marker = L.circleMarker([lat, lon], { radius:3.5, color:'#444', weight:1, fillColor:'#fff', fillOpacity:0.9 });
+    marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+    marker.bindPopup(html);
+    marker.addTo(entry.stationsLayer);
+  }
+}
 function toggleIbsZoneNames(checked){
   ibsShowZoneNames = checked;
   renderIbsZones(false);
