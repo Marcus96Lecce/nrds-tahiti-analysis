@@ -6,90 +6,224 @@
 <title>NRDS – Habitat Restoration Analysis (SOP Manu, Tahiti)</title>
 <style>
   :root{
-    --green:#2e7d32; --green-dark:#1b5e20; --bg:#f4f6f4; --card:#ffffff;
-    --border:#dfe6df; --text:#23291f; --muted:#6b7569;
+    --green:#2e7d32; --green-dark:#1b5e20; --green-light:#43a047; --green-xlight:#e8f5e9;
+    --bg:#eef2ee; --card:#ffffff;
+    --border:#d4e4d4; --text:#1a2418; --muted:#637061;
+    --shadow-sm:0 2px 8px rgba(0,40,0,.07); --shadow-md:0 6px 22px rgba(0,40,0,.12);
+    --r:10px;
     --papehue:#1f77b4; --maruapo:#ff7f0e; --hopa:#2ca02c;
     --native:#2ca02c; --introduced:#d62728; --unknown:#7f7f7f;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);}
-  header{background:var(--green-dark);color:#fff;padding:18px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px;}
-  header h1{margin:0;font-size:20px;}
-  header p{margin:4px 0 0;font-size:13px;opacity:.85;}
-  .nav-btn{background:#fff;color:var(--green-dark);border:none;border-radius:50%;width:38px;height:38px;font-size:22px;
-    font-weight:600;cursor:pointer;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center;}
-  .nav-btn:hover{background:#eef5ee;}
-  .add-elements-menu{position:fixed;right:10px;background:#fff;border:1px solid var(--border);border-radius:8px;
-    box-shadow:0 4px 16px rgba(0,0,0,.18);padding:8px;z-index:1000;display:flex;flex-direction:column;gap:6px;
-    min-width:200px;max-width:calc(100vw - 20px);}
+  html{scroll-behavior:smooth;}
+  body{margin:0;font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;}
+
+  /* ── Header ── */
+  header{
+    background:linear-gradient(135deg,#14471a 0%,var(--green-dark) 55%,#2a6b2e 100%);
+    color:#fff;padding:18px 24px;
+    display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px;
+    box-shadow:0 3px 14px rgba(0,0,0,.22);
+  }
+  header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.3px;text-shadow:0 1px 3px rgba(0,0,0,.25);}
+  header p{margin:5px 0 0;font-size:13px;opacity:.88;}
+  .nav-btn{
+    background:rgba(255,255,255,.14);color:#fff;
+    border:1.5px solid rgba(255,255,255,.35);border-radius:50%;
+    width:38px;height:38px;font-size:22px;font-weight:600;cursor:pointer;
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    transition:background .2s,border-color .2s;
+  }
+  .nav-btn:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.65);}
+  .add-elements-menu{
+    position:fixed;right:10px;background:#fff;border:1px solid var(--border);border-radius:var(--r);
+    box-shadow:var(--shadow-md);padding:8px;z-index:1000;
+    display:flex;flex-direction:column;gap:6px;min-width:200px;max-width:calc(100vw - 20px);
+  }
   .add-elements-menu button{white-space:nowrap;text-align:left;}
-  .map-text-label{font-size:10px;font-weight:600;color:#333;background:rgba(255,255,255,.82);
-    padding:0 3px;border-radius:3px;white-space:nowrap;line-height:1.5;transform:translate(-50%,-50%);
-    pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.25);}
-  .wrap{max-width:1000px;margin:0 auto;padding:20px;}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
-  .card h2{margin:0 0 6px;font-size:16px;color:var(--green-dark);}
+  .map-text-label{
+    font-size:10px;font-weight:600;color:#333;background:rgba(255,255,255,.88);
+    padding:1px 4px;border-radius:4px;white-space:nowrap;line-height:1.5;
+    transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.22);
+  }
+
+  /* ── Layout ── */
+  .wrap{max-width:1020px;margin:0 auto;padding:22px 20px;}
+
+  /* ── Cards ── */
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+    padding:20px 22px;margin-bottom:20px;
+    box-shadow:var(--shadow-sm);transition:box-shadow .22s;
+  }
+  .card:hover{box-shadow:var(--shadow-md);}
+  .card h2{
+    margin:0 0 10px;font-size:16px;color:var(--green-dark);font-weight:700;
+    padding-bottom:7px;border-bottom:2px solid var(--green-xlight);
+  }
+  .card .hint{
+    font-size:12.5px;color:var(--muted);margin-bottom:12px;
+    border-left:3px solid #b5d5b5;padding-left:10px;line-height:1.65;
+  }
+  /* native <details> inside submit-page cards */
   .card > details > summary{cursor:pointer;margin-bottom:8px;}
-  .card .hint{font-size:12.5px;color:var(--muted);margin-bottom:12px;}
-  button{background:var(--green);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13.5px;cursor:pointer;}
-  button:hover{background:var(--green-dark);}
-  button:disabled{background:#a9b6a4;cursor:not-allowed;}
-  button.secondary{background:#fff;color:var(--green-dark);border:1px solid var(--green);}
-  button.secondary:hover{background:#eef5ee;}
+
+  /* ── Collapsible sections ── */
+  details.collapsible{
+    border:1px solid var(--border);border-radius:var(--r);background:#fafcfa;
+    overflow:hidden;margin-bottom:10px;
+  }
+  details.collapsible > summary{
+    list-style:none;cursor:pointer;
+    padding:12px 16px;font-weight:600;font-size:13.5px;color:var(--green-dark);
+    display:flex;align-items:center;gap:8px;
+    transition:background .15s;user-select:none;
+  }
+  details.collapsible > summary::-webkit-details-marker,
+  details.collapsible > summary::marker{display:none;}
+  details.collapsible > summary:hover{background:#edf5ed;}
+  details.collapsible[open] > summary{background:var(--green-xlight);}
+  details.collapsible > summary .caret{
+    margin-left:auto;font-size:12px;color:var(--muted);
+    transition:transform .25s ease;display:inline-block;
+  }
+  details.collapsible[open] > summary .caret{transform:rotate(180deg);}
+  details.collapsible > .coll-body{padding:14px 16px 18px;}
+  details.collapsible[open] > .coll-body{animation:fadeIn .22s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ── Buttons ── */
+  button{
+    background:linear-gradient(135deg,var(--green-light) 0%,var(--green) 100%);
+    color:#fff;border:none;border-radius:var(--r);
+    padding:9px 18px;font-size:13.5px;cursor:pointer;font-weight:500;letter-spacing:.2px;
+    box-shadow:0 2px 7px rgba(46,125,50,.22);
+    transition:box-shadow .18s,transform .12s,filter .18s;
+  }
+  button:hover{filter:brightness(1.1);box-shadow:0 4px 14px rgba(46,125,50,.3);transform:translateY(-1px);}
+  button:active{transform:translateY(0);box-shadow:0 1px 4px rgba(46,125,50,.2);filter:none;}
+  button:disabled{background:#c2d0bf;box-shadow:none;cursor:not-allowed;transform:none;filter:none;}
+  button.secondary{
+    background:#fff;color:var(--green-dark);border:1.5px solid var(--green);box-shadow:none;
+  }
+  button.secondary:hover{background:var(--green-xlight);box-shadow:0 2px 8px rgba(46,125,50,.13);transform:translateY(-1px);}
+  button.secondary:active{transform:translateY(0);}
   button.secondary.active{background:var(--green);color:#fff;}
-  select{font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;}
+
+  /* ── Form controls ── */
+  select{
+    font-size:13px;padding:6px 9px;border:1.5px solid var(--border);border-radius:var(--r);
+    background:#fff;cursor:pointer;transition:border-color .15s;
+  }
+  select:focus{border-color:var(--green);outline:none;box-shadow:0 0 0 2px rgba(46,125,50,.15);}
+  input[type=date]{
+    font-size:13px;padding:5px 8px;border:1.5px solid var(--border);border-radius:var(--r);
+    background:#fff;transition:border-color .15s;
+  }
+  input[type=date]:focus{border-color:var(--green);outline:none;box-shadow:0 0 0 2px rgba(46,125,50,.15);}
   label.muted{display:inline-flex;align-items:center;gap:6px;}
   input[type=file]{font-size:13px;}
+
+  /* ── Status list ── */
   .status-list{list-style:none;margin:10px 0 0;padding:0;font-family:Consolas,monospace;font-size:12.5px;}
   .status-list li{padding:2px 0;}
   .ok{color:var(--green-dark);} .warn{color:#b8860b;} .err{color:#b22222;}
+
+  /* ── Layout helpers ── */
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-  .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11.5px;background:#eef5ee;color:var(--green-dark);border:1px solid #cfe3cf;}
-  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px;}
-  .stat{background:#f7faf6;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center;}
-  .stat .num{font-size:22px;font-weight:600;color:var(--green-dark);}
-  .stat .lbl{font-size:11.5px;color:var(--muted);}
+  .badge{
+    display:inline-block;padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:500;
+    background:var(--green-xlight);color:var(--green-dark);border:1px solid #b5d5b5;
+  }
+
+  /* ── Stat boxes ── */
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:10px;}
+  .stat{
+    background:linear-gradient(145deg,#f6fcf6 0%,#edf5ed 100%);
+    border:1px solid #c6dcc6;border-radius:var(--r);
+    padding:12px 14px;text-align:center;
+    box-shadow:0 1px 4px rgba(0,40,0,.05);
+    transition:box-shadow .2s,transform .2s;
+  }
+  .stat:hover{box-shadow:0 4px 12px rgba(0,40,0,.1);transform:translateY(-2px);}
+  .stat .num{font-size:24px;font-weight:700;color:var(--green-dark);line-height:1.2;}
+  .stat .lbl{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4;}
+
+  /* ── Tables ── */
   table.preview{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;}
-  table.preview th,table.preview td{border:1px solid var(--border);padding:5px 7px;text-align:left;}
-  table.preview th{background:#f0f4ef;position:sticky;top:0;}
-  .table-scroll{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:6px;}
-  .tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
-  .chart-box{overflow-x:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:#fcfcfb;}
-  svg text{font-family:Segoe UI,Arial,sans-serif;}
-  .legend-item{display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:12.5px;}
-  .swatch{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  table.preview th,table.preview td{border:1px solid var(--border);padding:5px 8px;text-align:left;}
+  table.preview th{background:linear-gradient(135deg,#eef6ee,#e4f0e4);position:sticky;top:0;font-weight:600;color:var(--green-dark);}
+  table.preview tr:nth-child(even) td{background:#f8fbf8;}
+  .table-scroll{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);}
+
+  /* ── Chart tabs (pill style) ── */
+  .tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;padding:4px;background:#eaf2ea;border-radius:var(--r);}
+  .tabs button{
+    border-radius:7px;font-size:12.5px;padding:6px 14px;
+    background:transparent;color:var(--muted);border:none;font-weight:400;
+    box-shadow:none;transition:background .15s,color .15s,box-shadow .15s;
+  }
+  .tabs button:hover{background:#ddeedd;color:var(--green-dark);box-shadow:none;transform:none;filter:none;}
+  .tabs button.active,.tabs button.secondary.active{
+    background:#fff;color:var(--green-dark);font-weight:600;
+    box-shadow:0 1px 5px rgba(0,0,0,.12);
+  }
+
+  /* ── Chart containers ── */
+  .chart-box{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);padding:12px;background:#fdfefe;}
+  svg text{font-family:'Segoe UI',system-ui,Arial,sans-serif;}
+  .legend-item{display:inline-flex;align-items:center;gap:5px;margin-right:16px;font-size:12.5px;}
+  .swatch{width:13px;height:13px;border-radius:3px;display:inline-block;box-shadow:0 1px 2px rgba(0,0,0,.1);}
   .muted{color:var(--muted);font-size:12.5px;}
-  input[type=date]{font-size:13px;padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:#fff;}
-  .wf-bar:hover rect{opacity:.82;}
-  .chart-popup{position:fixed;z-index:9999;background:#fff;border:1px solid var(--border);border-radius:8px;
-    padding:10px 14px 10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.18);font-size:12.5px;line-height:1.5;max-width:min(300px,86vw);}
+  .wf-bar:hover rect{opacity:.82;filter:brightness(1.06);}
+
+  /* ── Chart popup ── */
+  .chart-popup{
+    position:fixed;z-index:9999;background:#fff;border:1px solid var(--border);
+    border-radius:var(--r);padding:12px 16px 12px 14px;
+    box-shadow:var(--shadow-md);font-size:12.5px;line-height:1.55;
+    max-width:min(300px,86vw);
+    animation:popupIn .15s ease;
+  }
+  @keyframes popupIn{from{opacity:0;transform:scale(.96);}to{opacity:1;transform:scale(1);}}
   .chart-popup b{color:var(--green-dark);}
   .chart-popup .x{position:absolute;top:5px;right:8px;cursor:pointer;color:var(--muted);font-weight:bold;font-size:14px;padding:4px;}
-  .geo-picker-map{height:220px;width:100%;border:1px solid var(--border);border-radius:8px;margin-top:2px;cursor:crosshair;}
-  .map-flex-row{display:flex;gap:12px;align-items:flex-start;margin-top:8px;}
-  .map-container{flex:1;min-width:0;height:560px;border:1px solid var(--border);border-radius:8px;}
-  .map-combined-box{flex:0 0 360px;max-height:560px;overflow-y:auto;background:#f7faf6;border:1px solid var(--border);border-radius:8px;padding:12px;}
 
-  /* --- mobile / small-screen layout (phones, narrow tablets) --- */
-  @media (max-width:760px){
-    .wrap{padding:10px;}
-    header{padding:14px 16px;}
+  /* ── Map ── */
+  .geo-picker-map{height:220px;width:100%;border:1px solid var(--border);border-radius:var(--r);margin-top:2px;cursor:crosshair;}
+  .map-flex-row{display:flex;gap:14px;align-items:flex-start;margin-top:8px;}
+  .map-container{flex:1;min-width:0;height:560px;border:1px solid var(--border);border-radius:var(--r);}
+  .map-combined-box{flex:0 0 360px;max-height:560px;overflow-y:auto;background:#f7faf6;border:1px solid var(--border);border-radius:var(--r);padding:12px;}
+
+  /* ── Mobile ── */
+  @media(max-width:760px){
+    .wrap{padding:12px 12px;}
+    header{padding:14px 16px;gap:10px;}
     header h1{font-size:17px;}
     header p{font-size:12px;}
-    .card{padding:14px 14px;}
+    .card{padding:14px 14px;border-radius:9px;margin-bottom:14px;}
     .card h2{font-size:14.5px;}
-    button{padding:10px 14px;font-size:14px;}
-    select,input[type=date]{font-size:14px;padding:7px 8px;}
+    /* disable hover lift on touch devices */
+    .card:hover{box-shadow:var(--shadow-sm);}
+    button{padding:11px 16px;font-size:14.5px;}
+    button:hover{transform:none;filter:none;box-shadow:0 2px 7px rgba(46,125,50,.22);}
+    button.secondary:hover{transform:none;}
+    select,input[type=date]{font-size:15px;padding:8px 10px;}
     .row{gap:8px;}
     .row > label.muted{flex:1 1 auto;}
     .row select{width:100%;}
     .row input[type=date]{width:100%;}
-    .date-label, .date-reset-btn{flex:1 1 100% !important;}
-    .grid3{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));}
+    .date-label,.date-reset-btn{flex:1 1 100% !important;}
+    .grid3{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
+    .stat:hover{transform:none;box-shadow:0 1px 4px rgba(0,40,0,.05);}
+    .stat .num{font-size:22px;}
     .map-flex-row{flex-direction:column;}
     .map-container{flex:none;width:100%;height:380px;}
     .map-combined-box{flex:none;width:100%;max-height:300px;}
     table.preview{font-size:11px;}
+    .tabs{padding:3px;}
+    .tabs button{padding:7px 12px;font-size:13px;}
+    details.collapsible > summary{padding:13px 14px;font-size:14px;}
   }
 </style>
 <style>
@@ -918,21 +1052,31 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
     <div id="pastDataContent" style="display:none;">
       <div id="pastHistSection">
-        <h3 style="font-size:14px;margin:0 0 8px;">Habitat Restoration: historical comparison</h3>
-        <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
-        <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
-        <label class="muted" style="margin-left:12px;">
-          <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
-          Add combined current estimate (historical + NRDS, recency-weighted) — cleaning
-        </label>
-        <div id="pastDataCharts" style="margin-top:12px;"></div>
-        <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
-        <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
-        <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
+        <details class="collapsible" open>
+          <summary>🌿 Habitat Restoration: historical comparison<span class="caret">▾</span></summary>
+          <div class="coll-body">
+            <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
+            <div class="row" style="margin-bottom:10px;">
+              <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
+              <label class="muted">
+                <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
+                Add combined estimate (historical + NRDS, recency-weighted)
+              </label>
+            </div>
+            <div id="pastDataCharts"></div>
+            <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
+            <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
+          </div>
+        </details>
       </div>
-      <h3 style="font-size:14px;margin:0 0 8px;">Dératisation: temporal analysis</h3>
-      <button class="secondary" onclick="renderDeratTemporalAnalysis()">Generate dératisation analysis</button>
-      <div id="deratTemporalCharts" style="margin-top:12px;"></div>
+      <details class="collapsible">
+        <summary>🐀 Dératisation: temporal analysis<span class="caret">▾</span></summary>
+        <div class="coll-body">
+          <div class="hint">Monthly trends in rat activity (Conso 0–4), zero-activity rate, patrol frequency by valley, and a ranking of rat lines from most to least active across all recorded patrols.</div>
+          <button class="secondary" onclick="renderDeratTemporalAnalysis()">Generate dératisation analysis</button>
+          <div id="deratTemporalCharts" style="margin-top:14px;"></div>
+        </div>
+      </details>
     </div>
   </div>
 
