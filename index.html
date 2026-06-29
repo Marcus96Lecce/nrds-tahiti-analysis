@@ -3609,6 +3609,30 @@ function polygonPartsToLatLngRings(geomStr){
   // [[lon,lat],...] rings -> Leaflet expects [lat,lon]
   return geometryToPolygonParts(geomStr).map(rings => rings.map(ring => ring.map(([lon,lat]) => [lat,lon])));
 }
+// Shoelace area in geographic degrees², converted to hectares via a local equirectangular approximation.
+// Accurate enough for management-unit polygons (~1-10 km²); not suitable for global use.
+function zoneAreaHectares(geomStr){
+  if (!geomStr) return null;
+  const parts = geometryToPolygonParts(geomStr);
+  if (!parts.length) return null;
+  let totalHa = 0;
+  for (const rings of parts){
+    const outer = rings[0];
+    if (outer.length < 3) continue;
+    // Shoelace in degrees²
+    let area = 0;
+    for (let i = 0, j = outer.length - 1; i < outer.length; j = i++){
+      area += (outer[j][0] + outer[i][0]) * (outer[j][1] - outer[i][1]);
+    }
+    area = Math.abs(area) / 2;
+    // Convert: 1° lat ≈ 111,320 m; 1° lon ≈ 111,320 × cos(lat_mid) m
+    const latMid = outer.reduce((s, p) => s + p[1], 0) / outer.length;
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(latMid * Math.PI / 180);
+    totalHa += area * mPerDegLat * mPerDegLon / 10000;
+  }
+  return totalHa > 0 ? totalHa : null;
+}
 
 /* ---------------- enrichment (mirrors build_habitat_restoration_enriched.py) ---------------- */
 function parseStationCodes(raw){
@@ -5194,6 +5218,7 @@ function renderMap(shouldFit){
     if (!u.Geometry) continue;
     const rings = polygonPartsToLatLngRings(u.Geometry);
     let fillColor = '#ffffff', fillOpacity = 0.08;
+    let borderColor = '#2e5e2c', borderWeight = 1.5;
     let html = `<b>${u['Nom']}</b> (${u['Vallee']})<br>Surface area: ${u['Surface'] ? Math.round(+u['Surface'])+' m²' : '—'}`;
     if (histZoneMode === 'combined'){
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
@@ -5217,18 +5242,27 @@ function renderMap(shouldFit){
       // value is a categorical area-completion estimate, NRDS gives a count of individuals by species —
       // two different kinds of measurement that can't be averaged into one % without an arbitrary
       // planting-density assumption. Shown side by side instead, with a qualitative read.
+      // Visual differentiation from 'planting': zones with NRDS activity get an amber border (thicker).
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
       const hv = latestHistValue(hu, PLANT_WEIGHTS, 'Plant');
       const cutoff = hv ? HIST_PERIOD_DATE[hv.period] : null;
       const recent = nrdsPlantingActivitySince(u['Nom'], cutoff);
       fillColor = hv ? pctColor(hv.pct) : (recent ? '#9fcf9f' : '#d8d8d8');
       fillOpacity = 0.75;
+      // zones with NRDS activity use a distinct amber/orange border so they're visually separate
+      // from the historical-only layer (which uses the standard dark-green border at weight 1.5)
+      borderColor = recent ? '#d4870a' : '#2e5e2c';
+      borderWeight = recent ? 3 : 1.5;
       if (hv || recent){
+        const zoneAreaHa = zoneAreaHectares(u['Geometry']);
+        const densityTxt = (recent && zoneAreaHa)
+          ? ` — ${(recent.totalIndividuals / zoneAreaHa).toFixed(1)} ind/ha (zone ${zoneAreaHa.toFixed(1)} ha)`
+          : '';
         html += hv ? `<br>Plantings (historical, ${HIST_PERIOD_LABEL[hv.period]}): <b>${hv.raw}</b> (${hv.pct}%)` : '<br>Plantings: no historical survey for this unit';
         const speciesTxt = recent ? recent.species.map(([n,c])=>`${n} (${c})`).join(', ') : '';
-        html += recent ? `<br>NRDS activity since the survey: <b>${recent.totalIndividuals} individuals</b> — ${speciesTxt} — latest on ${recent.latestDate}`
+        html += recent ? `<br>NRDS activity since the survey: <b>${recent.totalIndividuals} individuals${densityTxt}</b><br>${speciesTxt}<br>Latest: ${recent.latestDate}`
           : (hv ? '<br>No NRDS activity recorded since the historical survey' : '<br>No NRDS activity recorded for this unit');
-        combinedBreakdown.push({ unit: u['Nom'], valley: u['Vallee'], hv, recent });
+        combinedBreakdown.push({ unit: u['Nom'], valley: u['Vallee'], hv, recent, zoneAreaHa });
       } else {
         html += '<br><i>no historical or NRDS data for this unit</i>';
       }
@@ -5248,7 +5282,7 @@ function renderMap(shouldFit){
       html += st ? `<br>Cleaning % (latest survey ${st.date}): <b>${st.pct}%</b>` : '<br><i>no cleaning % data</i>';
     }
     for (const ringSet of rings){
-      const poly = L.polygon(ringSet, { color:'#2e5e2c', weight:1.5, fillColor, fillOpacity });
+      const poly = L.polygon(ringSet, { color: borderColor, weight: borderWeight, fillColor, fillOpacity });
       poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       poly.bindPopup(html);
       poly.addTo(unitLayerGroup);
@@ -5429,12 +5463,14 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
       <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no data (neither historical nor NRDS)</span><br>`;
   } else if (histZoneMode === 'plantingActivity'){
-    legend += `<span class="legend-item"><b>Colored zones — historical plantings, compared against NRDS activity</b> (not blended: see the box below the map):</span>
+    legend += `<span class="legend-item"><b>Colored zones — historical plantings + NRDS activity overlay</b> (not blended — zone fill = historical %, border = NRDS signal):</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>0%</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>50%</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
       <span class="legend-item"><span class="swatch" style="background:#9fcf9f"></span>NRDS activity only (no historical survey)</span>
-      <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no data (neither historical nor NRDS)</span><br>`;
+      <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no data</span>
+      <span class="legend-item"><span style="display:inline-block;width:28px;height:10px;border:3px solid #d4870a;margin-right:4px;"></span>NRDS planting activity recorded since last historical survey (amber border)</span>
+      <span class="legend-item">Tooltip shows: historical %, NRDS species list, individuals/ha</span><br>`;
   } else if (histZoneMode){
     const label = histZoneMode === 'cleaning' ? 'Understory management' : 'Plantings';
     legend += `<span class="legend-item"><b>Zones colored by historical data — ${label}</b> (most recent survey available per unit: Dec 2025, Aug 2024 or Aug 2023):</span>
