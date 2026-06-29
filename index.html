@@ -2828,8 +2828,11 @@ async function submitPffForm(evt){
     const date = document.getElementById('pffDate').value;
     const observer = document.getElementById('pffObserver').value;
     const zone = document.getElementById('pffZone').value;
+    const pffValley = document.getElementById('pffMapValley').value;
     const newRows = pffPendingPoints.map(p => ({
-      date, observer, zone, status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
+      date, observer, zone,
+      valley: pffValley !== 'all' ? pffValley : null,
+      status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
       survey_method: p.surveyMethod || null,
     }));
     const result = await insertOrQueue('pff_observations', newRows);
