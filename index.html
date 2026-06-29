@@ -844,7 +844,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <span class="muted">Applies to points and the live cleaning/bait-consumption layers — not to the historical/combined overlays below, which have their own time-weighting.</span>
     </div>
     <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "4. Integration with past data"):</span>
+      <span class="muted">Historical data (from "4. Temporal trends"):</span>
       <label class="muted">
         <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
         Historical cleaning %
@@ -855,7 +855,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </label>
     </div>
     <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "4. Integration with past data"):</span>
+      <span class="muted">Historical data (from "4. Temporal trends"):</span>
       <label class="muted">
         <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
         Historical plantings
@@ -914,18 +914,25 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card" id="pastDataCard" style="display:none;">
-    <h2>4. Integration with past data</h2>
-    <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
+    <h2>4. Temporal trends</h2>
     <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
     <div id="pastDataContent" style="display:none;">
-      <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
-      <label class="muted" style="margin-left:12px;">
-        <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
-        Add combined current estimate (historical + NRDS, recency-weighted) — cleaning
-      </label>
-      <div id="pastDataCharts" style="margin-top:12px;"></div>
-      <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
-      <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
+      <div id="pastHistSection">
+        <h3 style="font-size:14px;margin:0 0 8px;">Habitat Restoration: historical comparison</h3>
+        <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
+        <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
+        <label class="muted" style="margin-left:12px;">
+          <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
+          Add combined current estimate (historical + NRDS, recency-weighted) — cleaning
+        </label>
+        <div id="pastDataCharts" style="margin-top:12px;"></div>
+        <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
+        <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
+        <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
+      </div>
+      <h3 style="font-size:14px;margin:0 0 8px;">Dératisation: temporal analysis</h3>
+      <button class="secondary" onclick="renderDeratTemporalAnalysis()">Generate dératisation analysis</button>
+      <div id="deratTemporalCharts" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -3267,13 +3274,15 @@ function onDataUpdated(){
   if (currentChartViews.size) rerenderAllCharts();
 
   document.getElementById('pastDataCard').style.display = '';
+  document.getElementById('pastDataContent').style.display = '';
   const pdStatus = document.getElementById('pastDataStatus');
+  const pastHistSection = document.getElementById('pastHistSection');
   if (pastData){
     pdStatus.textContent = '';
-    document.getElementById('pastDataContent').style.display = '';
+    pastHistSection.style.display = '';
   } else {
-    pdStatus.textContent = 'Error loading the embedded historical data — check the browser console.';
-    document.getElementById('pastDataContent').style.display = 'none';
+    pdStatus.textContent = 'Note: embedded historical habitat restoration data unavailable. Dératisation analysis below is still available.';
+    pastHistSection.style.display = 'none';
   }
 }
 
@@ -4904,7 +4913,7 @@ function renderMap(shouldFit){
   leafletMap.invalidateSize();
 }
 
-/* ---------------- Integration with past data ---------------- */
+/* ---------------- Temporal trends ---------------- */
 function normalizeCategory(s){
   if (s == null) return '';
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
@@ -5159,7 +5168,7 @@ function renderZonePriority(valley, rows){
 
   let html = `<label class="muted" style="display:block;margin-bottom:8px;">
     <input type="checkbox" id="zonePriorityHistToggle" ${includeHist?'checked':''} onchange="toggleZonePriorityHistorical(this.checked)">
-    Include historical data (from "4. Integration with past data") in the ranking below
+    Include historical data (from "4. Temporal trends") in the ranking below
   </label>`;
   html += `<div class="hint" style="margin-bottom:6px;">Zone priority overview, dirtiest/least-recently-assessed zones first — one merged view per zone: the small dots
     are every individual NRDS session recorded there (more recent = larger/darker, hover for date and value) — note this only counts sessions where a
@@ -5533,6 +5542,228 @@ let pastDataCombinedMode = false;
 function togglePastDataCombined(checked){
   pastDataCombinedMode = checked;
   renderPastDataComparison();
+}
+
+/* ---- Dératisation temporal analysis helpers ---- */
+
+// Generic line-trend SVG chart. series = [{label, color, values:[number|null,...], popupKey, counts:[]}]
+// yMax can be 4 (Conso scale) or 100 (percent); yUnit appended to axis labels.
+function drawLineTrendChart(series, categories, yMax, yUnit){
+  const W = 460, H = 260, mL = 48, mR = 18, mT = 18, mB = 48;
+  const xScale = i => categories.length <= 1 ? mL+(W-mL-mR)/2 : mL + i/(categories.length-1)*(W-mL-mR);
+  const yScale = v => H-mB - v/yMax*(H-mT-mB);
+  const step = yMax === 4 ? 1 : 25;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=yMax; v+=step){
+    const y = yScale(v);
+    svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
+    svg += svgEl('text',{x:mL-6,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, v+yUnit);
+  }
+  categories.forEach((c,i) => {
+    const x = xScale(i);
+    svg += svgEl('text',{x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, c);
+  });
+  // axis lines drawn before data so they don't intercept clicks
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  series.forEach(s => {
+    const pts = s.values.map((v,i) => v == null ? null : [xScale(i), yScale(v)]);
+    let runs = [], cur = [];
+    for (const p of pts){ if (p) cur.push(p); else { if (cur.length){ runs.push(cur); cur=[]; } } }
+    if (cur.length) runs.push(cur);
+    for (const run of runs){
+      const d = run.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+      svg += svgEl('path',{d,fill:'none',stroke:s.color,'stroke-width':2.5});
+    }
+    pts.forEach((p,i) => {
+      if (!p) return;
+      const val = s.values[i];
+      const checksTxt = s.counts && s.counts[i] ? `<div><b>Checks:</b> ${s.counts[i]}</div>` : '';
+      const idx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(categories[i])}</div>
+        <div><b>Valley:</b> ${escapeHtml(s.label)}</div>
+        <div><b>${escapeHtml(s.popupKey||'Value')}:</b> ${val.toFixed(2)}${yUnit}</div>${checksTxt}`) - 1;
+      svg += `<g onclick="pinPopup(event,${idx})" style="cursor:pointer;">${svgEl('title',{},`${s.label} — ${categories[i]}: ${val.toFixed(2)}${yUnit} (click for details)`)}${svgEl('circle',{cx:p[0],cy:p[1],r:5,fill:s.color})}</g>`;
+    });
+  });
+  svg += `</svg>`;
+  return `<div class="chart-box">${svg}</div>`;
+}
+
+// Stacked bar chart: patrols per month, one segment per valley.
+function drawDeratPatrolFreqChart(months, monthLabels, mvData, valleys){
+  const monthTotals = months.map(m => valleys.reduce((s,v) => s + ((mvData[m]||{})[v]||{patrolCount:0}).patrolCount, 0));
+  const maxTotal = Math.max(...monthTotals, 1);
+  const step = niceStep(maxTotal);
+  const yMax = Math.ceil(maxTotal/step)*step;
+  const W = Math.max(520, months.length*52), H = 240, mL = 36, mR = 18, mT = 18, mB = 48;
+  const barW = Math.min(28, (W-mL-mR)/months.length*0.55);
+  const xCenter = i => mL + (i+0.5)*(W-mL-mR)/months.length;
+  const yScale = v => H-mB - v/yMax*(H-mT-mB);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=yMax; v+=step){
+    const y = yScale(v);
+    svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
+    svg += svgEl('text',{x:mL-4,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, v);
+  }
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  months.forEach((m, i) => {
+    const x = xCenter(i);
+    let yBot = H-mB;
+    for (const v of valleys){
+      const cnt = ((mvData[m]||{})[v]||{patrolCount:0}).patrolCount;
+      if (!cnt) continue;
+      const barH = cnt/yMax*(H-mT-mB);
+      const yTop = yBot - barH;
+      const color = VALLEY_HEX[v]||categoricalColor(hashStringToInt(v));
+      const idx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(monthLabels[i])}</div>
+        <div><b>Valley:</b> ${escapeHtml(v)}</div>
+        <div><b>Patrols:</b> ${cnt}</div>`) - 1;
+      svg += `<g onclick="pinPopup(event,${idx})" style="cursor:pointer;">${svgEl('title',{},`${v} — ${monthLabels[i]}: ${cnt} patrols`)}${svgEl('rect',{x:x-barW/2,y:yTop,width:barW,height:barH,fill:color})}</g>`;
+      yBot = yTop;
+    }
+    const total = monthTotals[i];
+    if (total) svg += svgEl('text',{x,y:yScale(total)-3,'text-anchor':'middle','font-size':9,fill:'#3a3a3a'}, total);
+    svg += svgEl('text',{x,y:H-mB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-mB+14})`}, monthLabels[i]);
+  });
+  svg += `</svg>`;
+  return `<div class="chart-box">${svg}</div>`;
+}
+
+// Horizontal bar chart: one bar per rat line, sorted by avg Conso descending.
+function drawRatLineRankingChart(lineSorted){
+  if (!lineSorted.length) return '<span class="muted">No data.</span>';
+  const rowH = 22, mL = 122, mR = 56, mT = 8, mB = 20, barMaxW = 280;
+  const H = mT + lineSorted.length*rowH + mB, W = mL + barMaxW + mR;
+  const xScale = v => v/4*barMaxW;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=4; v++){
+    const x = mL+xScale(v);
+    svg += svgEl('line',{x1:x,x2:x,y1:mT,y2:H-mB,stroke:'#e3e8e2','stroke-width':1});
+    svg += svgEl('text',{x,y:H-mB+12,'text-anchor':'middle','font-size':10,fill:'#6b7569'}, v);
+  }
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  lineSorted.forEach((l, i) => {
+    const y = mT + i*rowH;
+    const bw = Math.max(1, xScale(l.avgConso));
+    const color = pctColor((4-l.avgConso)/4*100);
+    const idx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(l.zone)}</div>
+      <div><b>Valley:</b> ${escapeHtml(l.valley)}</div>
+      <div><b>Avg Conso:</b> ${l.avgConso.toFixed(2)}/4</div>
+      <div><b>Patrols:</b> ${l.patrolCount}</div>
+      <div><b>Station checks:</b> ${l.checkCount}</div>`) - 1;
+    svg += `<g onclick="pinPopup(event,${idx})" style="cursor:pointer;">${svgEl('title',{},`${l.zone}: avg Conso ${l.avgConso.toFixed(2)}/4 — ${l.patrolCount} patrols`)}${svgEl('rect',{x:mL,y:y+3,width:bw,height:rowH-6,fill:color})}${svgEl('text',{x:mL-4,y:y+rowH/2+4,'text-anchor':'end','font-size':10.5,fill:'#23291f'}, l.zone)}${svgEl('text',{x:mL+bw+4,y:y+rowH/2+4,'font-size':10,fill:'#4a4a4a'}, l.avgConso.toFixed(2))}</g>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+function renderDeratTemporalAnalysis(){
+  chartPopupData = [];
+  hideChartPopup();
+  const area = document.getElementById('deratTemporalCharts');
+  const patrols = tables.deratisation || [];
+  const checks = tables.sectionChecks || [];
+  if (!patrols.length){ area.innerHTML = '<span class="muted">No dératisation data loaded yet.</span>'; return; }
+
+  const checksByIdent = new Map();
+  for (const c of checks){
+    if (!checksByIdent.has(c.Identifier)) checksByIdent.set(c.Identifier,[]);
+    checksByIdent.get(c.Identifier).push(c);
+  }
+
+  const valleys = getAllValleys();
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mLabel = m => { const [yr,mo] = m.split('-'); return MONTH_ABBR[+mo-1]+' '+yr.slice(2); };
+
+  // Accumulate per-month-valley check values and patrol counts
+  const monthsSet = new Set();
+  const mvData = {}; // mvData[month][valley] = { consoVals:[], patrolCount:0 }
+  const lineData = {}; // zone -> { valley, consoVals:[], patrolCount:0 }
+  let totalWithChecks = 0;
+
+  for (const d of patrols){
+    if (!d.Date || !d.Zone) continue;
+    const dc = (checksByIdent.get(d.Identifier)||[]).filter(c => c.Conso !== '' && c.Conso != null && isFinite(+c.Conso));
+    if (!dc.length) continue;
+    const month = d.Date.substring(0,7);
+    const valley = d.Zone.split('-')[0];
+    totalWithChecks++;
+    monthsSet.add(month);
+    if (!mvData[month]) mvData[month] = {};
+    if (!mvData[month][valley]) mvData[month][valley] = { consoVals:[], patrolCount:0 };
+    for (const c of dc) mvData[month][valley].consoVals.push(+c.Conso);
+    mvData[month][valley].patrolCount++;
+    if (!lineData[d.Zone]) lineData[d.Zone] = { valley, consoVals:[], patrolCount:0 };
+    for (const c of dc) lineData[d.Zone].consoVals.push(+c.Conso);
+    lineData[d.Zone].patrolCount++;
+  }
+
+  const months = [...monthsSet].sort();
+  const monthLabels = months.map(mLabel);
+  const dateRange = months.length ? `${mLabel(months[0])} – ${mLabel(months[months.length-1])}` : '—';
+
+  // Series: monthly avg Conso per valley
+  const avgConsoSeries = valleys.map(v => ({
+    label: v, color: VALLEY_HEX[v]||categoricalColor(hashStringToInt(v)),
+    popupKey: 'Avg Conso',
+    counts: months.map(m => (mvData[m]||{})[v]?.consoVals.length || 0),
+    values: months.map(m => {
+      const d = (mvData[m]||{})[v];
+      return d && d.consoVals.length ? d.consoVals.reduce((s,x)=>s+x,0)/d.consoVals.length : null;
+    })
+  }));
+
+  // Series: % zero-activity per valley
+  const zeroSeries = valleys.map(v => ({
+    label: v, color: VALLEY_HEX[v]||categoricalColor(hashStringToInt(v)),
+    popupKey: '% no activity (Conso=0)',
+    counts: months.map(m => (mvData[m]||{})[v]?.consoVals.length || 0),
+    values: months.map(m => {
+      const d = (mvData[m]||{})[v];
+      return d && d.consoVals.length ? 100*d.consoVals.filter(x=>x===0).length/d.consoVals.length : null;
+    })
+  }));
+
+  // Rat line ranking
+  const lineSorted = Object.entries(lineData)
+    .map(([zone,d]) => ({ zone, valley:d.valley, avgConso:d.consoVals.reduce((s,x)=>s+x,0)/d.consoVals.length, checkCount:d.consoVals.length, patrolCount:d.patrolCount }))
+    .sort((a,b) => b.avgConso - a.avgConso);
+
+  const allChecks = Object.values(lineData).flatMap(d => d.consoVals);
+  const overallAvg = allChecks.reduce((s,x)=>s+x,0)/allChecks.length;
+  const overallZero = Math.round(100*allChecks.filter(x=>x===0).length/allChecks.length);
+
+  const legendHtml = valleys
+    .filter(v => avgConsoSeries.find(s=>s.label===v)?.values.some(x=>x!=null))
+    .map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]||categoricalColor(hashStringToInt(v))}"></span>${v}</span>`).join('');
+
+  area.innerHTML = `
+    <div class="grid3" style="margin-bottom:14px;">
+      <div class="stat"><div class="num">${totalWithChecks}</div><div class="lbl">patrols with at least one check</div></div>
+      <div class="stat"><div class="num">${overallAvg.toFixed(2)}</div><div class="lbl">overall average Conso (0–4, all time)</div></div>
+      <div class="stat"><div class="num">${overallZero}%</div><div class="lbl">checks with no activity (Conso = 0)</div></div>
+    </div>
+    <div class="row" style="align-items:flex-start;flex-wrap:wrap;gap:20px;margin-bottom:6px;">
+      <div>
+        <h4 style="font-size:13px;margin:0 0 4px;">Monthly average Conso (rat activity, 0–4)</h4>
+        <div class="muted" style="font-size:12px;margin-bottom:4px;">Higher = more bait consumed = more rats. Effective control should push lines down over time.</div>
+        ${drawLineTrendChart(avgConsoSeries, monthLabels, 4, '')}
+      </div>
+      <div>
+        <h4 style="font-size:13px;margin:0 0 4px;">% of checks with no activity (Conso = 0)</h4>
+        <div class="muted" style="font-size:12px;margin-bottom:4px;">Higher % = more stations with no rat sign. Should rise as control takes effect.</div>
+        ${drawLineTrendChart(zeroSeries, monthLabels, 100, '%')}
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">${legendHtml}</div>
+    <h4 style="font-size:13px;margin:0 0 4px;">Patrols per month (by valley)</h4>
+    ${drawDeratPatrolFreqChart(months, monthLabels, mvData, valleys)}
+    <div style="margin:4px 0 16px;">${legendHtml}</div>
+    <h4 style="font-size:13px;margin:0 0 4px;">Rat line ranking — average Conso across all patrols (highest activity first)</h4>
+    <div class="muted" style="font-size:12px;margin-bottom:6px;">Red = high rat activity, green = low. Hover a bar for a quick summary — click to pin a full popup. Sorted from most to least active.</div>
+    <div class="chart-box">${drawRatLineRankingChart(lineSorted)}</div>
+  `;
 }
 
 function renderPastDataComparison(){
