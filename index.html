@@ -1403,6 +1403,115 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+  <div class="card">
+    <details id="ibsDetails" ontoggle="onIbsDetailsToggle(this.open)">
+    <summary><h2 style="display:inline;margin:0;">6. Invasive Bird Survey (point count)</h2></summary>
+    <div class="hint">Standardised 10-minute point count for Common Myna (<i>Acridotheres tristis</i>) and Red-vented Bulbul (<i>Pycnonotus cafer</i>). Always use the same Station ID and return to the same GPS point each visit to build a comparable time series. Data feed the habitat–invasive bird interaction analysis (Blanvillain et al. 2003; 2020).</div>
+    <form id="ibsForm" onsubmit="submitBirdSurveyForm(event)">
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Date: <input type="date" id="ibsDate" required></label>
+        <label class="muted">Time (start): <input type="time" id="ibsTimeStart" required></label>
+        <label class="muted">Observer: <input type="text" id="ibsObserver" placeholder="e.g. Marco Elia" required style="width:180px;"></label>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label class="muted">Valley:
+          <select id="ibsValley" onchange="onIbsValleyChange()" required>
+            <option value="">Choose…</option>
+            <option value="Papehue">Papehue</option>
+            <option value="Maruapo">Maruapo</option>
+            <option value="Hopa">Hopa</option>
+          </select>
+        </label>
+        <label class="muted">Zone:
+          <select id="ibsZone" required><option value="">Choose a valley first</option></select>
+        </label>
+        <label class="muted">Station ID: <input type="text" id="ibsStationId" placeholder="e.g. PBS-01" list="ibsStationList" style="width:120px;" required></label>
+        <datalist id="ibsStationList"></datalist>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to record survey point GPS (return to the exact same spot every visit):</div>
+        <div class="row" style="margin-bottom:6px;">
+          <label class="muted"><input type="checkbox" id="ibsZoneNamesToggle" onchange="toggleIbsZoneNames(this.checked)"> Show zone names</label>
+          <label class="muted"><input type="checkbox" id="ibsUserLocToggle" onchange="toggleIbsUserLoc(this.checked)"> Show my location</label>
+          <span id="ibsUserLocStatus" class="muted"></span>
+        </div>
+        <div id="ibsPickerMap" class="geo-picker-map"></div>
+        <div class="row" style="margin-top:6px;margin-bottom:4px;align-items:center;">
+          <span class="muted" id="ibsPointReadout">Tap/click the map to set the survey point.</span>
+          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearIbsPoint()">Clear point</button>
+        </div>
+      </div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--green-dark);">Bird contacts (10-min count)</div>
+      <div class="row" style="margin-bottom:10px;gap:18px;flex-wrap:wrap;">
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:185px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Common Myna</div>
+          <div class="row" style="gap:12px;">
+            <label class="muted">Seen: <input type="number" id="ibsMynaSeen" min="0" value="0" style="width:58px;" required></label>
+            <label class="muted">Heard: <input type="number" id="ibsMynaHeard" min="0" value="0" style="width:58px;" required></label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:185px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Red-vented Bulbul</div>
+          <div class="row" style="gap:12px;">
+            <label class="muted">Seen: <input type="number" id="ibsBulbulSeen" min="0" value="0" style="width:58px;" required></label>
+            <label class="muted">Heard: <input type="number" id="ibsBulbulHeard" min="0" value="0" style="width:58px;" required></label>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+        <label class="muted">Vegetation at station:
+          <select id="ibsVegType" required>
+            <option value="">Choose…</option>
+            <option value="native_dominant">Native dominant (≥70% native canopy)</option>
+            <option value="mixed">Mixed (30–70% native)</option>
+            <option value="introduced_dominant">Introduced dominant (≥70% non-native)</option>
+          </select>
+        </label>
+        <label class="muted">Pomarea detected in territory?
+          <select id="ibsPomareaDetected" required>
+            <option value="">Choose…</option>
+            <option value="yes_singing">Yes — singing/calling</option>
+            <option value="yes_seen">Yes — seen</option>
+            <option value="no">No</option>
+            <option value="unknown">Territory not identified</option>
+          </select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+        <label class="muted">Interaction observed:
+          <select id="ibsInteraction" required>
+            <option value="">Choose…</option>
+            <option value="none">None</option>
+            <option value="pomarea_chases_myna">Pomarea chases Myna</option>
+            <option value="pomarea_chases_bulbul">Pomarea chases Bulbul</option>
+            <option value="myna_enters_territory">Myna enters Pomarea territory</option>
+            <option value="bulbul_enters_territory">Bulbul enters Pomarea territory</option>
+            <option value="myna_approaches_nest">Myna approaches nest/nest tree</option>
+            <option value="aggressive_interspecific">Aggressive encounter (any direction)</option>
+            <option value="other">Other — describe in notes</option>
+          </select>
+        </label>
+        <label class="muted">Weather:
+          <select id="ibsWeather" required>
+            <option value="">Choose…</option>
+            <option value="sunny">Sunny / clear</option>
+            <option value="partly_cloudy">Partly cloudy</option>
+            <option value="overcast">Overcast</option>
+            <option value="light_rain">Light rain</option>
+            <option value="heavy_rain">Heavy rain</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Notes (optional):</label>
+        <textarea id="ibsNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="Describe interactions, unusual behaviour, other species seen, or context."></textarea>
+      </div>
+      <button type="submit">Submit bird survey</button>
+      <span id="ibsSubmitStatus" class="muted"></span>
+    </form>
+    </details>
+  </div>
+
 </div>
 
 <script>
@@ -1539,6 +1648,7 @@ async function syncOfflineQueue(){
   if (syncedTables.has('habitat_restoration')) fetchHabitatRestoration();
   if (syncedTables.has('deratisation')) fetchDeratisation();
   if (syncedTables.has('pff_observations')) fetchPffObservations();
+  if (syncedTables.has('bird_surveys')) fetchBirdSurveys();
 }
 function renderOfflineBanner(){
   const banner = document.getElementById('offlineBanner');
@@ -2703,6 +2813,186 @@ async function submitPffForm(evt){
   }
 }
 
+/* ---------------- Invasive Bird Survey (point count) ----------------
+   Supabase table required (create once in dashboard):
+   bird_surveys(id bigint PK autoincrement, date text, time_start text,
+   observer text, valley text, zone text, station_id text,
+   lat float8, lon float8, duration_min int4 default 10,
+   myna_seen int4, myna_heard int4, bulbul_seen int4, bulbul_heard int4,
+   vegetation_type text, pomarea_detected text, interaction text,
+   weather text, notes text, created_at timestamptz default now())
+   RLS: enable row level security; add policy allowing public SELECT + INSERT. */
+
+let ibsPickerEntry = null;
+let ibsSurveyPoint = null;
+let ibsShowZoneNames = false;
+let ibsUserLocWatchId = null, ibsUserLocFirstFix = true;
+
+async function fetchBirdSurveys(){
+  try {
+    const { data, error } = await window.sb.from('bird_surveys').select('station_id').order('id');
+    if (error) return;
+    const ids = [...new Set((data||[]).map(r => r.station_id).filter(Boolean))].sort();
+    const dl = document.getElementById('ibsStationList');
+    if (dl) dl.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">`).join('');
+  } catch(e){ /* table may not exist yet */ }
+}
+function subscribeBirdSurveys(){
+  fetchBirdSurveys();
+  try {
+    window.sb.channel('bird_surveys_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bird_surveys' }, () => fetchBirdSurveys())
+      .subscribe();
+  } catch(e){ /* table not yet created — safe to ignore */ }
+}
+
+function ensureIbsPickerMap(){
+  if (ibsPickerEntry) return;
+  const map = L.map('ibsPickerMap', { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  ibsPickerEntry = {
+    map,
+    zonesLayer: L.layerGroup().addTo(map),
+    labelsLayer: L.layerGroup().addTo(map),
+    pointLayer:  L.layerGroup().addTo(map),
+    userLocLayer: L.layerGroup().addTo(map),
+  };
+  map.on('click', e => {
+    ibsSurveyPoint = { lat: e.latlng.lat, lon: e.latlng.lng };
+    renderIbsPoint();
+    document.getElementById('ibsPointReadout').textContent =
+      `Survey point: ${ibsSurveyPoint.lat.toFixed(6)}, ${ibsSurveyPoint.lon.toFixed(6)}`;
+  });
+  renderIbsZones(true);
+}
+
+function renderIbsZones(shouldFit){
+  const entry = ibsPickerEntry;
+  if (!entry) return;
+  const valleyFilter = document.getElementById('ibsValley')?.value || '';
+  const units = (tables.managementUnit||[]).filter(u => !valleyFilter || u['Vallee'] === valleyFilter);
+  entry.zonesLayer.clearLayers();
+  entry.labelsLayer.clearLayers();
+  const boundsLatLngs = [];
+  for (const u of units){
+    if (!u.Geometry) continue;
+    const rings = polygonPartsToLatLngRings(u.Geometry);
+    const poly = L.polygon(rings, { color:'#2e5e2c', weight:1, fillColor:'#ffffff', fillOpacity:0.07 });
+    poly.bindTooltip(`<b>${escapeHtml(u['Nom'])}</b> (${escapeHtml(u['Vallee'])})`, { sticky:true, direction:'top', opacity:0.95 });
+    poly.addTo(entry.zonesLayer);
+    rings.forEach(rs => rs.forEach(ring => ring.forEach(ll => boundsLatLngs.push(ll))));
+    if (ibsShowZoneNames){
+      const c = geometryCentroid(u.Geometry);
+      if (c) L.marker([c.lat, c.lon], { icon: smallLabelIcon(u['Nom']), interactive: false }).addTo(entry.labelsLayer);
+    }
+  }
+  if (shouldFit && boundsLatLngs.length) entry.map.fitBounds(boundsLatLngs, { padding: [10, 10] });
+}
+
+function renderIbsPoint(){
+  const entry = ibsPickerEntry;
+  if (!entry) return;
+  entry.pointLayer.clearLayers();
+  if (!ibsSurveyPoint) return;
+  L.circleMarker([ibsSurveyPoint.lat, ibsSurveyPoint.lon], {
+    radius: 8, color: '#1b5e20', weight: 2.5, fillColor: '#ffcc00', fillOpacity: 0.95
+  }).bindTooltip('Survey point', { permanent: false }).addTo(entry.pointLayer);
+}
+
+function clearIbsPoint(){
+  ibsSurveyPoint = null;
+  renderIbsPoint();
+  document.getElementById('ibsPointReadout').textContent = 'Tap/click the map to set the survey point.';
+}
+
+function onIbsDetailsToggle(open){
+  if (!open) return;
+  ensureIbsPickerMap();
+  if (ibsPickerEntry) ibsPickerEntry.map.invalidateSize();
+}
+
+function onIbsValleyChange(){
+  const valley = document.getElementById('ibsValley').value;
+  const zoneSel = document.getElementById('ibsZone');
+  if (!valley){ zoneSel.innerHTML = '<option value="">Choose a valley first</option>'; }
+  else {
+    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+    zoneSel.innerHTML = '<option value="">Choose…</option>'
+      + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+  }
+  if (ibsPickerEntry) renderIbsZones(true);
+}
+
+function toggleIbsZoneNames(checked){
+  ibsShowZoneNames = checked;
+  renderIbsZones(false);
+}
+
+function toggleIbsUserLoc(checked){
+  const statusEl = document.getElementById('ibsUserLocStatus');
+  statusEl.textContent = '';
+  if (checked){
+    if (!navigator.geolocation){
+      statusEl.textContent = 'Geolocation not supported.';
+      document.getElementById('ibsUserLocToggle').checked = false; return;
+    }
+    ibsUserLocFirstFix = true;
+    ibsUserLocWatchId = navigator.geolocation.watchPosition(pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const e = ibsPickerEntry; if (!e) return;
+      e.userLocLayer.clearLayers();
+      L.circle([latitude, longitude], { radius: accuracy, color:'#4285f4', weight:1, fillColor:'#4285f4', fillOpacity:0.12 }).addTo(e.userLocLayer);
+      L.circleMarker([latitude, longitude], { radius:6, color:'#fff', weight:2, fillColor:'#4285f4', fillOpacity:1 }).addTo(e.userLocLayer);
+      if (ibsUserLocFirstFix){ e.map.setView([latitude, longitude], 16); ibsUserLocFirstFix = false; }
+      statusEl.textContent = `GPS: ±${Math.round(accuracy)} m`;
+    }, err => { statusEl.textContent = 'GPS error: ' + err.message; }, { enableHighAccuracy: true });
+  } else {
+    if (ibsUserLocWatchId !== null){ navigator.geolocation.clearWatch(ibsUserLocWatchId); ibsUserLocWatchId = null; }
+    if (ibsPickerEntry) ibsPickerEntry.userLocLayer.clearLayers();
+    statusEl.textContent = '';
+  }
+}
+
+async function submitBirdSurveyForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('ibsSubmitStatus');
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const newRow = {
+      date:             document.getElementById('ibsDate').value,
+      time_start:       document.getElementById('ibsTimeStart').value,
+      observer:         document.getElementById('ibsObserver').value.trim(),
+      valley:           document.getElementById('ibsValley').value,
+      zone:             document.getElementById('ibsZone').value,
+      station_id:       document.getElementById('ibsStationId').value.trim(),
+      lat:              ibsSurveyPoint ? ibsSurveyPoint.lat : null,
+      lon:              ibsSurveyPoint ? ibsSurveyPoint.lon : null,
+      duration_min:     10,
+      myna_seen:        parseInt(document.getElementById('ibsMynaSeen').value, 10) || 0,
+      myna_heard:       parseInt(document.getElementById('ibsMynaHeard').value, 10) || 0,
+      bulbul_seen:      parseInt(document.getElementById('ibsBulbulSeen').value, 10) || 0,
+      bulbul_heard:     parseInt(document.getElementById('ibsBulbulHeard').value, 10) || 0,
+      vegetation_type:  document.getElementById('ibsVegType').value,
+      pomarea_detected: document.getElementById('ibsPomareaDetected').value,
+      interaction:      document.getElementById('ibsInteraction').value,
+      weather:          document.getElementById('ibsWeather').value,
+      notes:            document.getElementById('ibsNotes').value.trim() || null,
+    };
+    const result = await insertOrQueue('bird_surveys', [newRow]);
+    statusEl.innerHTML = result.queued
+      ? `<span class="ok">✓ Saved offline — will upload automatically when back online.</span>`
+      : `<span class="ok">✓ Bird survey submitted.</span>`;
+    document.getElementById('ibsForm').reset();
+    clearIbsPoint();
+    document.getElementById('ibsDate').value = new Date().toISOString().slice(0,10);
+    await fetchBirdSurveys();
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
 /* ---------------- Activity Types + Log an Activity (generic, team-defined) ----------------
    Lets the valley management team define brand-new kinds of conservation activity beyond Habitat
    Restoration/Dératisation (predator control, biosecurity, nest monitoring, translocation, disease
@@ -3166,12 +3456,18 @@ whenSupabaseReady(() => {
   subscribePepinieres();
   subscribeActivityTypes();
   subscribeActivityEntries();
+  subscribeBirdSurveys();
   syncOfflineQueue(); // picks up anything queued in a previous session, if we're online now
 });
 loadReferenceData();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
+document.getElementById('ibsDate').value = new Date().toISOString().slice(0,10);
+(function setDefaultIbsTime(){
+  const now = new Date(), pad = n => String(n).padStart(2,'0');
+  document.getElementById('ibsTimeStart').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+})();
 (function setDefaultDrDate(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
   document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
