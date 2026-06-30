@@ -5238,43 +5238,49 @@ function renderMap(shouldFit){
         html += '<br><i>no historical or NRDS data for this unit</i>';
       }
     } else if (histZoneMode === 'plantingActivity'){
-      // Deliberately NOT a numeric blend like the cleaning "combined" mode: the historical Plantation
-      // value is a categorical area-completion estimate, NRDS gives a count of individuals by species —
-      // two different kinds of measurement that can't be averaged into one % without an arbitrary
-      // planting-density assumption. Shown side by side instead, with a qualitative read.
-      // Visual differentiation from 'planting': zones with NRDS activity get an amber border (thicker).
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
-      const hv = latestHistValue(hu, PLANT_WEIGHTS, 'Plant');
+      const topo = zoneTypology(hu);
+      const hv = topo.hv;
       const cutoff = hv ? HIST_PERIOD_DATE[hv.period] : null;
       const recent = nrdsPlantingActivitySince(u['Nom'], cutoff);
-      fillColor = hv ? pctColor(hv.pct) : (recent ? '#9fcf9f' : '#d8d8d8');
+      // Fill = typology colour; if no hist data but NRDS present → amber placeholder
+      fillColor = (topo.type === 'X' && !hv && recent) ? '#e8b050' : topo.color;
       fillOpacity = 0.75;
-      // zones with NRDS activity use a distinct amber/orange border so they're visually separate
-      // from the historical-only layer (which uses the standard dark-green border at weight 1.5)
+      // Amber/thick border = NRDS planting recorded since last Butaud survey
       borderColor = recent ? '#d4870a' : '#2e5e2c';
       borderWeight = recent ? 3 : 1.5;
-      if (hv || recent){
-        const zoneAreaHa = zoneAreaHectares(u['Geometry']);
-        const densityTxt = (recent && zoneAreaHa)
-          ? ` — ${(recent.totalIndividuals / zoneAreaHa).toFixed(1)} ind/ha (zone ${zoneAreaHa.toFixed(1)} ha)`
-          : '';
-        html += hv ? `<br>Plantings (historical, ${HIST_PERIOD_LABEL[hv.period]}): <b>${hv.raw}</b> (${hv.pct}%)` : '<br>Plantings: no historical survey for this unit';
-        const speciesTxt = recent ? recent.species.map(([n,c])=>`${n} (${c})`).join(', ') : '';
-        html += recent ? `<br>NRDS activity since the survey: <b>${recent.totalIndividuals} individuals${densityTxt}</b><br>${speciesTxt}<br>Latest: ${recent.latestDate}`
-          : (hv ? '<br>No NRDS activity recorded since the historical survey' : '<br>No NRDS activity recorded for this unit');
-        combinedBreakdown.push({ unit: u['Nom'], valley: u['Vallee'], hv, recent, zoneAreaHa });
+      const vegTxt = topo.vd ? `${topo.vd.raw} (${HIST_PERIOD_LABEL[topo.vd.period]})` : 'no vegetation data';
+      const plantTxt = hv ? `${hv.raw} / ${hv.pct}% (${HIST_PERIOD_LABEL[hv.period]})` : 'no historical survey';
+      html += `<br><b>Type: ${topo.label}</b>`;
+      html += `<br>Vegetation: ${vegTxt}`;
+      html += `<br>Plantations (historical): ${plantTxt}`;
+      const zoneAreaHa = zoneAreaHectares(u['Geometry']);
+      if (recent){
+        const densityTxt = zoneAreaHa ? ` — ${(recent.totalIndividuals/zoneAreaHa).toFixed(1)} ind/ha (zone ${zoneAreaHa.toFixed(1)} ha)` : '';
+        html += `<br>NRDS since survey: <b>${recent.totalIndividuals} individuals${densityTxt}</b><br>${recent.species.map(([n,c])=>`${n} (${c})`).join(', ')}<br>Latest: ${recent.latestDate}`;
+        if (topo.type === 'C') html += `<br><i>&#8594; NRDS active: potential upgrade toward type B</i>`;
       } else {
-        html += '<br><i>no historical or NRDS data for this unit</i>';
+        html += hv ? '<br>No NRDS planting activity since the survey' : '<br>No NRDS planting activity recorded';
       }
-    } else if (histZoneMode){
+      if (hv || recent || topo.vd) combinedBreakdown.push({ unit:u['Nom'], valley:u['Vallee'], topo, hv, recent, zoneAreaHa });
+      else html += '<br><i>no historical or NRDS data for this unit</i>';
+    } else if (histZoneMode === 'planting'){
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
-      const weights = histZoneMode === 'cleaning' ? SB_WEIGHTS : PLANT_WEIGHTS;
-      const prefix = histZoneMode === 'cleaning' ? 'SB' : 'Plant';
-      const label = histZoneMode === 'cleaning' ? 'Understory management' : 'Plantings';
-      const hv = latestHistValue(hu, weights, prefix);
+      const topo = zoneTypology(hu);
+      fillColor = topo.color;
+      fillOpacity = 0.75;
+      const vegTxt = topo.vd ? `${topo.vd.raw} (${HIST_PERIOD_LABEL[topo.vd.period]})` : 'no vegetation data';
+      const plantTxt = topo.hv ? `${topo.hv.raw} / ${topo.hv.pct}% (${HIST_PERIOD_LABEL[topo.hv.period]})` : 'no planting data';
+      html += `<br><b>Type: ${topo.label}</b>`;
+      html += `<br>Vegetation: ${vegTxt}`;
+      html += `<br>Plantations: ${plantTxt}`;
+      combinedBreakdown.push({ unit:u['Nom'], valley:u['Vallee'], topo });
+    } else if (histZoneMode === 'cleaning'){
+      const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
+      const hv = latestHistValue(hu, SB_WEIGHTS, 'SB');
       fillColor = hv ? pctColor(hv.pct) : '#d8d8d8';
       fillOpacity = 0.75;
-      html += hv ? `<br>${label} (historical, ${HIST_PERIOD_LABEL[hv.period]}): <b>${hv.raw}</b> (${hv.pct}%)` : '<br><i>no historical data for this unit</i>';
+      html += hv ? `<br>Understory management (historical, ${HIST_PERIOD_LABEL[hv.period]}): <b>${hv.raw}</b> (${hv.pct}%)` : '<br><i>no historical data for this unit</i>';
     } else if (mapLayers.has('cleaning')){
       const st = statusMap.get(u['Nom']);
       fillColor = st ? pctColor(st.pct) : '#d8d8d8';
@@ -5463,17 +5469,24 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
       <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no data (neither historical nor NRDS)</span><br>`;
   } else if (histZoneMode === 'plantingActivity'){
-    legend += `<span class="legend-item"><b>Colored zones — historical plantings + NRDS activity overlay</b> (not blended — zone fill = historical %, border = NRDS signal):</span>
-      <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>0%</span>
-      <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>50%</span>
-      <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
-      <span class="legend-item"><span class="swatch" style="background:#9fcf9f"></span>NRDS activity only (no historical survey)</span>
-      <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>no data</span>
-      <span class="legend-item"><span style="display:inline-block;width:28px;height:10px;border:3px solid #d4870a;margin-right:4px;"></span>NRDS planting activity recorded since last historical survey (amber border)</span>
-      <span class="legend-item">Tooltip shows: historical %, NRDS species list, individuals/ha</span><br>`;
-  } else if (histZoneMode){
-    const label = histZoneMode === 'cleaning' ? 'Understory management' : 'Plantings';
-    legend += `<span class="legend-item"><b>Zones colored by historical data — ${label}</b> (most recent survey available per unit: Dec 2025, Aug 2024 or Aug 2023):</span>
+    legend += `<span class="legend-item"><b>Zone typology + NRDS activity</b> (fill = A/A*/B/C from Butaud vegetation + plantations; amber border = active NRDS planting since last survey):</span>
+      <span class="legend-item"><span class="swatch" style="background:#1a7a1a"></span>A — Consolidated native forest (native dominant + ≥50% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#4caf50"></span>A* — Native dominant, partial planting (&lt;50%)</span>
+      <span class="legend-item"><span class="swatch" style="background:#d4870a"></span>B — Active restoration (invasive dominant, ≥33% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#c0392b"></span>C — Frontier (invasive dominant, &lt;33% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#e8b050"></span>NRDS activity only (no Butaud survey for this unit)</span>
+      <span class="legend-item"><span class="swatch" style="background:#9e9e9e"></span>X — Anthropic / no data</span>
+      <span class="legend-item"><span style="display:inline-block;width:28px;height:10px;border:3px solid #d4870a;margin-right:4px;"></span>NRDS planting recorded since last Butaud survey (amber border)</span><br>`;
+  } else if (histZoneMode === 'planting'){
+    legend += `<span class="legend-item"><b>Zone typology — Planted species layer</b> (vegetation dominance + plantation progress, most recent Butaud survey per zone):</span>
+      <span class="legend-item"><span class="swatch" style="background:#1a7a1a"></span>A — Consolidated native forest (native dominant + ≥50% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#4caf50"></span>A* — Native dominant, partial planting (&lt;50%)</span>
+      <span class="legend-item"><span class="swatch" style="background:#d4870a"></span>B — Active restoration (invasive dominant, ≥33% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#c0392b"></span>C — Frontier (invasive dominant, &lt;33% planted)</span>
+      <span class="legend-item"><span class="swatch" style="background:#9e9e9e"></span>X — Anthropic / no data</span>
+      <span class="legend-item">Click a zone to see vegetation type, plantation %, and typology reasoning</span><br>`;
+  } else if (histZoneMode === 'cleaning'){
+    legend += `<span class="legend-item"><b>Zones colored by historical data — Understory management</b> (most recent survey: Dec 2025, Aug 2024 or Aug 2023):</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(0)}"></span>0%</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(50)}"></span>50%</span>
       <span class="legend-item"><span class="swatch" style="background:${pctColor(100)}"></span>100%</span>
@@ -5550,6 +5563,9 @@ function renderMap(shouldFit){
   } else if (histZoneMode === 'plantingActivity'){
     combinedBox.style.display = '';
     combinedBox.innerHTML = renderPlantingActivityBox(combinedBreakdown);
+  } else if (histZoneMode === 'planting'){
+    combinedBox.style.display = '';
+    combinedBox.innerHTML = renderTypologyBox(combinedBreakdown);
   } else if (mapLayers.has('pff')){
     combinedBox.style.display = '';
     combinedBox.innerHTML = renderPffColonyCalcBox(pffColoniesForBox);
@@ -5572,6 +5588,64 @@ function normalizeCategory(s){
 const SB_WEIGHTS = { aucune:0, debutee:10, 'un tiers':33, moitie:50, effectuee:100, 'sans objet':null };
 const PLANT_WEIGHTS = { aucune:0, rares:10, 'un tiers':33, moitie:50, effectuee:100, 'sans objet':null };
 const HIST_PERIOD_LABEL = { '2025':'Dec 2025', '2024':'Aug 2024', '2023':'Aug 2023' };
+
+// ── Zone typology (Butaud vegetation survey interpretation) ──────────────────
+// Based on two variables: vegetation dominance (first species in the Végétation
+// column) and plantation progress (Plantations categorical %).
+// A  = native dominant + ≥50% planted  → consolidated native forest
+// A* = native dominant + <50% planted  → natural recovery / early planting
+// B  = invasive dominant + ≥33% planted → active restoration in progress
+// C  = invasive dominant + <33% planted → frontier, minimal intervention
+// X  = anthropic zone or no data
+const NATIVE_GENERA = ['neonauclea','hibiscus','inocarpus','rhus','weinmannia','calophyllum','alstonia'];
+const INVASIVE_GENERA = ['spathodea','mangifera','miconia'];
+const TYPOLOGY_DEF = {
+  'A':  { color:'#1a7a1a', label:'A — Consolidated native forest' },
+  'A*': { color:'#4caf50', label:'A* — Native dominant, partial planting' },
+  'B':  { color:'#d4870a', label:'B — Active restoration' },
+  'C':  { color:'#c0392b', label:'C — Frontier (invasive dominant)' },
+  'X':  { color:'#9e9e9e', label:'X — Anthropic / no data' },
+};
+function vegNativeDominance(vegStr){
+  if (!vegStr) return null;
+  const s = vegStr.toLowerCase();
+  if (s.includes('anthropis')) return 'anthropic';
+  const words = s.split(/\s+/);
+  let fn = Infinity, fi = Infinity;
+  words.forEach((w,i)=>{
+    if (NATIVE_GENERA.some(g => w.startsWith(g)) && i < fn) fn = i;
+    if (INVASIVE_GENERA.some(g => w.startsWith(g)) && i < fi) fi = i;
+  });
+  if (fn < fi) return 'native';
+  if (fi < fn) return 'invasive';
+  if (fn !== Infinity) return 'native';
+  if (fi !== Infinity) return 'invasive';
+  return null;
+}
+function latestVegDominance(hu){
+  if (!hu) return null;
+  for (const yr of ['2025','2024','2023']){
+    const veg = hu['Veg'+yr];
+    if (veg){ return { dominance: vegNativeDominance(veg), period: yr, raw: veg }; }
+  }
+  return null;
+}
+function zoneTypology(hu){
+  const vd = latestVegDominance(hu);
+  const hv = latestHistValue(hu, PLANT_WEIGHTS, 'Plant');
+  const dom = vd ? vd.dominance : null;
+  const pct = hv ? hv.pct : null;
+  if (dom === 'anthropic') return { type:'X', ...TYPOLOGY_DEF['X'], vd, hv };
+  if (dom === 'native'){
+    if ((pct||0) >= 50) return { type:'A',  ...TYPOLOGY_DEF['A'],  vd, hv };
+    else                return { type:'A*', ...TYPOLOGY_DEF['A*'], vd, hv };
+  }
+  if (dom === 'invasive'){
+    if ((pct||0) >= 33) return { type:'B', ...TYPOLOGY_DEF['B'], vd, hv };
+    else                return { type:'C', ...TYPOLOGY_DEF['C'], vd, hv };
+  }
+  return { type:'X', ...TYPOLOGY_DEF['X'], vd, hv };
+}
 
 // for the map's per-zone historical overlay: most recent snapshot with a usable (non-"sans objet") value
 function latestHistValue(hu, weights, fieldPrefix){
@@ -5993,30 +6067,76 @@ function renderCombinedCalcBox(breakdown){
 
 // Box for the planting "activity" overlay — explains the qualitative join (not a blend) and lists,
 // per unit, the historical baseline next to whatever NRDS activity was recorded since that survey.
+function renderTypologyBox(breakdown){
+  // Counts per type
+  const counts = {};
+  for (const b of breakdown){ const t = b.topo ? b.topo.type : 'X'; counts[t] = (counts[t]||0)+1; }
+  let html = `<b>Zone typology — classification logic:</b><br>
+    Two variables from the Butaud vegetation survey (most recent per zone: Dec 2025, Aug 2024, or Aug 2023):<br>
+    <b>1. Vegetation dominance</b>: the first species named in the Végétation column.
+    Native genera (Neonauclea, Hibiscus, Inocarpus, Rhus, Weinmannia…) → native-dominant.
+    Invasive genera (Spathodea, Mangifera…) → invasive-dominant.<br>
+    <b>2. Plantation progress</b>: the categorical % of zone area where native plantings occurred
+    (aucune=0%, rares=10%, un tiers=33%, moitié=50%, effectuée=100%). This is restoration <i>effort</i>,
+    not canopy cover — planted trees need 3–5+ years to break into the canopy.<br><br>
+    <span style="color:#1a7a1a;font-weight:bold">A</span> — native dominant + ≥50% planted → consolidated.<br>
+    <span style="color:#4caf50;font-weight:bold">A*</span> — native dominant + &lt;50% planted → natural recovery or early planting.<br>
+    <span style="color:#d4870a;font-weight:bold">B</span> — invasive dominant + ≥33% planted → active restoration.<br>
+    <span style="color:#c0392b;font-weight:bold">C</span> — invasive dominant + &lt;33% planted → frontier zone.<br>
+    <span style="color:#9e9e9e;font-weight:bold">X</span> — anthropic zone or missing data.<br><br>
+    <b>Summary: ${breakdown.length} zone(s)</b> — `;
+  html += Object.entries(TYPOLOGY_DEF).map(([t,d])=>{
+    const n = counts[t]||0;
+    return n ? `<span style="color:${d.color};font-weight:bold">${t}</span>: ${n}` : null;
+  }).filter(Boolean).join(' · ');
+  if (breakdown.length){
+    const sorted = [...breakdown].sort((a,b)=> (a.topo.type||'').localeCompare(b.topo.type||'') || a.valley.localeCompare(b.valley) || a.unit.localeCompare(b.unit));
+    html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
+      <th>Unit</th><th>Valley</th><th>Type</th><th>Vegetation (latest)</th><th>Plantations</th>
+      </tr></thead><tbody>`;
+    for (const b of sorted){
+      const vegTxt = b.topo.vd ? b.topo.vd.raw : '—';
+      const plantTxt = b.topo.hv ? `${b.topo.hv.raw} (${b.topo.hv.pct}%)` : '—';
+      html += `<tr><td>${b.unit}</td><td>${b.valley}</td>
+        <td style="color:${b.topo.color};font-weight:bold">${b.topo.type}</td>
+        <td>${vegTxt}</td><td>${plantTxt}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  return html;
+}
+
 function renderPlantingActivityBox(breakdown){
-  let html = `<b>How to read the "NRDS activity" comparison (plantings):</b>
-    the historical Plantation value and the NRDS planting log are <i>deliberately not blended into a single
-    percentage</i>, unlike the cleaning "combined estimate" above. The historical value is a categorical
-    area-completion estimate — % of the unit's surface reported planted at the time of the survey (aucune=0%,
-    rares=10%, un tiers=33%, moitie=50%, effectuee=100%) — while NRDS's habitat-restoration log records a
-    concrete <b>count of individuals by species</b> for each planting action. These are two incompatible units
-    of measurement (an area fraction vs. an individual count), and converting one into the other would require
-    assuming a planting density (individuals per m²) that the current data cannot justify — so no such number is
-    invented here. Instead, for each unit this shows the most recent historical baseline % side by side with
-    everything NRDS has logged <i>strictly after</i> that survey's date: total individuals planted, the species
-    breakdown, the number of distinct actions, and the date of the latest one — a qualitative read for the reader
-    to judge progress from, not a single derived figure. ${breakdown.length} unit(s) with at least one data source
-    are listed below.`;
+  const counts = {};
+  for (const b of breakdown){ const t = b.topo ? b.topo.type : 'X'; counts[t] = (counts[t]||0)+1; }
+  let html = `<b>Zone typology + NRDS activity overlay:</b><br>
+    Zone fill colour = typology (A/A*/B/C) derived from the Butaud vegetation survey (see "Historical plantings"
+    checkbox for the full classification logic). The NRDS planting log is shown <i>on top</i> as an amber border
+    and in the tooltip — it cannot be merged into the typology % because the two datasets measure different things:
+    the Butaud Plantations column records the <i>fraction of zone area</i> that has received native plantings,
+    while NRDS records <i>individual counts by species</i> for each planting action. Converting one to the other
+    requires a planting-density assumption that the current data cannot justify.<br>
+    The amber border marks zones where NRDS has recorded planting activity <i>after</i> the most recent Butaud
+    survey — in type-C zones, this signals a potential upgrade toward type B. ${breakdown.length} zone(s) shown.<br><br>
+    <b>Summary</b> — `;
+  html += Object.entries(TYPOLOGY_DEF).map(([t,d])=>{
+    const n = counts[t]||0;
+    return n ? `<span style="color:${d.color};font-weight:bold">${t}</span>: ${n}` : null;
+  }).filter(Boolean).join(' · ');
   if (breakdown.length){
     html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
-      <th>Unit</th><th>Valley</th><th>Historical</th><th>NRDS activity since the survey</th>
+      <th>Unit</th><th>Valley</th><th>Type</th><th>Plantations (historical)</th><th>NRDS since survey</th>
       </tr></thead><tbody>`;
     for (const b of breakdown){
       const histTxt = b.hv ? `${b.hv.raw} (${b.hv.pct}%, ${HIST_PERIOD_LABEL[b.hv.period]})` : '—';
       const nrdsTxt = b.recent
-        ? `${b.recent.totalIndividuals} individuals (${b.recent.actionsCount} actions) — ${b.recent.species.map(([n,c])=>`${n} (${c})`).join(', ')} — latest on ${b.recent.latestDate}`
-        : (b.hv ? 'no activity recorded since the historical survey' : '—');
-      html += `<tr><td>${b.unit}</td><td>${b.valley}</td><td>${histTxt}</td><td>${nrdsTxt}</td></tr>`;
+        ? `${b.recent.totalIndividuals} ind. (${b.recent.actionsCount} actions) — ${b.recent.species.map(([n,c])=>`${n} (${c})`).join(', ')} — ${b.recent.latestDate}`
+        : (b.hv ? 'no activity since survey' : '—');
+      const typeColor = b.topo ? b.topo.color : '#9e9e9e';
+      const typeLabel = b.topo ? b.topo.type : 'X';
+      html += `<tr><td>${b.unit}</td><td>${b.valley}</td>
+        <td style="color:${typeColor};font-weight:bold">${typeLabel}</td>
+        <td>${histTxt}</td><td>${nrdsTxt}</td></tr>`;
     }
     html += '</tbody></table></div>';
   }
