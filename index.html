@@ -1106,7 +1106,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div style="margin-top:14px;">
       <div style="font-weight:600;font-size:12.5px;color:var(--green-dark);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">App-collected data</div>
       <div class="row" style="flex-wrap:wrap;gap:8px;">
-        <button class="secondary" onclick="downloadBirdSurveys()">⬇ Invasive Bird Surveys</button>
+        <button class="secondary" onclick="downloadBirdSurveys()">⬇ Bird Surveys (sessions)</button>
+        <button class="secondary" onclick="downloadBirdContacts()">⬇ Bird Contacts (individual detections)</button>
         <button class="secondary" onclick="downloadPffObservations()">⬇ PFF Observations</button>
         <button class="secondary" onclick="downloadPepinieres()">⬇ Pépinières</button>
         <button class="secondary" onclick="downloadAllActivityEntries()">⬇ Activity Entries</button>
@@ -3927,15 +3928,104 @@ function downloadOriginalFormat(which){
 }
 
 /* ---------------- per-dataset download helpers ---------------- */
+function _parseContactLog(raw){
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch(e){ return []; }
+}
+
 function downloadBirdSurveys(){
+  /* Session-level CSV: one row per 10-min point count.
+     Derived columns from contact_log are added for direct use in R/Python:
+     myna_total, bulbul_total, wattled_total (= seen + heard, detection events),
+     n_contacts (individual detections logged), n_myna_F / n_bulbul_F
+     (detections coded F = foraging on Spathodea — key behaviour variable),
+     pct_contacts_F (% contacts coded F across all species),
+     n_contacts_0_25m (within inner 25 m band). */
   const rows = birdSurveys;
   if (!rows.length){ alert('No bird survey records loaded yet.'); return; }
-  const fields = ['id','date','time_start','observer','valley','zone','station_id','session_number',
-    'lat','lon','duration_min','sky','wind_beaufort','rain',
+  const enriched = rows.map(r => {
+    const contacts = _parseContactLog(r.contact_log);
+    const n        = contacts.length;
+    const nMynaF   = contacts.filter(c => c.species === 'myna'   && c.beh === 'F').length;
+    const nBulbulF = contacts.filter(c => c.species === 'bulbul' && c.beh === 'F').length;
+    const nF       = contacts.filter(c => c.beh === 'F').length;
+    const n025     = contacts.filter(c => c.dist === '0-25m').length;
+    return {
+      ...r,
+      myna_total:        (r.myna_seen   || 0) + (r.myna_heard   || 0),
+      bulbul_total:      (r.bulbul_seen || 0) + (r.bulbul_heard || 0),
+      wattled_total:     (r.wattled_seen|| 0) + (r.wattled_heard|| 0),
+      n_contacts:        n,
+      n_myna_F:          nMynaF,
+      n_bulbul_F:        nBulbulF,
+      pct_contacts_F:    n ? Math.round(nF / n * 100) : '',
+      n_contacts_0_25m:  n025,
+    };
+  });
+  const fields = [
+    'id','date','time_start','observer','valley','zone','station_id','session_number',
+    'lat','lon','duration_min',
+    'sky','wind_beaufort','rain',
     'canopy_cover','canopy_height','canopy_dominant','spathodea_flowering',
-    'myna_seen','myna_heard','bulbul_seen','bulbul_heard','wattled_seen','wattled_heard',
-    'pomarea_detected','zone_typology','contact_log','notes','created_at'];
-  downloadCSV('bird_surveys.csv', rows, fields);
+    'zone_typology',
+    'myna_seen','myna_heard','myna_total',
+    'bulbul_seen','bulbul_heard','bulbul_total',
+    'wattled_seen','wattled_heard','wattled_total',
+    'pomarea_detected',
+    'n_contacts','n_myna_F','n_bulbul_F','pct_contacts_F','n_contacts_0_25m',
+    'notes','created_at'
+  ];
+  downloadCSV('bird_surveys_sessions.csv', enriched, fields);
+}
+
+function downloadBirdContacts(){
+  /* Individual-detection CSV: one row per contact logged in the contact log.
+     For use in behaviour analysis (foraging on Spathodea, distance decay,
+     height stratum distribution). Survey-level metadata is repeated on every
+     row for direct import into R/Python without a join.
+     Only sessions that have at least one contact logged are included. */
+  const rows = birdSurveys;
+  if (!rows.length){ alert('No bird survey records loaded yet.'); return; }
+  const out = [];
+  for (const r of rows){
+    const contacts = _parseContactLog(r.contact_log);
+    if (!contacts.length) continue;
+    contacts.forEach((c, i) => {
+      out.push({
+        survey_id:           r.id,
+        contact_index:       i + 1,
+        date:                r.date,
+        time_start:          r.time_start,
+        observer:            r.observer,
+        valley:              r.valley,
+        zone:                r.zone,
+        station_id:          r.station_id,
+        session_number:      r.session_number,
+        zone_typology:       r.zone_typology,
+        canopy_cover:        r.canopy_cover,
+        canopy_height:       r.canopy_height,
+        canopy_dominant:     r.canopy_dominant,
+        spathodea_flowering: r.spathodea_flowering,
+        sky:                 r.sky,
+        wind_beaufort:       r.wind_beaufort,
+        species:             c.species || '',
+        detection_type:      c.det    || '',
+        distance_band:       c.dist   || '',
+        behaviour:           c.beh    || '',
+        height_stratum:      c.height || '',
+        behaviour_label:     { F:'foraging_spathodea', P:'perched', T:'in_transit', V:'vocalising', O:'other' }[c.beh] || c.beh || '',
+      });
+    });
+  }
+  if (!out.length){ alert('No individual contact records found. Fill in the "Contact log" section of the bird survey form to log individual detections.'); return; }
+  const fields = [
+    'survey_id','contact_index','date','time_start','observer',
+    'valley','zone','station_id','session_number','zone_typology',
+    'canopy_cover','canopy_height','canopy_dominant','spathodea_flowering',
+    'sky','wind_beaufort',
+    'species','detection_type','distance_band','behaviour','behaviour_label','height_stratum'
+  ];
+  downloadCSV('bird_surveys_contacts.csv', out, fields);
 }
 function downloadPffObservations(){
   const rows = pffObservations;
