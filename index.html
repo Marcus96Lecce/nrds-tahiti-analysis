@@ -1360,14 +1360,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="card">
     <details id="ibsDetails" ontoggle="onIbsDetailsToggle(this.open)">
     <summary><h2 style="display:inline;margin:0;">4. Invasive Bird Survey (point count)</h2></summary>
-    <div class="hint">Standardised 10-minute point count for Common Myna (<i>Acridotheres tristis</i>) and Red-vented Bulbul (<i>Pycnonotus cafer</i>). Always use the same Station ID and return to the same GPS point each visit to build a comparable time series. Data feed the habitat–invasive bird interaction analysis (Blanvillain et al. 2003; 2020).</div>
+    <div class="hint">Standardised 10-minute point count (50 m radius) for Common Myna (<i>Acridotheres tristis</i>) and Red-vented Bulbul (<i>Pycnonotus cafer</i>). Always use the same Station ID and return to the exact same GPS point every visit. Protocol: Papehue pilot study — native-canopy (Type A/A*) vs invasive-canopy (Type C) comparison. Data feed the habitat–invasive bird interaction analysis (Spotswood et al. 2013; Blanvillain et al. 2020).</div>
     <form id="ibsForm" onsubmit="submitBirdSurveyForm(event)">
-      <div class="row" style="margin-bottom:10px;">
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Station &amp; Session</div>
+      <div class="row" style="margin-bottom:10px;flex-wrap:wrap;">
         <label class="muted">Date: <input type="date" id="ibsDate" required></label>
-        <label class="muted">Time (start): <input type="time" id="ibsTimeStart" required></label>
-        <label class="muted">Observer: <input type="text" id="ibsObserver" placeholder="e.g. Marco Elia" required style="width:180px;"></label>
+        <label class="muted">Start time: <input type="time" id="ibsTimeStart" required></label>
+        <label class="muted">Observer: <input type="text" id="ibsObserver" placeholder="e.g. Marco Elia" required style="width:160px;"></label>
+        <label class="muted">Session #: <input type="number" id="ibsSessionNumber" min="1" max="10" value="1" style="width:60px;" required title="Visit number to this station (1 = first visit)"></label>
       </div>
-      <div class="row" style="margin-bottom:10px;">
+      <div class="row" style="margin-bottom:6px;flex-wrap:wrap;">
         <label class="muted">Valley:
           <select id="ibsValley" onchange="onIbsValleyChange()" required>
             <option value="">Choose…</option>
@@ -1377,17 +1380,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
           </select>
         </label>
         <label class="muted">Zone:
-          <select id="ibsZone" required><option value="">Choose a valley first</option></select>
+          <select id="ibsZone" onchange="onIbsZoneChange()" required><option value="">Choose a valley first</option></select>
         </label>
-        <label class="muted">Station ID: <input type="text" id="ibsStationId" placeholder="e.g. PBS-01" list="ibsStationList" style="width:120px;" required></label>
+        <label class="muted">Station ID: <input type="text" id="ibsStationId" placeholder="e.g. PBS-01" list="ibsStationList" style="width:110px;" required title="Unique code for this point — reuse the same code every return visit"></label>
         <datalist id="ibsStationList"></datalist>
       </div>
+      <div id="ibsZoneTypologyBadge" style="margin-bottom:10px;min-height:20px;"></div>
+
       <div style="margin-bottom:10px;">
-        <div class="muted" style="margin-bottom:4px;">Tap/click the map to record survey point GPS (return to the exact same spot every visit):</div>
-        <div class="row" style="margin-bottom:6px;">
-          <label class="muted"><input type="checkbox" id="ibsStationsOverlayToggle" onchange="toggleIbsStationsOverlay(this.checked)"> Overlay all rat stations</label>
-          <label class="muted"><input type="checkbox" id="ibsZoneNamesToggle" onchange="toggleIbsZoneNames(this.checked)"> Show zone names</label>
-          <label class="muted"><input type="checkbox" id="ibsUserLocToggle" onchange="toggleIbsUserLoc(this.checked)"> Show my location</label>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to record the survey point GPS (return to the exact same spot every visit):</div>
+        <div class="row" style="margin-bottom:6px;flex-wrap:wrap;">
+          <label class="muted"><input type="checkbox" id="ibsStationsOverlayToggle" onchange="toggleIbsStationsOverlay(this.checked)"> Overlay rat stations</label>
+          <label class="muted"><input type="checkbox" id="ibsZoneNamesToggle" onchange="toggleIbsZoneNames(this.checked)"> Zone names</label>
+          <label class="muted"><input type="checkbox" id="ibsUserLocToggle" onchange="toggleIbsUserLoc(this.checked)"> My location</label>
           <span id="ibsUserLocStatus" class="muted"></span>
         </div>
         <div id="ibsPickerMap" class="geo-picker-map"></div>
@@ -1396,70 +1401,118 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearIbsPoint()">Clear point</button>
         </div>
       </div>
-      <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--green-dark);">Bird contacts (10-min count)</div>
-      <div class="row" style="margin-bottom:10px;gap:18px;flex-wrap:wrap;">
-        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:185px;">
-          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Common Myna</div>
-          <div class="row" style="gap:12px;">
-            <label class="muted">Seen: <input type="number" id="ibsMynaSeen" min="0" value="0" style="width:58px;" required></label>
-            <label class="muted">Heard: <input type="number" id="ibsMynaHeard" min="0" value="0" style="width:58px;" required></label>
-          </div>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:185px;">
-          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Red-vented Bulbul</div>
-          <div class="row" style="gap:12px;">
-            <label class="muted">Seen: <input type="number" id="ibsBulbulSeen" min="0" value="0" style="width:58px;" required></label>
-            <label class="muted">Heard: <input type="number" id="ibsBulbulHeard" min="0" value="0" style="width:58px;" required></label>
-          </div>
-        </div>
-      </div>
-      <div class="row" style="margin-bottom:10px;gap:12px;flex-wrap:wrap;">
-        <label class="muted">Vegetation at station:
-          <select id="ibsVegType" required>
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Survey Conditions</div>
+      <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:12px;">
+        <label class="muted">Sky:
+          <select id="ibsSky" required>
             <option value="">Choose…</option>
-            <option value="native_dominant">Native dominant (≥70% native canopy)</option>
-            <option value="mixed">Mixed (30–70% native)</option>
-            <option value="introduced_dominant">Introduced dominant (≥70% non-native)</option>
-          </select>
-        </label>
-        <label class="muted">Pomarea detected in territory?
-          <select id="ibsPomareaDetected" required>
-            <option value="">Choose…</option>
-            <option value="yes_singing">Yes — singing/calling</option>
-            <option value="yes_seen">Yes — seen</option>
-            <option value="no">No</option>
-            <option value="unknown">Territory not identified</option>
-          </select>
-        </label>
-      </div>
-      <div class="row" style="margin-bottom:10px;gap:12px;flex-wrap:wrap;">
-        <label class="muted">Interaction observed:
-          <select id="ibsInteraction" required>
-            <option value="">Choose…</option>
-            <option value="none">None</option>
-            <option value="pomarea_chases_myna">Pomarea chases Myna</option>
-            <option value="pomarea_chases_bulbul">Pomarea chases Bulbul</option>
-            <option value="myna_enters_territory">Myna enters Pomarea territory</option>
-            <option value="bulbul_enters_territory">Bulbul enters Pomarea territory</option>
-            <option value="myna_approaches_nest">Myna approaches nest/nest tree</option>
-            <option value="aggressive_interspecific">Aggressive encounter (any direction)</option>
-            <option value="other">Other — describe in notes</option>
-          </select>
-        </label>
-        <label class="muted">Weather:
-          <select id="ibsWeather" required>
-            <option value="">Choose…</option>
-            <option value="sunny">Sunny / clear</option>
+            <option value="clear">Clear / sunny</option>
             <option value="partly_cloudy">Partly cloudy</option>
             <option value="overcast">Overcast</option>
-            <option value="light_rain">Light rain</option>
-            <option value="heavy_rain">Heavy rain</option>
+          </select>
+        </label>
+        <label class="muted">Wind (Beaufort):
+          <select id="ibsWindBeaufort" required>
+            <option value="">–</option>
+            <option value="0">0 — Calm</option>
+            <option value="1">1 — Light air</option>
+            <option value="2">2 — Light breeze</option>
+            <option value="3">3 — Gentle breeze (limit)</option>
+            <option value="4">4 — Moderate — exclude</option>
+            <option value="5">5 — Fresh — exclude</option>
+          </select>
+        </label>
+        <label class="muted">Rain:
+          <select id="ibsRain" required>
+            <option value="none">None</option>
+            <option value="light">Light (mist/drizzle)</option>
+            <option value="heavy">Heavy — exclude</option>
           </select>
         </label>
       </div>
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Station Covariates <span style="font-weight:400;font-size:11px;text-transform:none;">(record once per station per session — visual estimates OK)</span></div>
+      <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:12px;">
+        <label class="muted">Canopy cover:
+          <select id="ibsCanopyCover" required>
+            <option value="">–</option>
+            <option value="lt25">&lt;25%</option>
+            <option value="25-50">25–50%</option>
+            <option value="50-75">50–75%</option>
+            <option value="gt75">&gt;75%</option>
+          </select>
+        </label>
+        <label class="muted">Canopy height:
+          <select id="ibsCanopyHeight" required>
+            <option value="">–</option>
+            <option value="lt5m">&lt;5 m</option>
+            <option value="5-10m">5–10 m</option>
+            <option value="10-15m">10–15 m</option>
+            <option value="gt15m">&gt;15 m</option>
+          </select>
+        </label>
+        <label class="muted">Spathodea flowering:
+          <select id="ibsSpathodeaFlowering" required>
+            <option value="absent">Absent / no Spathodea visible</option>
+            <option value="low">Low (few flowers)</option>
+            <option value="medium">Medium</option>
+            <option value="high">High (canopy in full bloom)</option>
+          </select>
+        </label>
+      </div>
+      <div class="row" style="margin-bottom:14px;">
+        <label class="muted" style="flex:1;">Dominant species in visible canopy (free text): <input type="text" id="ibsCanopyDominant" placeholder="e.g. Neonauclea forsteri, Spathodea campanulata…" style="width:100%;max-width:380px;"></label>
+      </div>
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Bird Contacts — 10-min count, 50 m radius</div>
+      <div class="row" style="margin-bottom:10px;gap:14px;flex-wrap:wrap;">
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Common Myna <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Acridotheres tristis</span></div>
+          <div class="row" style="gap:10px;">
+            <label class="muted">Seen: <input type="number" id="ibsMynaSeen" min="0" value="0" style="width:54px;" required></label>
+            <label class="muted">Heard: <input type="number" id="ibsMynaHeard" min="0" value="0" style="width:54px;" required></label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Red-vented Bulbul <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Pycnonotus cafer</span></div>
+          <div class="row" style="gap:10px;">
+            <label class="muted">Seen: <input type="number" id="ibsBulbulSeen" min="0" value="0" style="width:54px;" required></label>
+            <label class="muted">Heard: <input type="number" id="ibsBulbulHeard" min="0" value="0" style="width:54px;" required></label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Wattled Honeyeater <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Foulehaio carunculatus</span></div>
+          <div class="row" style="gap:10px;">
+            <label class="muted">Seen: <input type="number" id="ibsWattledSeen" min="0" value="0" style="width:54px;"></label>
+            <label class="muted">Heard: <input type="number" id="ibsWattledHeard" min="0" value="0" style="width:54px;"></label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
+          <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Pomarea <span style="font-weight:400;font-size:11px;color:var(--muted);">(native, if territory present)</span></div>
+          <label class="muted" style="display:block;">
+            <select id="ibsPomareaDetected">
+              <option value="no">Not detected</option>
+              <option value="yes_singing">Detected — singing/calling</option>
+              <option value="yes_seen">Detected — seen</option>
+              <option value="unknown">Territory status unknown</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <details class="collapsible" style="margin-bottom:12px;">
+        <summary>Contact log — individual detections <span style="font-weight:400;font-size:11px;color:var(--muted);">(optional but recommended for behaviour analysis)</span> <span class="caret">▼</span></summary>
+        <div class="coll-body">
+          <div class="muted" style="margin-bottom:8px;font-size:12px;">For each bird detected within 50 m, add a row. Behaviour <b>F = foraging on Spathodea</b> (flowers/fruit) is the key variable linking canopy type to bird use. S=seen / H=heard / SH=seen+heard.</div>
+          <div id="ibsContactLogRows" style="margin-bottom:8px;"></div>
+          <button type="button" class="secondary" style="padding:5px 12px;font-size:12.5px;" onclick="addIbsContact()">+ Add contact</button>
+        </div>
+      </details>
+
       <div style="margin-bottom:10px;">
-        <label class="muted" style="display:block;margin-bottom:4px;">Notes (optional):</label>
-        <textarea id="ibsNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="Describe interactions, unusual behaviour, other species seen, or context."></textarea>
+        <label class="muted" style="display:block;margin-bottom:4px;">Notes (interactions, unusual behaviour, other species, context):</label>
+        <textarea id="ibsNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="e.g. Myna pair foraging on Spathodea flowers at canopy level; Pomarea chased Myna at 08:14."></textarea>
       </div>
       <button type="submit">Submit bird survey</button>
       <span id="ibsSubmitStatus" class="muted"></span>
@@ -2849,14 +2902,45 @@ async function submitPffForm(evt){
 }
 
 /* ---------------- Invasive Bird Survey (point count) ----------------
-   Supabase table required (create once in dashboard):
-   bird_surveys(id bigint PK autoincrement, date text, time_start text,
-   observer text, valley text, zone text, station_id text,
-   lat float8, lon float8, duration_min int4 default 10,
-   myna_seen int4, myna_heard int4, bulbul_seen int4, bulbul_heard int4,
-   vegetation_type text, pomarea_detected text, interaction text,
-   weather text, notes text, created_at timestamptz default now())
-   RLS: enable row level security; add policy allowing public SELECT + INSERT. */
+   Supabase table (run once in SQL editor to create + add new columns):
+
+   CREATE TABLE IF NOT EXISTS bird_surveys (
+     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+     date text, time_start text, observer text,
+     valley text, zone text, station_id text,
+     session_number int4,
+     lat float8, lon float8, duration_min int4 default 10,
+     sky text, wind_beaufort int4, rain text,
+     canopy_cover text, canopy_height text, canopy_dominant text,
+     spathodea_flowering text,
+     myna_seen int4, myna_heard int4,
+     bulbul_seen int4, bulbul_heard int4,
+     wattled_seen int4, wattled_heard int4,
+     pomarea_detected text,
+     zone_typology text,
+     contact_log text,
+     notes text,
+     created_at timestamptz default now()
+   );
+   ALTER TABLE bird_surveys ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY "public read" ON bird_surveys FOR SELECT USING (true);
+   CREATE POLICY "public insert" ON bird_surveys FOR INSERT WITH CHECK (true);
+
+   If the table already exists, run only the ALTER TABLE lines below:
+   ALTER TABLE bird_surveys
+     ADD COLUMN IF NOT EXISTS session_number int4,
+     ADD COLUMN IF NOT EXISTS sky text,
+     ADD COLUMN IF NOT EXISTS wind_beaufort int4,
+     ADD COLUMN IF NOT EXISTS rain text,
+     ADD COLUMN IF NOT EXISTS canopy_cover text,
+     ADD COLUMN IF NOT EXISTS canopy_height text,
+     ADD COLUMN IF NOT EXISTS canopy_dominant text,
+     ADD COLUMN IF NOT EXISTS spathodea_flowering text,
+     ADD COLUMN IF NOT EXISTS wattled_seen int4,
+     ADD COLUMN IF NOT EXISTS wattled_heard int4,
+     ADD COLUMN IF NOT EXISTS zone_typology text,
+     ADD COLUMN IF NOT EXISTS contact_log text;
+   (Drop old columns no longer used: interaction, vegetation_type, weather — optional.) */
 
 let ibsPickerEntry = null;
 let ibsSurveyPoint = null;
@@ -2960,7 +3044,75 @@ function onIbsValleyChange(){
     zoneSel.innerHTML = '<option value="">Choose…</option>'
       + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
   }
+  onIbsZoneChange();
   if (ibsPickerEntry) renderIbsZones(true);
+}
+
+function onIbsZoneChange(){
+  const valley = document.getElementById('ibsValley').value;
+  const zone   = document.getElementById('ibsZone').value;
+  const badge  = document.getElementById('ibsZoneTypologyBadge');
+  if (!badge) return;
+  if (!valley || !zone){ badge.innerHTML = ''; return; }
+  const lu   = pastUnitLookupMap();
+  const hu   = lu.get(valley + '||' + zone);
+  const topo = zoneTypology(hu);
+  const vegTxt  = topo.vd ? escapeHtml(topo.vd.raw) + ' (' + escapeHtml(HIST_PERIOD_LABEL[topo.vd.period]||topo.vd.period) + ')' : 'no vegetation data';
+  const plantTxt = topo.hv ? escapeHtml(topo.hv.raw) + ' / ' + topo.hv.pct + '%' : 'no plantation data';
+  badge.innerHTML = `<span style="background:${topo.color};color:#fff;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:700;margin-right:6px;">${escapeHtml(topo.type)}</span><span style="font-size:12.5px;">${escapeHtml(topo.label)}</span><span class="muted" style="font-size:11.5px;margin-left:8px;">| Veg: ${vegTxt} | Plant: ${plantTxt}</span>`;
+}
+
+/* contact log */
+let ibsContactLog = [];
+
+function renderIbsContactRows(){
+  const wrap = document.getElementById('ibsContactLogRows');
+  if (!wrap) return;
+  if (!ibsContactLog.length){
+    wrap.innerHTML = '<div class="muted" style="font-size:12px;font-style:italic;">No contacts added yet.</div>';
+    return;
+  }
+  wrap.innerHTML = ibsContactLog.map((c, i) => `
+    <div class="row" style="gap:6px;margin-bottom:5px;flex-wrap:wrap;align-items:center;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:#fafcfa;">
+      <select onchange="ibsContactLog[${i}].species=this.value" style="font-size:12px;">
+        <option value="myna" ${c.species==='myna'?'selected':''}>Myna</option>
+        <option value="bulbul" ${c.species==='bulbul'?'selected':''}>Bulbul</option>
+        <option value="wattled" ${c.species==='wattled'?'selected':''}>Wattled HE</option>
+        <option value="other" ${c.species==='other'?'selected':''}>Other</option>
+      </select>
+      <select onchange="ibsContactLog[${i}].det=this.value" style="font-size:12px;" title="Detection type: S=seen / H=heard / SH=seen+heard">
+        <option value="SH" ${c.det==='SH'?'selected':''}>S+H</option>
+        <option value="S"  ${c.det==='S'?'selected':''}>S only</option>
+        <option value="H"  ${c.det==='H'?'selected':''}>H only</option>
+      </select>
+      <select onchange="ibsContactLog[${i}].dist=this.value" style="font-size:12px;" title="Distance band from station">
+        <option value="0-25m"  ${c.dist==='0-25m'?'selected':''}>0–25 m</option>
+        <option value="25-50m" ${c.dist==='25-50m'?'selected':''}>25–50 m</option>
+      </select>
+      <select onchange="ibsContactLog[${i}].beh=this.value" style="font-size:12px;" title="Behaviour: F=foraging on Spathodea / P=perched / T=in transit / V=vocalising only">
+        <option value="F" ${c.beh==='F'?'selected':''} style="font-weight:600;">F — foraging Spathodea</option>
+        <option value="P" ${c.beh==='P'?'selected':''}>P — perched</option>
+        <option value="T" ${c.beh==='T'?'selected':''}>T — in transit</option>
+        <option value="V" ${c.beh==='V'?'selected':''}>V — vocalising</option>
+        <option value="O" ${c.beh==='O'?'selected':''}>O — other</option>
+      </select>
+      <select onchange="ibsContactLog[${i}].height=this.value" style="font-size:12px;" title="Height stratum">
+        <option value="C" ${c.height==='C'?'selected':''}>C — canopy &gt;5 m</option>
+        <option value="M" ${c.height==='M'?'selected':''}>M — mid-storey 2–5 m</option>
+        <option value="G" ${c.height==='G'?'selected':''}>G — ground &lt;2 m</option>
+      </select>
+      <button type="button" onclick="removeIbsContact(${i})" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;">×</button>
+    </div>`).join('');
+}
+
+function addIbsContact(){
+  ibsContactLog.push({ species:'myna', det:'SH', dist:'0-25m', beh:'P', height:'C' });
+  renderIbsContactRows();
+}
+
+function removeIbsContact(i){
+  ibsContactLog.splice(i, 1);
+  renderIbsContactRows();
 }
 
 function toggleIbsStationsOverlay(checked){
@@ -3018,35 +3170,60 @@ function toggleIbsUserLoc(checked){
 async function submitBirdSurveyForm(evt){
   evt.preventDefault();
   const statusEl = document.getElementById('ibsSubmitStatus');
+  const wind = parseInt(document.getElementById('ibsWindBeaufort').value, 10);
+  const rain = document.getElementById('ibsRain').value;
+  if (wind >= 4){
+    if (!confirm(`Wind Beaufort ${wind} — protocol excludes counts at ≥4. Submit anyway?`)) return;
+  }
+  if (rain === 'heavy'){
+    if (!confirm('Heavy rain — protocol excludes counts in heavy rain. Submit anyway?')) return;
+  }
   statusEl.innerHTML = 'Submitting…';
   try {
+    const valley = document.getElementById('ibsValley').value;
+    const zone   = document.getElementById('ibsZone').value;
+    const lu     = pastUnitLookupMap();
+    const hu     = lu.get(valley + '||' + zone);
+    const topo   = zoneTypology(hu);
     const newRow = {
-      date:             document.getElementById('ibsDate').value,
-      time_start:       document.getElementById('ibsTimeStart').value,
-      observer:         document.getElementById('ibsObserver').value.trim(),
-      valley:           document.getElementById('ibsValley').value,
-      zone:             document.getElementById('ibsZone').value,
-      station_id:       document.getElementById('ibsStationId').value.trim(),
-      lat:              ibsSurveyPoint ? ibsSurveyPoint.lat : null,
-      lon:              ibsSurveyPoint ? ibsSurveyPoint.lon : null,
-      duration_min:     10,
-      myna_seen:        parseInt(document.getElementById('ibsMynaSeen').value, 10) || 0,
-      myna_heard:       parseInt(document.getElementById('ibsMynaHeard').value, 10) || 0,
-      bulbul_seen:      parseInt(document.getElementById('ibsBulbulSeen').value, 10) || 0,
-      bulbul_heard:     parseInt(document.getElementById('ibsBulbulHeard').value, 10) || 0,
-      vegetation_type:  document.getElementById('ibsVegType').value,
-      pomarea_detected: document.getElementById('ibsPomareaDetected').value,
-      interaction:      document.getElementById('ibsInteraction').value,
-      weather:          document.getElementById('ibsWeather').value,
-      notes:            document.getElementById('ibsNotes').value.trim() || null,
+      date:                document.getElementById('ibsDate').value,
+      time_start:          document.getElementById('ibsTimeStart').value,
+      observer:            document.getElementById('ibsObserver').value.trim(),
+      valley,
+      zone,
+      station_id:          document.getElementById('ibsStationId').value.trim(),
+      session_number:      parseInt(document.getElementById('ibsSessionNumber').value, 10) || 1,
+      lat:                 ibsSurveyPoint ? ibsSurveyPoint.lat : null,
+      lon:                 ibsSurveyPoint ? ibsSurveyPoint.lon : null,
+      duration_min:        10,
+      sky:                 document.getElementById('ibsSky').value,
+      wind_beaufort:       isNaN(wind) ? null : wind,
+      rain,
+      canopy_cover:        document.getElementById('ibsCanopyCover').value,
+      canopy_height:       document.getElementById('ibsCanopyHeight').value,
+      canopy_dominant:     document.getElementById('ibsCanopyDominant').value.trim() || null,
+      spathodea_flowering: document.getElementById('ibsSpathodeaFlowering').value,
+      myna_seen:           parseInt(document.getElementById('ibsMynaSeen').value, 10) || 0,
+      myna_heard:          parseInt(document.getElementById('ibsMynaHeard').value, 10) || 0,
+      bulbul_seen:         parseInt(document.getElementById('ibsBulbulSeen').value, 10) || 0,
+      bulbul_heard:        parseInt(document.getElementById('ibsBulbulHeard').value, 10) || 0,
+      wattled_seen:        parseInt(document.getElementById('ibsWattledSeen').value, 10) || 0,
+      wattled_heard:       parseInt(document.getElementById('ibsWattledHeard').value, 10) || 0,
+      pomarea_detected:    document.getElementById('ibsPomareaDetected').value,
+      zone_typology:       topo.type,
+      contact_log:         ibsContactLog.length ? JSON.stringify(ibsContactLog) : null,
+      notes:               document.getElementById('ibsNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_surveys', [newRow]);
     statusEl.innerHTML = result.queued
-      ? `<span class="ok">✓ Saved offline — will upload automatically when back online.</span>`
-      : `<span class="ok">✓ Bird survey submitted.</span>`;
+      ? `<span class="ok">✓ Saved offline — will upload when back online.</span>`
+      : `<span class="ok">✓ Bird survey submitted (zone typology: ${escapeHtml(topo.type)}).</span>`;
     document.getElementById('ibsForm').reset();
+    ibsContactLog = [];
+    renderIbsContactRows();
     clearIbsPoint();
     document.getElementById('ibsDate').value = new Date().toISOString().slice(0,10);
+    onIbsZoneChange();
     await fetchBirdSurveys();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
@@ -3753,9 +3930,11 @@ function downloadOriginalFormat(which){
 function downloadBirdSurveys(){
   const rows = birdSurveys;
   if (!rows.length){ alert('No bird survey records loaded yet.'); return; }
-  const fields = ['id','date','time_start','observer','valley','zone','station_id','lat','lon',
-    'duration_min','myna_seen','myna_heard','bulbul_seen','bulbul_heard',
-    'vegetation_type','pomarea_detected','interaction','weather','notes','created_at'];
+  const fields = ['id','date','time_start','observer','valley','zone','station_id','session_number',
+    'lat','lon','duration_min','sky','wind_beaufort','rain',
+    'canopy_cover','canopy_height','canopy_dominant','spathodea_flowering',
+    'myna_seen','myna_heard','bulbul_seen','bulbul_heard','wattled_seen','wattled_heard',
+    'pomarea_detected','zone_typology','contact_log','notes','created_at'];
   downloadCSV('bird_surveys.csv', rows, fields);
 }
 function downloadPffObservations(){
