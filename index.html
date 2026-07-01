@@ -6142,52 +6142,78 @@ function haversineKm(lat1, lon1, lat2, lon2){
   return 2*R*Math.asin(Math.sqrt(a));
 }
 
-// Home-page "where to work next" ranking for cutting/cleaning actions, reusing the exact same
-// combinedCleaningEstimate() numbers shown in the zone-priority chart and the map, so this list
-// agrees with both. Primary sort: combined estimate, dirtiest first, bucketed to the nearest 5%
-// so near-equal zones tie rather than splitting on noise. Tiebreak: proximity to the nearest
-// "already clean" zone (estimate above the median of all zones that have data) — the idea being
-// that finishing off a zone next to an already-clean one consolidates a clean area, vs. starting
-// fresh somewhere isolated. Zones with no estimate at all are excluded (no data = no claim of
-// urgency, same convention as the existing zone-priority "no data" bucket).
-// includeStale=false (the default view) drops stale zones (freshest contributing source older than
-// STALE_DAYS) from the candidate pool *before* ranking — not just hiding them after the fact — so
-// they neither take a top-20 slot nor count as a "clean" proximity anchor for someone else's tiebreak;
-// the list backfills with the next most-reliable zones instead. includeStale=true puts them back in,
-// mixed into the same ranking, via the checkbox in renderPriorityZonesDropdown().
+// DOM_WEIGHT per typology: how urgently does an un-planted zone need cleaning to enable restoration?
+const PRIORITY_DOM_WEIGHT = { 'C':1.0, 'B':0.8, 'A*':0.4, 'A':0.2, 'X':0.0 };
+// Urgency thresholds for tier labels
+const PRIORITY_TIER = score => score > 0.25 ? 'urgent' : score > 0.08 ? 'active' : 'monitor';
+
+// Composite LIFE STOP EXTINCTION priority score for cutting/cleaning work:
+//   urgency = alpha * habitat_risk + (1-alpha) * restore_prep
+//   habitat_risk  = proj_planting_pct * (1 - cleaning_pct)
+//     → high when existing plantings are at risk of being smothered (protect investment)
+//   restore_prep  = (1 - proj_planting_pct) * (1 - cleaning_pct) * dom_weight
+//     → high when zone is invasive-dominant, unplanted, and dirty (enable new planting)
+// cleaning_pct from combinedCleaningEstimate (historical SB + NRDS recency-weighted)
+// proj_planting_pct from Butaud historical % + NRDS individuals at nrdsDensityPerHa trees/ha
 function topPriorityZones(n, includeStale){
   let data = zonePriorityData('all', true).filter(d => d.res.estimate != null);
   if (!includeStale) data = data.filter(d => !(d.lastDays != null && d.lastDays > STALE_DAYS));
+
+  // apply valley filter
+  if (priorityValleyFilter !== 'all') data = data.filter(d => d.valley === priorityValleyFilter);
   if (!data.length) return [];
 
+  // build lookup tables for planting projection
+  const pastLookup = pastUnitLookupMap();
+  const unitGeomMap = new Map();
   const centroidByKey = new Map();
   for (const u of tables.managementUnit||[]){
-    const c = geometryCentroid(u['Geometry']);
-    if (c) centroidByKey.set(u['Vallee']+'||'+u['Nom'], c);
+    unitGeomMap.set(u['Vallee']+'||'+u['Nom'], u['Geometry']);
+    const ctr = geometryCentroid(u['Geometry']);
+    if (ctr) centroidByKey.set(u['Vallee']+'||'+u['Nom'], ctr);
   }
-  for (const d of data) d.centroid = centroidByKey.get(d.valley+'||'+d.unit) || null;
-
-  const sorted = [...data].sort((a,b) => a.res.estimate - b.res.estimate);
-  const mid = sorted.length / 2;
-  const median = sorted.length % 2 === 1 ? sorted[Math.floor(mid)].res.estimate
-    : (sorted[mid-1].res.estimate + sorted[mid].res.estimate) / 2;
-  const cleanZones = data.filter(d => d.res.estimate > median && d.centroid);
 
   for (const d of data){
-    let best = Infinity;
-    if (d.centroid && cleanZones.length){
-      for (const c of cleanZones){
-        if (c === d) continue;
-        const dist = haversineKm(d.centroid.lat, d.centroid.lon, c.centroid.lat, c.centroid.lon);
-        if (dist < best) best = dist;
-      }
+    d.centroid = centroidByKey.get(d.valley+'||'+d.unit) || null;
+
+    // projected planting %
+    const hu = pastLookup.get(d.valley+'||'+d.unit);
+    const topo = zoneTypology(hu);
+    const hv = topo.hv;
+    const histPct = hv ? (hv.pct || 0) : 0;
+    const recent = nrdsPlantingActivitySince(d.unit, null);
+    const geom = unitGeomMap.get(d.valley+'||'+d.unit);
+    const areaHa = geom ? zoneAreaHectares(geom) : null;
+    let nrdsPctAdd = 0;
+    if (recent && areaHa && nrdsDensityPerHa > 0){
+      const areaEquivHa = recent.totalIndividuals / nrdsDensityPerHa;
+      nrdsPctAdd = Math.min(100 - histPct, (areaEquivHa / areaHa) * 100);
     }
-    d.nearestCleanKm = best;
+    d.projPct = Math.min(100, histPct + nrdsPctAdd) / 100; // 0-1
+    d.histPct = histPct;
+    d.nrdsPctAdd = nrdsPctAdd;
+    d.nrdsIndividuals = recent ? recent.totalIndividuals : 0;
+    d.topoType = topo.type;
+    d.topoColor = topo.color;
+    d.domWeight = PRIORITY_DOM_WEIGHT[topo.type] ?? 0;
+
+    // cleaning % from combinedCleaningEstimate (already in d.res.estimate, 0-100)
+    const cleanFrac = d.res.estimate / 100; // 0-1
+
+    const alpha = priorityAlpha;
+    const beta  = 1 - alpha;
+    d.habitatRisk  = d.projPct * (1 - cleanFrac);
+    d.restorePrepRaw = (1 - d.projPct) * (1 - cleanFrac) * d.domWeight;
+    d.urgency = alpha * d.habitatRisk + beta * d.restorePrepRaw;
+    d.tier = PRIORITY_TIER(d.urgency);
+    d.dominantComponent = d.habitatRisk * alpha >= d.restorePrepRaw * beta ? 'risk' : 'prep';
   }
 
+  // Sort: tier order (urgent > active > monitor), then urgency descending within tier
+  const tierRank = { urgent: 0, active: 1, monitor: 2 };
   data.sort((a,b) => {
-    const bucketDiff = Math.round(a.res.estimate/5) - Math.round(b.res.estimate/5);
-    return bucketDiff !== 0 ? bucketDiff : a.nearestCleanKm - b.nearestCleanKm;
+    const td = tierRank[a.tier] - tierRank[b.tier];
+    return td !== 0 ? td : b.urgency - a.urgency;
   });
 
   return data.slice(0, n);
@@ -6202,34 +6228,66 @@ function togglePriorityStale(checked){
   includeStaleInPriority = checked;
   onDataUpdated();
 }
+function setPriorityValley(v){ priorityValleyFilter = v; onDataUpdated(); }
+function onPriorityAlphaChange(v){ priorityAlpha = Math.max(0, Math.min(1, +v)); onDataUpdated(); }
 function renderPriorityZonesDropdown(top){
-  const staleToggle = `<label class="muted" style="display:block;margin-bottom:8px;">
-    <input type="checkbox" id="priorityStaleToggle" ${includeStaleInPriority?'checked':''} onchange="togglePriorityStale(this.checked)">
-    Include ⚠ stale zones (data older than ${STALE_DAYS} days) in the ranking
-  </label>`;
+  const valleys = getAllValleys();
+  const valleyOpts = ['all', ...valleys].map(v =>
+    `<option value="${escapeHtml(v)}" ${priorityValleyFilter===v?'selected':''}>${v==='all'?'All valleys':escapeHtml(v)}</option>`
+  ).join('');
+  const alphaVal = (priorityAlpha * 100).toFixed(0);
+  const controls = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;align-items:center;">
+    <label class="muted" style="display:flex;align-items:center;gap:6px;">
+      Valley:
+      <select onchange="setPriorityValley(this.value)" style="padding:2px 6px;font-size:12px;">${valleyOpts}</select>
+    </label>
+    <label class="muted" style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+      <span style="white-space:nowrap;">🌱 Prep</span>
+      <input type="range" min="0" max="100" value="${alphaVal}"
+        oninput="onPriorityAlphaChange(this.value/100);this.nextElementSibling.textContent=this.value+'%'"
+        style="flex:1;">
+      <span style="white-space:nowrap;min-width:32px;">${alphaVal}%</span>
+      <span style="white-space:nowrap;">🛡 Protect</span>
+    </label>
+    <label class="muted" style="display:flex;align-items:center;gap:5px;">
+      <input type="checkbox" id="priorityStaleToggle" ${includeStaleInPriority?'checked':''} onchange="togglePriorityStale(this.checked)">
+      ⚠ stale
+    </label>
+  </div>`;
   const openAttr = priorityDetailsOpen ? 'open' : '';
   const toggleAttr = `ontoggle="priorityDetailsOpen=this.open;document.getElementById('priorityCalcBox').style.display=this.open?'':'none'"`;
   if (!top.length){
     return `<details style="margin-top:10px;" ${openAttr} ${toggleAttr}>
       <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning</summary>
-      <div style="margin-top:8px;">${staleToggle}<div class="muted">No zone has a combined estimate yet.</div></div>
+      <div style="margin-top:8px;">${controls}<div class="muted">No zone has a combined estimate for the selected valley.</div></div>
     </details>`;
   }
+  const TIER_META = {
+    urgent:  { icon: '🔴', label: 'URGENT',  bg: '#fff5f5', border: '#e74c3c' },
+    active:  { icon: '🟡', label: 'ACTIVE',  bg: '#fffbf0', border: '#e0a020' },
+    monitor: { icon: '🟢', label: 'MONITOR', bg: '#f7faf6', border: '#7cb87c' }
+  };
   const rows = top.map((d,i) => {
-    const color = pctColor(d.res.estimate);
+    const tm = TIER_META[d.tier];
     const stale = d.lastDays != null && d.lastDays > STALE_DAYS;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid ${color};border-radius:0 6px 6px 0;">
-      <span class="muted" style="width:18px;">#${i+1}</span>
-      <span style="flex:1;font-size:13px;">${escapeHtml(d.unit)} (${escapeHtml(d.valley)})</span>
-      <span style="font-weight:600;color:${color};">${d.res.estimate.toFixed(0)}%</span>
-      ${stale ? `<span class="muted" title="Freshest contributing data is over ${STALE_DAYS} days old">⚠ stale</span>` : ''}
+    const compIcon = d.dominantComponent === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
+    const projLabel = `${(d.projPct*100).toFixed(0)}% planted`;
+    const cleanLabel = `${d.res.estimate.toFixed(0)}% cleaned`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;background:${tm.bg};border-left:5px solid ${tm.border};border-radius:0 6px 6px 0;">
+      <span style="width:20px;text-align:center;">${tm.icon}</span>
+      <span class="muted" style="width:18px;font-size:11px;">#${i+1}</span>
+      <span style="flex:1;font-size:13px;font-weight:600;">${escapeHtml(d.unit)}</span>
+      <span class="muted" style="font-size:11.5px;">${escapeHtml(d.valley)}</span>
+      <span class="muted" style="font-size:11px;white-space:nowrap;">${projLabel} · ${cleanLabel}</span>
+      <span class="muted" style="font-size:11px;border:1px solid #ddd;border-radius:3px;padding:1px 5px;background:#fff;white-space:nowrap;">${compIcon}</span>
+      ${stale ? `<span class="muted" title="Freshest data over ${STALE_DAYS} days old">⚠</span>` : ''}
     </div>`;
   }).join('');
   return `<details style="margin-top:10px;" ${openAttr} ${toggleAttr}>
     <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning (click to expand)</summary>
     <div style="margin-top:8px;">
-      ${staleToggle}
-      <div class="muted" style="margin-bottom:6px;">Top 20, worst combined estimate (historical + NRDS, recency-weighted) first — fire red = intervene now, fading toward green = less urgent. Ties broken by proximity to an already-clean zone.</div>
+      ${controls}
+      <div class="muted" style="margin-bottom:6px;">Top 20 by composite urgency (LIFE STOP EXTINCTION) — 🔴 intervene now · 🟡 plan soon · 🟢 monitor. Slider: balance between protecting existing plantings vs. preparing new zones.</div>
       ${rows}
     </div>
   </details>`;
@@ -6264,34 +6322,39 @@ function renderLastPlantingDropdown(mainRows){
   </details>`;
 }
 
-// Same "explain the calculation" side-box pattern as the map's renderCombinedCalcBox()/
-// renderPlantingActivityBox() — shown/hidden together with the <details> above via its ontoggle.
 function renderPriorityCalcBox(top){
-  let html = `<b>How this ranking is calculated:</b>
-    Same "Combined current estimate" (historical + NRDS, recency-weighted) shown on the map and in the
-    "Cleaning % trend over time" chart — see those for the full station-coverage formula. Here, zones
-    are bucketed to the nearest 5% (so near-equal estimates tie instead of splitting on noise) and
-    sorted dirtiest-first by that bucket.<br><br>
-    <b>Tiebreak — proximity to a clean zone:</b> within a tied bucket, "clean" zones are defined as
-    those above the median estimate of all zones that currently have data. For every zone, the
-    great-circle distance (haversine) from its management-unit polygon centroid to the nearest clean
-    zone's centroid is computed; the smaller that distance, the higher the zone ranks within its bucket.
-    The idea: finishing off a zone right next to an already-clean one consolidates a contiguous clean
-    area, rather than spreading effort to an isolated dirty zone far from any progress already made.<br><br>
-    Zones with no combined estimate at all (no historical or NRDS data) are excluded — no data means no
-    basis to claim urgency. ⚠ stale = the freshest contributing source is more than ${STALE_DAYS} days old;
-    by default stale zones are dropped from the ranking entirely (not just hidden) — they neither take a
-    top-20 slot nor count as a "clean" proximity anchor for another zone's tiebreak — check the box above
-    the list to mix them back in.`;
+  const alpha = priorityAlpha, beta = 1 - alpha;
+  let html = `<b>LIFE STOP EXTINCTION — composite urgency score</b><br><br>
+    The ranking merges two habitat-restoration signals into a single urgency score for cutting/cleaning work:<br><br>
+    <b>urgency = ${(alpha*100).toFixed(0)}% × habitat_risk + ${(beta*100).toFixed(0)}% × restore_prep</b><br><br>
+    <b>habitat_risk</b> = proj_planting% × (1 − cleaning%)<br>
+    <span class="muted">High when existing native plantings are at risk of being smothered by invasive regrowth. Protects the investment already made (critical for Pomarea nigra habitat creation).</span><br><br>
+    <b>restore_prep</b> = (1 − proj_planting%) × (1 − cleaning%) × typology_weight<br>
+    <span class="muted">High when a zone is unplanted, still dirty, and invasive-dominant — cleaning would directly unlock new planting capacity.</span><br><br>
+    <b>Typology weights:</b> C=1.0 · B=0.8 · A*=0.4 · A=0.2 · X=0 (invasive zones need clearing most urgently to enable restoration).<br><br>
+    <b>Inputs:</b><br>
+    · <i>proj_planting%</i> — Butaud historical % + NRDS individuals @ ${nrdsDensityPerHa} trees/ha (same as "Compare with NRDS" map layer)<br>
+    · <i>cleaning%</i> — Combined estimate (historical SB + NRDS, recency-weighted), same as zone-priority chart<br><br>
+    <b>Tiers:</b> 🔴 URGENT (score > 0.25) · 🟡 ACTIVE (0.08–0.25) · 🟢 MONITOR (≤ 0.08)<br>
+    Sorted: tier first, urgency descending within tier.<br><br>
+    ⚠ stale = freshest contributing data over ${STALE_DAYS} days old — excluded by default.`;
   if (top.length){
-    html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
-      <th>#</th><th>Unit</th><th>Valley</th><th>Estimate</th><th>Nearest clean zone</th><th></th>
+    html += `<div class="table-scroll" style="margin-top:10px;"><table class="preview"><thead><tr>
+      <th>#</th><th>Tier</th><th>Unit</th><th>Valley</th><th>Score</th><th>Risk</th><th>Prep</th><th>Proj%</th><th>Clean%</th><th>Driver</th>
       </tr></thead><tbody>`;
     top.forEach((d,i) => {
-      const km = d.nearestCleanKm === Infinity ? '—' : `${d.nearestCleanKm.toFixed(2)} km`;
-      const stale = (d.lastDays != null && d.lastDays > STALE_DAYS) ? '⚠ stale' : '';
-      html += `<tr><td>${i+1}</td><td>${escapeHtml(d.unit)}</td><td>${escapeHtml(d.valley)}</td>` +
-        `<td><b>${d.res.estimate.toFixed(0)}%</b></td><td>${km}</td><td>${stale}</td></tr>`;
+      const tierIcon = {urgent:'🔴',active:'🟡',monitor:'🟢'}[d.tier];
+      const driver = d.dominantComponent === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
+      html += `<tr>
+        <td>${i+1}</td><td>${tierIcon}</td>
+        <td>${escapeHtml(d.unit)}</td><td>${escapeHtml(d.valley)}</td>
+        <td><b>${d.urgency.toFixed(3)}</b></td>
+        <td>${(d.habitatRisk*alpha).toFixed(3)}</td>
+        <td>${(d.restorePrepRaw*beta).toFixed(3)}</td>
+        <td>${(d.projPct*100).toFixed(0)}%</td>
+        <td>${d.res.estimate.toFixed(0)}%</td>
+        <td class="muted" style="font-size:11px;">${driver}</td>
+      </tr>`;
     });
     html += '</tbody></table></div>';
   }
