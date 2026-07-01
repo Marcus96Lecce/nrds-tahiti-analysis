@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2e7d32">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NRDS">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>NRDS – Habitat Restoration Analysis (SOP Manu, Tahiti)</title>
 <style>
   :root{
@@ -1140,6 +1147,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
 
   <div id="offlineBanner" class="hint" style="background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:16px;display:none;"></div>
+  <div id="iosBanner" style="display:none;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:13px;">
+    📲 <b>Install on iPhone/iPad:</b> tap <b>Share</b> (□↑) → <b>Add to Home Screen</b> — works fully offline in valleys without signal.
+    <button type="button" onclick="document.getElementById('iosBanner').style.display='none'" style="float:right;background:none;border:none;font-size:16px;cursor:pointer;line-height:1;">✕</button>
+  </div>
 
   <div class="card">
     <details id="hrDetails" ontoggle="onHrDetailsToggle(this.open)">
@@ -1692,6 +1703,29 @@ let pastData = null;
    zone-polygon/rat-station context layers are drawn from already-fetched in-memory data, not tiles,
    so the pickers stay fully usable, just without the satellite imagery backdrop). */
 const OFFLINE_QUEUE_KEY = '_nrds_offline_queue';
+
+/* ─── Offline data cache helpers ─── */
+var _offlineDataTs = {};  // key → ISO timestamp when data was last fetched live
+function _dbSave(key, payload) {
+  try {
+    var ts = new Date().toISOString();
+    localStorage.setItem('_nrds_cache_' + key, JSON.stringify({ payload: payload, ts: ts }));
+    _offlineDataTs[key] = ts;
+  } catch(e) {}
+}
+function _dbLoad(key) {
+  try {
+    var raw = localStorage.getItem('_nrds_cache_' + key);
+    if (!raw) return null;
+    return JSON.parse(raw); // { payload, ts }
+  } catch(e) { return null; }
+}
+function _cacheAge(key) {
+  var entry = _dbLoad(key);
+  if (!entry) return null;
+  return entry.ts;
+}
+
 function getOfflineQueue(){
   try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); } catch (e) { return []; }
 }
@@ -1774,40 +1808,70 @@ function removeFromQueue(id){
   if (!confirm('Remove this item from the offline queue? It will NOT be uploaded.')) return;
   saveOfflineQueue(getOfflineQueue().filter(item => item.id !== id));
 }
+var _pwaInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _pwaInstallPrompt = e;
+  renderOfflineBanner();
+});
+window.addEventListener('appinstalled', function() {
+  _pwaInstallPrompt = null;
+  renderOfflineBanner();
+});
+
 function renderOfflineBanner(){
   const banner = document.getElementById('offlineBanner');
   if (!banner) return;
   const queue = getOfflineQueue();
   const online = navigator.onLine;
-  if (online && !queue.length){ banner.style.display = 'none'; return; }
+  const showInstall = !!_pwaInstallPrompt;
+  if (online && !queue.length && !showInstall){ banner.style.display = 'none'; return; }
   banner.style.display = '';
   const statusDot = online ? '🟡' : '🔴';
-  const statusTxt = online ? 'Online' : 'Offline — forms are being saved on this device only';
-  let html = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <span><b>${statusDot} ${statusTxt}</b></span>`;
-  if (queue.length){
-    html += `<span class="muted">${queue.length} submission${queue.length===1?'':'s'} queued</span>
-    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="syncOfflineQueue()" ${online?'':'disabled'}>⬆ Sync now</button>`;
-  } else {
-    html += `<span class="muted">No submissions waiting.</span>`;
+  const statusTxt = online ? 'Online' : 'Offline — forms queued on device';
+  let html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+    + '<span><b>' + statusDot + ' ' + statusTxt + '</b></span>';
+  if (!online) {
+    // Show cached data age
+    var hCached = _dbLoad('habitat'), dCached = _dbLoad('derat');
+    var cacheInfo = '';
+    if (hCached) cacheInfo += ' habitat ' + hCached.ts.slice(0,10);
+    if (dCached) cacheInfo += (cacheInfo ? ',' : '') + ' derat ' + dCached.ts.slice(0,10);
+    if (cacheInfo) html += '<span class="muted" style="font-size:12px;">📦 Cached data:' + cacheInfo + '</span>';
+    else html += '<span class="muted" style="font-size:12px;">No data cached yet — go online once to enable full offline mode</span>';
   }
-  html += `</div>`;
   if (queue.length){
-    html += `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">`;
+    html += '<span class="muted">' + queue.length + ' submission' + (queue.length===1?'':'s') + ' queued</span>'
+      + '<button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="syncOfflineQueue()" ' + (online?'':'disabled') + '>⬆ Sync now</button>';
+  }
+  if (showInstall) {
+    html += '<button type="button" class="secondary" style="padding:4px 9px;font-size:12px;background:#2e7d32;color:#fff;border-color:#2e7d32;" onclick="installPwa()">📲 Install app</button>';
+  }
+  html += '</div>';
+  if (queue.length){
+    html += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">';
     for (const item of queue){
       const t = new Date(item.queuedAt);
       const when = isNaN(t) ? '' : t.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-      html += `<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e0c060;border-radius:6px;padding:7px 10px;">
-        <span style="flex:1;font-size:13px;">${queueItemLabel(item)}</span>
-        <span class="muted" style="font-size:11.5px;white-space:nowrap;">${when}</span>
-        <button type="button" onclick="removeFromQueue('${escapeHtml(item.id)}')"
-          style="background:none;border:1px solid #ccc;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;color:#c0392b;"
-          title="Remove from queue (will NOT be uploaded)">✕</button>
-      </div>`;
+      html += '<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e0c060;border-radius:6px;padding:7px 10px;">'
+        + '<span style="flex:1;font-size:13px;">' + queueItemLabel(item) + '</span>'
+        + '<span class="muted" style="font-size:11.5px;white-space:nowrap;">' + when + '</span>'
+        + '<button type="button" onclick="removeFromQueue(\'' + escapeHtml(item.id) + '\')"'
+        + ' style="background:none;border:1px solid #ccc;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;color:#c0392b;"'
+        + ' title="Remove from queue (will NOT be uploaded)">✕</button>'
+        + '</div>';
     }
-    html += `</div>`;
+    html += '</div>';
   }
   banner.innerHTML = html;
+}
+function installPwa() {
+  if (!_pwaInstallPrompt) return;
+  _pwaInstallPrompt.prompt();
+  _pwaInstallPrompt.userChoice.then(function(r) {
+    if (r.outcome === 'accepted') _pwaInstallPrompt = null;
+    renderOfflineBanner();
+  });
 }
 window.addEventListener('online', () => { renderOfflineBanner(); syncOfflineQueue(); });
 window.addEventListener('offline', () => renderOfflineBanner());
@@ -1870,10 +1934,23 @@ function rebuildMergedTables(){
   resetUnitStationsCache();
 }
 async function loadReferenceData(){
+  async function fetchJson(url, cacheKey) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(resp.status);
+      const data = await resp.json();
+      _dbSave(cacheKey, data);
+      return data;
+    } catch(e) {
+      var cached = _dbLoad(cacheKey);
+      if (cached) return cached.payload;
+      throw new Error('Offline — no cache for ' + url);
+    }
+  }
   const [mu, dt, es] = await Promise.all([
-    fetch('data/management_unit.json').then(r => r.json()),
-    fetch('data/derat_tahiti.json').then(r => r.json()),
-    fetch('data/espece.json').then(r => r.json()),
+    fetchJson('data/management_unit.json', 'ref_mu'),
+    fetchJson('data/derat_tahiti.json', 'ref_dt'),
+    fetchJson('data/espece.json', 'ref_es'),
   ]);
   staticManagementUnit = mu; staticDeratTahiti = dt; tables.espece = es;
   rebuildMergedTables();
@@ -1893,42 +1970,69 @@ function dbRowToHabitatRow(r){
   };
 }
 
-async function fetchHabitatRestoration(){
-  const { data, error } = await window.sb.from('habitat_restoration').select('*').order('id');
-  if (error){
-    document.getElementById('liveDataStatus').innerHTML = `<span class="err">Error loading habitat restoration data: ${escapeHtml(error.message)}</span>`;
-    return;
-  }
-  const habitat = [], sectionEspece = [];
-  for (const r of data){
+function _applyHabitatData(data) {
+  var habitat = [], sectionEspece = [];
+  for (var _i = 0; _i < data.length; _i++) {
+    var r = data[_i];
     habitat.push(dbRowToHabitatRow(r));
-    for (const sp of (r.species||[])){
+    var sps = r.species || [];
+    for (var _j = 0; _j < sps.length; _j++) {
+      var sp = sps[_j];
       sectionEspece.push({ Identifier: String(r.id), 'Espèce': [sp.name,sp.common,sp.type].join(' | '), Number: sp.number });
     }
   }
   tables.habitat = habitat; tables.sectionEspece = sectionEspece;
   dataLoaded.habitat = true;
-  document.getElementById('liveDataStatus').textContent = `Connected — ${habitat.length} habitat restoration actions loaded from the shared database.`;
   maybeBuildEnriched();
 }
-
-async function fetchDeratisation(){
-  const { data, error } = await window.sb.from('deratisation').select('*').order('id');
-  if (error){
-    document.getElementById('deratDataStatus').innerHTML = `<span class="err">Error loading dératisation data: ${escapeHtml(error.message)}</span>`;
-    return;
+async function fetchHabitatRestoration(){
+  try {
+    const { data, error } = await window.sb.from('habitat_restoration').select('*').order('id');
+    if (error) throw new Error(error.message);
+    _applyHabitatData(data);
+    _dbSave('habitat', data);
+    document.getElementById('liveDataStatus').textContent = 'Connected — ' + tables.habitat.length + ' habitat restoration actions loaded from the shared database.';
+  } catch(e) {
+    var cached = _dbLoad('habitat');
+    if (cached) {
+      _applyHabitatData(cached.payload);
+      document.getElementById('liveDataStatus').innerHTML = '<span class="muted">📵 Offline — habitat data from cache (' + cached.ts.slice(0,10) + ')</span>';
+    } else {
+      document.getElementById('liveDataStatus').innerHTML = '<span class="err">Offline — no cached habitat data</span>';
+    }
   }
-  const deratisation = [], sectionChecks = [];
-  for (const r of data){
+}
+
+function _applyDeratData(data) {
+  var deratisation = [], sectionChecks = [];
+  for (var _i = 0; _i < data.length; _i++) {
+    var r = data[_i];
     deratisation.push({ Identifier: String(r.id), Date: r.date||'', Observer: r.observer||'', Zone: r.zone||'', Passage: r.passage||'' });
-    for (const c of (r.checks||[])){
-      sectionChecks.push({ Identifier: String(r.id), Derat: c.station, Conso: c.conso });
+    var cks = r.checks || [];
+    for (var _j = 0; _j < cks.length; _j++) {
+      sectionChecks.push({ Identifier: String(r.id), Derat: cks[_j].station, Conso: cks[_j].conso });
     }
   }
   tables.deratisation = deratisation; tables.sectionChecks = sectionChecks;
   dataLoaded.derat = true;
-  document.getElementById('deratDataStatus').textContent = `${deratisation.length} dératisation patrols loaded from the shared database.`;
-  if (enriched) onDataUpdated(); // keeps the "total actions" stat (habitat + dératisation) in sync when derat loads/changes after habitat
+  if (enriched) onDataUpdated();
+}
+async function fetchDeratisation(){
+  try {
+    const { data, error } = await window.sb.from('deratisation').select('*').order('id');
+    if (error) throw new Error(error.message);
+    _applyDeratData(data);
+    _dbSave('derat', data);
+    document.getElementById('deratDataStatus').textContent = tables.deratisation.length + ' dératisation patrols loaded from the shared database.';
+  } catch(e) {
+    var cached = _dbLoad('derat');
+    if (cached) {
+      _applyDeratData(cached.payload);
+      document.getElementById('deratDataStatus').innerHTML = '<span class="muted">📵 Offline — dératisation data from cache (' + cached.ts.slice(0,10) + ')</span>';
+    } else {
+      document.getElementById('deratDataStatus').innerHTML = '<span class="err">Offline — no cached dératisation data</span>';
+    }
+  }
 }
 
 function subscribeHabitatRestoration(){
@@ -2132,18 +2236,31 @@ function buildPffColonies(sourceRows){
 }
 
 let pffObservations = [];
-async function fetchPffObservations(){
-  const { data, error } = await window.sb.from('pff_observations').select('*').order('id');
-  if (error){ console.error('Error loading pff_observations:', error.message); return; }
+function _applyPffData(data) {
   pffObservations = data || [];
-  // The Zone datalist is the registry itself, built live from whatever's already been submitted —
-  // the first report under a new name "saves" it, since it becomes a suggested option for everyone
-  // from that point on (re-populated on every fetch/Realtime update, not just once).
-  const zones = [...new Set(pffObservations.map(r => r.zone).filter(Boolean))].sort();
-  document.getElementById('pffZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
+  var zones = [];
+  var seenZ = {};
+  for (var _i = 0; _i < pffObservations.length; _i++) {
+    var z = pffObservations[_i].zone;
+    if (z && !seenZ[z]) { zones.push(z); seenZ[z] = 1; }
+  }
+  zones.sort();
+  document.getElementById('pffZoneList').innerHTML = zones.map(function(z) { return '<option value="' + escapeHtml(z) + '">'; }).join('');
   if (leafletMap) renderMap(false);
   if (currentChartViews.has('pff')) renderAllCharts();
   if (pffPickerEntry){ renderPffPickerColonies(); renderPffPickerExisting(); }
+}
+async function fetchPffObservations(){
+  try {
+    const { data, error } = await window.sb.from('pff_observations').select('*').order('id');
+    if (error) throw new Error(error.message);
+    _applyPffData(data);
+    _dbSave('pff', data);
+  } catch(e) {
+    var cached = _dbLoad('pff');
+    if (cached) { _applyPffData(cached.payload); }
+    else { console.warn('PFF: offline, no cache'); }
+  }
 }
 function subscribePffObservations(){
   fetchPffObservations();
@@ -2567,13 +2684,29 @@ function onHrDetailsToggle(open){
 
 /* ---------------- Pépinière live data (nursery registry) ---------------- */
 let pepinieres = [];
-async function fetchPepinieres(){
-  const { data, error } = await window.sb.from('pepinieres').select('*').order('id');
-  if (error){ console.error('Error loading pepinieres:', error.message); return; }
+function _applyPepData(data) {
   pepinieres = data || [];
-  const zones = [...new Set(pepinieres.map(r => r.zone).filter(Boolean))].sort();
-  document.getElementById('pepZoneList').innerHTML = zones.map(z => `<option value="${escapeHtml(z)}">`).join('');
+  var zones = [];
+  var seenZ = {};
+  for (var _i = 0; _i < pepinieres.length; _i++) {
+    var z = pepinieres[_i].zone;
+    if (z && !seenZ[z]) { zones.push(z); seenZ[z] = 1; }
+  }
+  zones.sort();
+  document.getElementById('pepZoneList').innerHTML = zones.map(function(z) { return '<option value="' + escapeHtml(z) + '">'; }).join('');
   if (pepPickerEntry) renderPepPickerOthers();
+}
+async function fetchPepinieres(){
+  try {
+    const { data, error } = await window.sb.from('pepinieres').select('*').order('id');
+    if (error) throw new Error(error.message);
+    _applyPepData(data);
+    _dbSave('pep', data);
+  } catch(e) {
+    var cached = _dbLoad('pep');
+    if (cached) { _applyPepData(cached.payload); }
+    else { console.warn('Pepinieres: offline, no cache'); }
+  }
 }
 function subscribePepinieres(){
   fetchPepinieres();
@@ -3008,15 +3141,27 @@ let ibsShowZoneNames = false;
 let ibsShowStations = false;
 let ibsUserLocWatchId = null, ibsUserLocFirstFix = true;
 
+function _applyBirdData(data) {
+  birdSurveys = data || [];
+  var ids = [], seenId = {};
+  for (var _i = 0; _i < birdSurveys.length; _i++) {
+    var sid = birdSurveys[_i].station_id;
+    if (sid && !seenId[sid]) { ids.push(sid); seenId[sid] = 1; }
+  }
+  ids.sort();
+  var dl = document.getElementById('ibsStationList');
+  if (dl) dl.innerHTML = ids.map(function(id) { return '<option value="' + escapeHtml(id) + '">'; }).join('');
+}
 async function fetchBirdSurveys(){
   try {
     const { data, error } = await window.sb.from('bird_surveys').select('*').order('id');
-    if (error) return;
-    birdSurveys = data || [];
-    const ids = [...new Set(birdSurveys.map(r => r.station_id).filter(Boolean))].sort();
-    const dl = document.getElementById('ibsStationList');
-    if (dl) dl.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">`).join('');
-  } catch(e){ /* table may not exist yet */ }
+    if (error) return; // table may not exist yet
+    _applyBirdData(data);
+    _dbSave('birds', data);
+  } catch(e) {
+    var cached = _dbLoad('birds');
+    if (cached) { _applyBirdData(cached.payload); }
+  }
 }
 function subscribeBirdSurveys(){
   fetchBirdSurveys();
@@ -3734,6 +3879,21 @@ function showHomeView(){
   if (location.hash === '#submit') history.replaceState(null, '', location.pathname + location.search);
   window.scrollTo(0,0);
 }
+// iOS "Add to Home Screen" hint — shown only on iPhone/iPad Safari that hasn't installed the app
+(function(){
+  var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
+  var dismissed = localStorage.getItem('_nrds_ios_banner_dismissed');
+  if (isIos && !dismissed) {
+    var b = document.getElementById('iosBanner');
+    if (b) {
+      b.style.display = '';
+      b.querySelector('button').addEventListener('click', function() {
+        localStorage.setItem('_nrds_ios_banner_dismissed', '1');
+      });
+    }
+  }
+})();
+
 if (location.hash === '#submit') showSubmitView();
 // Covers navigating to/from #submit via a same-document hash change (e.g. typing the URL with
 // #submit while the app is already running) — the check above only ever runs once, at initial
@@ -7084,6 +7244,24 @@ function renderPastDataComparison(){
     combinedBox.style.display = 'none';
     combinedBox.innerHTML = '';
   }
+}
+
+/* ─────── Service Worker registration ─────── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').then(function(reg) {
+      reg.addEventListener('updatefound', function() {
+        var nw = reg.installing;
+        nw.addEventListener('statechange', function() {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[SW] New version cached — reload for latest.');
+          }
+        });
+      });
+    }).catch(function(err) {
+      console.warn('[SW] Registration failed:', err);
+    });
+  });
 }
 </script>
 </body>

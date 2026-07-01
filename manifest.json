@@ -1,0 +1,24 @@
+{
+  "name": "NRDS Tahiti — SOP Manu",
+  "short_name": "NRDS",
+  "description": "Habitat restoration & dératisation monitoring for LIFE STOP EXTINCTION, Tahiti valleys",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#2e7d32",
+  "background_color": "#eef2ee",
+  "lang": "en",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Log action",
+      "short_name": "Log",
+      "description": "Open the habitat restoration form",
+      "url": "./#form"
+    }
+  ]
+}
