@@ -6150,155 +6150,135 @@ function haversineKm(lat1, lon1, lat2, lon2){
   return 2*R*Math.asin(Math.sqrt(a));
 }
 
-// DOM_WEIGHT per typology: how urgently does an un-planted zone need cleaning to enable restoration?
-const PRIORITY_DOM_WEIGHT = { 'C':1.0, 'B':0.8, 'A*':0.4, 'A':0.2, 'X':0.0 };
-// Urgency thresholds for tier labels
-const PRIORITY_TIER = score => score > 0.25 ? 'urgent' : score > 0.08 ? 'active' : 'monitor';
+// Home-page "where to work next" ranking for cutting/cleaning actions.
+// Now uses composite LIFE STOP EXTINCTION urgency score computed outside renderMap()
+// via computeZoneUrgency(), keeping topPriorityZones itself simple and crash-safe.
+function computeZoneUrgency(d, pastLookup, unitGeomMap){
+  try {
+    var hu = pastLookup.get(d.valley+'||'+d.unit);
+    var topo = zoneTypology(hu);
+    var hv = topo.hv;
+    var histPct = hv ? (hv.pct || 0) : 0;
+    var geom = unitGeomMap.get(d.valley+'||'+d.unit);
+    var areaHa = geom ? zoneAreaHectares(geom) : null;
+    var recent = nrdsPlantingActivitySince(d.unit, null);
+    var nrdsPctAdd = 0;
+    if (recent && areaHa && nrdsDensityPerHa > 0){
+      var areaEquivHa = recent.totalIndividuals / nrdsDensityPerHa;
+      nrdsPctAdd = Math.min(100 - histPct, (areaEquivHa / areaHa) * 100);
+    }
+    var projPct = Math.min(100, histPct + nrdsPctAdd) / 100;
+    var cleanFrac = d.res.estimate / 100;
+    var domWeightMap = { A:0.2, B:0.8, C:1.0, X:0.0 };
+    domWeightMap['A*'] = 0.4;
+    var domWeight = domWeightMap[topo.type] !== undefined ? domWeightMap[topo.type] : 0;
+    var alpha = priorityAlpha;
+    var habitatRisk = projPct * (1 - cleanFrac);
+    var restorePrep = (1 - projPct) * (1 - cleanFrac) * domWeight;
+    var urgency = alpha * habitatRisk + (1 - alpha) * restorePrep;
+    var tier = urgency > 0.25 ? 'urgent' : urgency > 0.08 ? 'active' : 'monitor';
+    return { projPct:projPct, histPct:histPct, nrdsPctAdd:nrdsPctAdd,
+             nrdsCount: recent ? recent.totalIndividuals : 0,
+             topoType:topo.type, habitatRisk:habitatRisk, restorePrep:restorePrep,
+             urgency:urgency, tier:tier,
+             driver: habitatRisk * alpha >= restorePrep * (1-alpha) ? 'risk' : 'prep' };
+  } catch(e){ return null; }
+}
 
-// Composite LIFE STOP EXTINCTION priority score for cutting/cleaning work:
-//   urgency = alpha * habitat_risk + (1-alpha) * restore_prep
-//   habitat_risk  = proj_planting_pct * (1 - cleaning_pct)
-//     → high when existing plantings are at risk of being smothered (protect investment)
-//   restore_prep  = (1 - proj_planting_pct) * (1 - cleaning_pct) * dom_weight
-//     → high when zone is invasive-dominant, unplanted, and dirty (enable new planting)
-// cleaning_pct from combinedCleaningEstimate (historical SB + NRDS recency-weighted)
-// proj_planting_pct from Butaud historical % + NRDS individuals at nrdsDensityPerHa trees/ha
 function topPriorityZones(n, includeStale){
-  let data = zonePriorityData('all', true).filter(d => d.res.estimate != null);
-  if (!includeStale) data = data.filter(d => !(d.lastDays != null && d.lastDays > STALE_DAYS));
-
-  // apply valley filter
-  if (priorityValleyFilter !== 'all') data = data.filter(d => d.valley === priorityValleyFilter);
+  var data = zonePriorityData('all', true).filter(function(d){ return d.res.estimate != null; });
+  if (!includeStale) data = data.filter(function(d){ return !(d.lastDays != null && d.lastDays > STALE_DAYS); });
+  if (priorityValleyFilter !== 'all') data = data.filter(function(d){ return d.valley === priorityValleyFilter; });
   if (!data.length) return [];
 
-  // build lookup tables for planting projection
-  const pastLookup = pastUnitLookupMap();
-  const unitGeomMap = new Map();
-  const centroidByKey = new Map();
-  for (const u of tables.managementUnit||[]){
+  var pastLookup = pastUnitLookupMap();
+  var unitGeomMap = new Map();
+  var centroidByKey = new Map();
+  for (var i=0; i<(tables.managementUnit||[]).length; i++){
+    var u = tables.managementUnit[i];
     unitGeomMap.set(u['Vallee']+'||'+u['Nom'], u['Geometry']);
-    const ctr = geometryCentroid(u['Geometry']);
+    var ctr = geometryCentroid(u['Geometry']);
     if (ctr) centroidByKey.set(u['Vallee']+'||'+u['Nom'], ctr);
   }
 
-  for (const d of data){
-    d.centroid = centroidByKey.get(d.valley+'||'+d.unit) || null;
-
-    // projected planting %
-    const hu = pastLookup.get(d.valley+'||'+d.unit);
-    const topo = zoneTypology(hu);
-    const hv = topo.hv;
-    const histPct = hv ? (hv.pct || 0) : 0;
-    const recent = nrdsPlantingActivitySince(d.unit, null);
-    const geom = unitGeomMap.get(d.valley+'||'+d.unit);
-    const areaHa = geom ? zoneAreaHectares(geom) : null;
-    let nrdsPctAdd = 0;
-    if (recent && areaHa && nrdsDensityPerHa > 0){
-      const areaEquivHa = recent.totalIndividuals / nrdsDensityPerHa;
-      nrdsPctAdd = Math.min(100 - histPct, (areaEquivHa / areaHa) * 100);
-    }
-    d.projPct = Math.min(100, histPct + nrdsPctAdd) / 100; // 0-1
-    d.histPct = histPct;
-    d.nrdsPctAdd = nrdsPctAdd;
-    d.nrdsIndividuals = recent ? recent.totalIndividuals : 0;
-    d.topoType = topo.type;
-    d.topoColor = topo.color;
-    d.domWeight = PRIORITY_DOM_WEIGHT[topo.type] ?? 0;
-
-    // cleaning % from combinedCleaningEstimate (already in d.res.estimate, 0-100)
-    const cleanFrac = d.res.estimate / 100; // 0-1
-
-    const alpha = priorityAlpha;
-    const beta  = 1 - alpha;
-    d.habitatRisk  = d.projPct * (1 - cleanFrac);
-    d.restorePrepRaw = (1 - d.projPct) * (1 - cleanFrac) * d.domWeight;
-    d.urgency = alpha * d.habitatRisk + beta * d.restorePrepRaw;
-    d.tier = PRIORITY_TIER(d.urgency);
-    d.dominantComponent = d.habitatRisk * alpha >= d.restorePrepRaw * beta ? 'risk' : 'prep';
+  for (var j=0; j<data.length; j++){
+    data[j].centroid = centroidByKey.get(data[j].valley+'||'+data[j].unit) || null;
+    data[j].score = computeZoneUrgency(data[j], pastLookup, unitGeomMap);
   }
 
-  // Sort: tier order (urgent > active > monitor), then urgency descending within tier
-  const tierRank = { urgent: 0, active: 1, monitor: 2 };
-  data.sort((a,b) => {
-    const td = tierRank[a.tier] - tierRank[b.tier];
-    return td !== 0 ? td : b.urgency - a.urgency;
+  data.sort(function(a,b){
+    var sa = a.score, sb = b.score;
+    if (!sa && !sb) return 0;
+    if (!sa) return 1;
+    if (!sb) return -1;
+    var tierRank = { urgent:0, active:1, monitor:2 };
+    var td = (tierRank[sa.tier]||0) - (tierRank[sb.tier]||0);
+    return td !== 0 ? td : sb.urgency - sa.urgency;
   });
 
   return data.slice(0, n);
 }
 
 let includeStaleInPriority = false;
-// onDataUpdated() fully rebuilds buildSummary's innerHTML, which would otherwise re-create a fresh,
-// closed <details> every time the checkbox below triggers a re-render — this just remembers the
-// open/closed state across that rebuild so checking the box doesn't visually snap the list shut.
 let priorityDetailsOpen = false;
-function togglePriorityStale(checked){
-  includeStaleInPriority = checked;
-  onDataUpdated();
-}
+let priorityValleyFilter = 'all';
+let priorityAlpha = 0.65;
+function togglePriorityStale(checked){ includeStaleInPriority = checked; onDataUpdated(); }
 function setPriorityValley(v){ priorityValleyFilter = v; onDataUpdated(); }
 function onPriorityAlphaChange(v){ priorityAlpha = Math.max(0, Math.min(1, +v)); onDataUpdated(); }
+
 function renderPriorityZonesDropdown(top){
-  const valleys = getAllValleys();
-  const valleyOpts = ['all', ...valleys].map(v =>
-    `<option value="${escapeHtml(v)}" ${priorityValleyFilter===v?'selected':''}>${v==='all'?'All valleys':escapeHtml(v)}</option>`
-  ).join('');
-  const alphaVal = (priorityAlpha * 100).toFixed(0);
-  const controls = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;align-items:center;">
-    <label class="muted" style="display:flex;align-items:center;gap:6px;">
-      Valley:
-      <select onchange="setPriorityValley(this.value)" style="padding:2px 6px;font-size:12px;">${valleyOpts}</select>
-    </label>
-    <label class="muted" style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
-      <span style="white-space:nowrap;">🌱 Prep</span>
-      <input type="range" min="0" max="100" value="${alphaVal}"
-        oninput="onPriorityAlphaChange(this.value/100);this.nextElementSibling.textContent=this.value+'%'"
-        style="flex:1;">
-      <span style="white-space:nowrap;min-width:32px;">${alphaVal}%</span>
-      <span style="white-space:nowrap;">🛡 Protect</span>
-    </label>
-    <label class="muted" style="display:flex;align-items:center;gap:5px;">
-      <input type="checkbox" id="priorityStaleToggle" ${includeStaleInPriority?'checked':''} onchange="togglePriorityStale(this.checked)">
-      ⚠ stale
-    </label>
-  </div>`;
-  const openAttr = priorityDetailsOpen ? 'open' : '';
-  const toggleAttr = `ontoggle="priorityDetailsOpen=this.open;document.getElementById('priorityCalcBox').style.display=this.open?'':'none'"`;
-  if (!top.length){
-    return `<details style="margin-top:10px;" ${openAttr} ${toggleAttr}>
-      <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning</summary>
-      <div style="margin-top:8px;">${controls}<div class="muted">No zone has a combined estimate for the selected valley.</div></div>
-    </details>`;
-  }
-  const TIER_META = {
-    urgent:  { icon: '🔴', label: 'URGENT',  bg: '#fff5f5', border: '#e74c3c' },
-    active:  { icon: '🟡', label: 'ACTIVE',  bg: '#fffbf0', border: '#e0a020' },
-    monitor: { icon: '🟢', label: 'MONITOR', bg: '#f7faf6', border: '#7cb87c' }
-  };
-  const rows = top.map((d,i) => {
-    const tm = TIER_META[d.tier];
-    const stale = d.lastDays != null && d.lastDays > STALE_DAYS;
-    const compIcon = d.dominantComponent === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
-    const projLabel = `${(d.projPct*100).toFixed(0)}% planted`;
-    const cleanLabel = `${d.res.estimate.toFixed(0)}% cleaned`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;background:${tm.bg};border-left:5px solid ${tm.border};border-radius:0 6px 6px 0;">
-      <span style="width:20px;text-align:center;">${tm.icon}</span>
-      <span class="muted" style="width:18px;font-size:11px;">#${i+1}</span>
-      <span style="flex:1;font-size:13px;font-weight:600;">${escapeHtml(d.unit)}</span>
-      <span class="muted" style="font-size:11.5px;">${escapeHtml(d.valley)}</span>
-      <span class="muted" style="font-size:11px;white-space:nowrap;">${projLabel} · ${cleanLabel}</span>
-      <span class="muted" style="font-size:11px;border:1px solid #ddd;border-radius:3px;padding:1px 5px;background:#fff;white-space:nowrap;">${compIcon}</span>
-      ${stale ? `<span class="muted" title="Freshest data over ${STALE_DAYS} days old">⚠</span>` : ''}
-    </div>`;
+  var valleys = getAllValleys();
+  var valleyOpts = ['all'].concat(valleys).map(function(v){
+    var sel = priorityValleyFilter===v ? 'selected' : '';
+    var label = v==='all' ? 'All valleys' : v;
+    return '<option value="'+escapeHtml(v)+'" '+sel+'>'+escapeHtml(label)+'</option>';
   }).join('');
-  return `<details style="margin-top:10px;" ${openAttr} ${toggleAttr}>
-    <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning (click to expand)</summary>
-    <div style="margin-top:8px;">
-      ${controls}
-      <div class="muted" style="margin-bottom:6px;">Top 20 by composite urgency (LIFE STOP EXTINCTION) — 🔴 intervene now · 🟡 plan soon · 🟢 monitor. Slider: balance between protecting existing plantings vs. preparing new zones.</div>
-      ${rows}
-    </div>
-  </details>`;
+  var alphaVal = Math.round(priorityAlpha * 100);
+  var staleToggle = '<label class="muted" style="display:flex;align-items:center;gap:5px;">' +
+    '<input type="checkbox" id="priorityStaleToggle" '+(includeStaleInPriority?'checked':'')+' onchange="togglePriorityStale(this.checked)"> stale</label>';
+  var controls = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;align-items:center;">' +
+    '<label class="muted" style="display:flex;align-items:center;gap:6px;">Valley: <select onchange="setPriorityValley(this.value)" style="padding:2px 6px;font-size:12px;">'+valleyOpts+'</select></label>' +
+    '<label class="muted" style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">🌱 Prep <input type="range" min="0" max="100" value="'+alphaVal+'" oninput="onPriorityAlphaChange(this.value/100)" style="flex:1;"> 🛡 Protect ('+alphaVal+'%)</label>' +
+    staleToggle + '</div>';
+  var openAttr = priorityDetailsOpen ? 'open' : '';
+  var toggleAttr = 'ontoggle="priorityDetailsOpen=this.open;document.getElementById(\'priorityCalcBox\').style.display=this.open?\'\':\''+'none\'"';
+  if (!top.length){
+    return '<details style="margin-top:10px;" '+openAttr+' '+toggleAttr+'>' +
+      '<summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning</summary>' +
+      '<div style="margin-top:8px;">'+controls+'<div class="muted">No zone with data for selected valley.</div></div></details>';
+  }
+  var TIER_META = {
+    urgent:  { icon: '🔴', bg: '#fff5f5', border: '#e74c3c' },
+    active:  { icon: '🟡', bg: '#fffbf0', border: '#e0a020' },
+    monitor: { icon: '🟢', bg: '#f7faf6', border: '#7cb87c' }
+  };
+  var rows = top.map(function(d,i){
+    var sc = d.score;
+    if (!sc){ // fallback for zones where scoring failed
+      var color = pctColor(d.res.estimate);
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid '+color+';border-radius:0 6px 6px 0;">' +
+        '<span class="muted" style="width:18px;">#'+(i+1)+'</span>' +
+        '<span style="flex:1;font-size:13px;">'+escapeHtml(d.unit)+' ('+escapeHtml(d.valley)+')</span>' +
+        '<span style="font-weight:600;color:'+color+';">'+d.res.estimate.toFixed(0)+'%</span></div>';
+    }
+    var tm = TIER_META[sc.tier] || TIER_META.monitor;
+    var stale = d.lastDays != null && d.lastDays > STALE_DAYS;
+    var driver = sc.driver === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;background:'+tm.bg+';border-left:5px solid '+tm.border+';border-radius:0 6px 6px 0;">' +
+      '<span style="width:20px;text-align:center;">'+tm.icon+'</span>' +
+      '<span class="muted" style="width:18px;font-size:11px;">#'+(i+1)+'</span>' +
+      '<span style="flex:1;font-size:13px;font-weight:600;">'+escapeHtml(d.unit)+'</span>' +
+      '<span class="muted" style="font-size:11.5px;">'+escapeHtml(d.valley)+'</span>' +
+      '<span class="muted" style="font-size:11px;white-space:nowrap;">'+Math.round(sc.projPct*100)+'% planted · '+d.res.estimate.toFixed(0)+'% cleaned</span>' +
+      '<span class="muted" style="font-size:11px;border:1px solid #ddd;border-radius:3px;padding:1px 5px;background:#fff;white-space:nowrap;">'+driver+'</span>' +
+      (stale ? '<span class="muted" title="Stale data">⚠</span>' : '') + '</div>';
+  }).join('');
+  return '<details style="margin-top:10px;" '+openAttr+' '+toggleAttr+'>' +
+    '<summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">📍 Priority zones to work on — cutting/cleaning (click to expand)</summary>' +
+    '<div style="margin-top:8px;">'+controls +
+    '<div class="muted" style="margin-bottom:6px;">Top 20 · 🔴 urgent · 🟡 active · 🟢 monitor (LIFE STOP EXTINCTION composite score)</div>' +
+    rows + '</div></details>';
 }
 
 function renderLastPlantingDropdown(mainRows){
@@ -6331,38 +6311,29 @@ function renderLastPlantingDropdown(mainRows){
 }
 
 function renderPriorityCalcBox(top){
-  const alpha = priorityAlpha, beta = 1 - alpha;
-  let html = `<b>LIFE STOP EXTINCTION — composite urgency score</b><br><br>
-    The ranking merges two habitat-restoration signals into a single urgency score for cutting/cleaning work:<br><br>
-    <b>urgency = ${(alpha*100).toFixed(0)}% × habitat_risk + ${(beta*100).toFixed(0)}% × restore_prep</b><br><br>
-    <b>habitat_risk</b> = proj_planting% × (1 − cleaning%)<br>
-    <span class="muted">High when existing native plantings are at risk of being smothered by invasive regrowth. Protects the investment already made (critical for Pomarea nigra habitat creation).</span><br><br>
-    <b>restore_prep</b> = (1 − proj_planting%) × (1 − cleaning%) × typology_weight<br>
-    <span class="muted">High when a zone is unplanted, still dirty, and invasive-dominant — cleaning would directly unlock new planting capacity.</span><br><br>
-    <b>Typology weights:</b> C=1.0 · B=0.8 · A*=0.4 · A=0.2 · X=0 (invasive zones need clearing most urgently to enable restoration).<br><br>
-    <b>Inputs:</b><br>
-    · <i>proj_planting%</i> — Butaud historical % + NRDS individuals @ ${nrdsDensityPerHa} trees/ha (same as "Compare with NRDS" map layer)<br>
-    · <i>cleaning%</i> — Combined estimate (historical SB + NRDS, recency-weighted), same as zone-priority chart<br><br>
-    <b>Tiers:</b> 🔴 URGENT (score > 0.25) · 🟡 ACTIVE (0.08–0.25) · 🟢 MONITOR (≤ 0.08)<br>
-    Sorted: tier first, urgency descending within tier.<br><br>
-    ⚠ stale = freshest contributing data over ${STALE_DAYS} days old — excluded by default.`;
+  var alpha = priorityAlpha, beta = 1 - alpha;
+  var aP = Math.round(alpha*100), bP = Math.round(beta*100);
+  var html = '<b>LIFE STOP EXTINCTION — composite urgency score</b><br><br>' +
+    'urgency = <b>'+aP+'% x habitat_risk + '+bP+'% x restore_prep</b><br><br>' +
+    '<b>habitat_risk</b> = proj_planting% x (1 - cleaning%) — high when plantings exist and zone is dirty<br>' +
+    '<b>restore_prep</b> = (1 - proj_planting%) x (1 - cleaning%) x typology_weight — high when zone is unplanted, dirty, invasive-dominant<br><br>' +
+    '<b>Typology weights:</b> C=1.0 · B=0.8 · A*=0.4 · A=0.2 · X=0<br>' +
+    '<b>Inputs:</b> proj_planting% from Butaud+NRDS @ '+nrdsDensityPerHa+' trees/ha; cleaning% from combined estimate<br>' +
+    '<b>Tiers:</b> 🔴 &gt;0.25 · 🟡 0.08-0.25 · 🟢 below 0.08. Sorted by tier then urgency desc.<br><br>';
   if (top.length){
-    html += `<div class="table-scroll" style="margin-top:10px;"><table class="preview"><thead><tr>
-      <th>#</th><th>Tier</th><th>Unit</th><th>Valley</th><th>Score</th><th>Risk</th><th>Prep</th><th>Proj%</th><th>Clean%</th><th>Driver</th>
-      </tr></thead><tbody>`;
-    top.forEach((d,i) => {
-      const tierIcon = {urgent:'🔴',active:'🟡',monitor:'🟢'}[d.tier];
-      const driver = d.dominantComponent === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
-      html += `<tr>
-        <td>${i+1}</td><td>${tierIcon}</td>
-        <td>${escapeHtml(d.unit)}</td><td>${escapeHtml(d.valley)}</td>
-        <td><b>${d.urgency.toFixed(3)}</b></td>
-        <td>${(d.habitatRisk*alpha).toFixed(3)}</td>
-        <td>${(d.restorePrepRaw*beta).toFixed(3)}</td>
-        <td>${(d.projPct*100).toFixed(0)}%</td>
-        <td>${d.res.estimate.toFixed(0)}%</td>
-        <td class="muted" style="font-size:11px;">${driver}</td>
-      </tr>`;
+    html += '<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>' +
+      '<th>#</th><th>Tier</th><th>Unit</th><th>Score</th><th>Proj%</th><th>Clean%</th><th>Driver</th>' +
+      '</tr></thead><tbody>';
+    top.forEach(function(d,i){
+      var sc = d.score;
+      if (!sc){ html += '<tr><td>'+(i+1)+'</td><td>—</td><td>'+escapeHtml(d.unit)+'</td><td colspan="4" class="muted">no score</td></tr>'; return; }
+      var tierIcon = sc.tier==='urgent'?'🔴':sc.tier==='active'?'🟡':'🟢';
+      var driver = sc.driver==='risk'?'planting at risk':'needs prep';
+      html += '<tr><td>'+(i+1)+'</td><td>'+tierIcon+'</td><td>'+escapeHtml(d.unit)+'</td>' +
+        '<td><b>'+sc.urgency.toFixed(3)+'</b></td>' +
+        '<td>'+Math.round(sc.projPct*100)+'%</td>' +
+        '<td>'+d.res.estimate.toFixed(0)+'%</td>' +
+        '<td class="muted" style="font-size:11px;">'+driver+'</td></tr>';
     });
     html += '</tbody></table></div>';
   }
