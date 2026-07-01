@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4796,7 +4796,7 @@ function latestUnitStatus(dateFrom, dateTo){
   for (const r of enriched.mainRows){
     if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     const cur = map.get(r.Unit_Name);
-    if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date});
+    if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date, name:r.Name, comment:r.Comment});
   }
   return map;
 }
@@ -5566,7 +5566,7 @@ function renderMap(shouldFit){
       const st = statusMap.get(u['Nom']);
       fillColor = st ? pctColor(st.pct) : '#d8d8d8';
       fillOpacity = 0.75;
-      html += st ? `<br>Cleaning % (latest survey ${st.date}): <b>${st.pct}%</b>` : '<br><i>no cleaning % data</i>';
+      html += st ? `<br>Cleaning % (latest survey ${st.date}): <b>${st.pct}%</b>${st.comment ? `<br><span class="muted">📝 ${escapeHtml(st.comment)}</span>` : ""}` : '<br><i>no cleaning % data</i>';
     }
     for (const ringSet of rings){
       const poly = L.polygon(ringSet, { color: borderColor, weight: borderWeight, fillColor, fillOpacity });
