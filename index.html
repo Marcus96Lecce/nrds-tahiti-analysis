@@ -970,6 +970,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         Show my location
       </label>
       <span id="userLocationStatus" class="muted"></span>
+      <label class="muted">
+        <input type="checkbox" id="pepiniereLayerToggle" onchange="togglePepiniereLayer(this.checked)">
+        Show pépinières
+      </label>
     </div>
     <div class="row" style="margin-bottom:12px;">
       <label class="muted date-label">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
@@ -4936,8 +4940,9 @@ let mapLayersDropdownOpen = false;
 let showStationsOverlay = false;
 let showRatLines = false;
 let showZoneNames = false;
+let showPepiniereLayer = false;
 let histZoneMode = null; // null | 'cleaning' | 'combined' | 'planting' | 'plantingActivity' — overrides zone fill color; only the pair matching the active mapLayer ('cleaning'/'combined' under "Cleaning status by zone", 'planting'/'plantingActivity' under "Planted species") is ever reachable via the UI
-let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null, newLinesLayerGroup = null, ratLinesLayerGroup = null, zoneNameLabelsGroup = null, userLocationGroup = null;
+let leafletMap = null, unitLayerGroup = null, pointLayerGroup = null, stationsOverlayGroup = null, newLinesLayerGroup = null, ratLinesLayerGroup = null, zoneNameLabelsGroup = null, userLocationGroup = null, pepiniereMapGroup = null;
 // Small always-on text label (not just a hover tooltip) — used both for rat-line names (so a line
 // is identifiable without hovering exactly on it, even where it overlaps a zone polygon) and for
 // zone names at their centroid. iconSize:[0,0] + the CSS transform centers the text on the anchor
@@ -4996,6 +5001,7 @@ function ensureMap(){
   ratLinesLayerGroup = L.layerGroup().addTo(leafletMap);
   zoneNameLabelsGroup = L.layerGroup().addTo(leafletMap);
   userLocationGroup = L.layerGroup().addTo(leafletMap);
+  pepiniereMapGroup = L.layerGroup().addTo(leafletMap);
 }
 
 /* ---------------- "Add Elements" draw mode ---------------- */
@@ -5323,6 +5329,10 @@ function toggleZoneNamesOverlay(checked){
   showZoneNames = checked;
   renderMap(false);
 }
+function togglePepiniereLayer(checked){
+  showPepiniereLayer = checked;
+  renderMap(false);
+}
 
 /* ---------------- "Show my location" (browser Geolocation, opt-in) ---------------- */
 // Independent of renderMap()'s data-filter redraw cycle on purpose — this is the device's live GPS
@@ -5417,6 +5427,7 @@ function renderMap(shouldFit){
   newLinesLayerGroup.clearLayers();
   ratLinesLayerGroup.clearLayers();
   zoneNameLabelsGroup.clearLayers();
+  pepiniereMapGroup.clearLayers();
   // user-drawn lines have no Valley of their own, so they always render regardless of the valley
   // filter/units-empty check below — they're independent annotations, not part of the zone registry
   const lineBoundsLatLngs = [];
@@ -5725,6 +5736,24 @@ function renderMap(shouldFit){
       marker.bindPopup(html);
       marker.addTo(stationsOverlayGroup);
       boundsLatLngs.push([lat, lon]);
+    }
+  }
+
+  if (showPepiniereLayer){
+    const filtered = mapValleyFilter === 'all'
+      ? pepinieres
+      : pepinieres.filter(p => !p.zone || p.zone.toLowerCase().includes(mapValleyFilter.toLowerCase()));
+    for (const p of filtered){
+      const lat = +p.lat, lon = +p.lon;
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const html = `<b>🌱 Pépinière: ${escapeHtml(p.name)}</b><br>` +
+        `Plants: ${p.number_of_plants ?? '—'}<br>Date: ${escapeHtml(p.date || '—')}<br>` +
+        `Observer: ${escapeHtml(p.observer || '—')}<br>Zone: ${escapeHtml(p.zone || '—')}` +
+        (p.notes ? `<br>Notes: ${escapeHtml(p.notes)}` : '');
+      L.circleMarker([lat, lon], { radius: 9, color: '#1a5c1a', weight: 2, fillColor: '#2ca02c', fillOpacity: 0.9 })
+        .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
+        .bindPopup(html)
+        .addTo(pepiniereMapGroup);
     }
   }
 
