@@ -4140,6 +4140,7 @@ function onDataUpdated(){
     <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(topZones)}</div>
     <div class="map-combined-box" id="priorityCalcBox" style="display:${priorityDetailsOpen?'':'none'};">${renderPriorityCalcBox(topZones)}</div>
   </div>`;
+  html += renderLastPlantingDropdown(mainRows);
   document.getElementById('buildSummary').innerHTML = html;
   document.getElementById('enrichedDownloadButtons').innerHTML = `
     <button class="secondary" onclick="downloadCSV('habitat_restoration_enriched.csv', enriched.mainRows, Object.keys(enriched.mainRows[0]))">⬇ habitat_restoration_enriched.csv</button>
@@ -6130,6 +6131,35 @@ function renderPriorityZonesDropdown(top){
       <div class="muted" style="margin-bottom:6px;">Top 20, worst combined estimate (historical + NRDS, recency-weighted) first — fire red = intervene now, fading toward green = less urgent. Ties broken by proximity to an already-clean zone.</div>
       ${rows}
     </div>
+  </details>`;
+}
+
+function renderLastPlantingDropdown(mainRows){
+  const rows = mainRows
+    .filter(r => r.Action === 'Plantation' && r.Date)
+    .sort((a,b) => new Date(b.Date) - new Date(a.Date))
+    .slice(0, 15);
+  const countLabel = rows.length ? `${rows.length} most recent` : 'no records yet';
+  const inner = rows.length
+    ? rows.map(r => {
+        const species = (r.Species_Planted||'').split(';').filter(Boolean);
+        const speciesHtml = species.length
+          ? species.map(s => `<span style="background:#edf5ed;border-radius:3px;padding:1px 5px;font-size:11.5px;">${escapeHtml(s)}</span>`).join(' ')
+          : `<span class="muted">—</span>`;
+        const nPlants = r.Total_Individuals > 0 ? `<b>${r.Total_Individuals}</b> plants` : '';
+        const nPeople = r.Number_of_Person ? `${escapeHtml(r.Number_of_Person)} ppl` : '';
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;margin-bottom:4px;background:#f7faf6;border-left:4px solid #2ca02c;border-radius:0 6px 6px 0;">
+          <span style="min-width:82px;font-size:12px;color:#555;">${escapeHtml(r.Date)}</span>
+          <span style="min-width:90px;font-weight:600;font-size:13px;">${escapeHtml(r.Unit_Name||'—')} <span class="muted" style="font-weight:400;">(${escapeHtml(r.Valley||'—')})</span></span>
+          <span style="flex:1;font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${speciesHtml}</span>
+          <span class="muted" style="font-size:11.5px;white-space:nowrap;">${[nPlants,nPeople].filter(Boolean).join(' · ')}</span>
+          <span class="muted" style="font-size:11px;white-space:nowrap;">${escapeHtml(r.Name||'')}</span>
+        </div>`;
+      }).join('')
+    : `<div class="muted" style="padding:8px 10px;">No plantation actions recorded yet.</div>`;
+  return `<details style="margin-top:8px;">
+    <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🌱 Last planting actions (${countLabel})</summary>
+    <div style="margin-top:8px;">${inner}</div>
   </details>`;
 }
 
