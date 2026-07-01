@@ -937,6 +937,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
     <div id="drawBanner" class="hint" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
     <div id="drawFormBox" class="hint" style="display:none;background:#f7faf6;border:1px solid var(--border);padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+    <div id="drawQueueBanner" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
     <div class="row" style="margin-bottom:12px;">
       <label class="muted">Valley:
         <select id="mapValley" onchange="setMapValley(this.value)">
@@ -1713,6 +1714,7 @@ function getOfflineQueue(){
 function saveOfflineQueue(queue){
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
   renderOfflineBanner();
+  renderDrawQueueBanner();
 }
 function queueOffline(table, rows){
   const queue = getOfflineQueue();
@@ -1765,25 +1767,41 @@ async function syncOfflineQueue(){
   if (syncedTables.has('deratisation')) fetchDeratisation();
   if (syncedTables.has('pff_observations')) fetchPffObservations();
   if (syncedTables.has('bird_surveys')) fetchBirdSurveys();
+  if (syncedTables.has('new_elements')) fetchNewElements();
+  if (syncedTables.has('pepinieres')) fetchPepinieres();
 }
 function queueItemLabel(item){
   const TABLE_NAMES = {
     habitat_restoration: 'Habitat Restoration', deratisation: 'Dératisation',
-    pff_observations: 'PFF Observation', bird_surveys: 'Bird Survey (IBS)', pepinieres: 'Pépinière'
+    pff_observations: 'PFF Observation', bird_surveys: 'Bird Survey (IBS)',
+    pepinieres: 'Pépinière', new_elements: 'New Element'
   };
-  const name = TABLE_NAMES[item.table] || item.table;
   const r = item.rows && item.rows[0];
-  if (!r) return name;
+  if (!r) return '<b>' + escapeHtml(TABLE_NAMES[item.table] || item.table) + '</b>';
+
+  // new_elements: show type icon + type label + name + valley
+  if (item.table === 'new_elements') {
+    const isLine = item.rows.length > 1 || (r.ligne_stat && r.name !== r.ligne_stat);
+    const typeIcons = { zone: '🟦', station: '📍', valley: '🏔', line: '〰️' };
+    const typeLabels = { zone: 'Zone', station: 'Station', valley: 'Valley', line: 'Rat Line' };
+    const actualType = isLine ? 'line' : r.type;
+    const displayName = isLine ? (r.ligne_stat || r.name.replace(/-\d+$/, '')) : (r.name || '');
+    const icon = typeIcons[actualType] || '▪';
+    const lbl = typeLabels[actualType] || actualType;
+    return '<b>' + escapeHtml(icon + ' ' + lbl) + '</b> — '
+      + escapeHtml(displayName) + (r.valley ? ' · <span class="muted">' + escapeHtml(r.valley) + '</span>' : '');
+  }
+
+  const name = TABLE_NAMES[item.table] || item.table;
   const parts = [];
   if (r.action || r.Action)       parts.push(escapeHtml((r.action || r.Action || '').split('(')[0].trim()));
   if (r.unit_name || r.Unit_Name) parts.push(escapeHtml(r.unit_name || r.Unit_Name));
   if (r.valley || r.Valley)       parts.push(escapeHtml(r.valley || r.Valley));
   if (r.date || r.Date)           parts.push(escapeHtml(r.date || r.Date));
   if (r.name || r.Name)           parts.push('<span class="muted">'+escapeHtml(r.name || r.Name)+'</span>');
-  // pff_observations: multiple rows
   if (item.table === 'pff_observations' && item.rows.length > 1)
-    parts.push(`${item.rows.length} points`);
-  return `<b>${name}</b>${parts.length ? ' — ' + parts.join(' · ') : ''}`;
+    parts.push(item.rows.length + ' points');
+  return '<b>' + escapeHtml(name) + '</b>' + (parts.length ? ' — ' + parts.join(' · ') : '');
 }
 function removeFromQueue(id){
   if (!confirm('Remove this item from the offline queue? It will NOT be uploaded.')) return;
@@ -1854,8 +1872,34 @@ function installPwa() {
     renderOfflineBanner();
   });
 }
-window.addEventListener('online', () => { renderOfflineBanner(); syncOfflineQueue(); });
-window.addEventListener('offline', () => renderOfflineBanner());
+function renderDrawQueueBanner(){
+  const banner = document.getElementById('drawQueueBanner');
+  if (!banner) return;
+  const queue = getOfflineQueue().filter(function(item){ return item.table === 'new_elements'; });
+  if (!queue.length){ banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  const online = navigator.onLine;
+  let html = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'
+    + '<span><b>' + (online ? '🟡' : '🔴') + ' ' + queue.length + ' element' + (queue.length > 1 ? 's' : '') + ' queued — saved offline</b></span>';
+  if (online) html += '<button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="syncOfflineQueue()">⬆ Sync now</button>';
+  html += '</div><div style="display:flex;flex-direction:column;gap:6px;">';
+  for (var _qi = 0; _qi < queue.length; _qi++){
+    const item = queue[_qi];
+    const t = new Date(item.queuedAt);
+    const when = isNaN(t) ? '' : t.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    html += '<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e0c060;border-radius:6px;padding:7px 10px;">'
+      + '<span style="flex:1;font-size:13px;">' + queueItemLabel(item) + '</span>'
+      + '<span class="muted" style="font-size:11.5px;white-space:nowrap;">' + when + '</span>'
+      + '<button type="button" onclick="removeFromQueue(\'' + escapeHtml(item.id) + '\')"'
+      + ' style="background:none;border:1px solid #ccc;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;color:#c0392b;"'
+      + ' title="Remove — element will NOT be uploaded">✕</button>'
+      + '</div>';
+  }
+  html += '</div>';
+  banner.innerHTML = html;
+}
+window.addEventListener('online', () => { renderOfflineBanner(); renderDrawQueueBanner(); syncOfflineQueue(); });
+window.addEventListener('offline', () => { renderOfflineBanner(); renderDrawQueueBanner(); });
 
 /* ---------------- live shared data: static reference JSON + Supabase (replaces CSV upload) ----------------
    Reference tables (Management Unit, Derat Tahiti, Espèce) rarely change and aren't edited via the new
@@ -2051,12 +2095,7 @@ function computePolygonAreaM2(ring){
   for (let i=0;i<pts.length-1;i++) area += pts[i][0]*pts[i+1][1] - pts[i+1][0]*pts[i][1];
   return Math.abs(area/2);
 }
-async function fetchNewElements(){
-  const { data, error } = await window.sb.from('new_elements').select('*').order('id');
-  if (error){
-    console.error('Error loading new_elements:', error.message);
-    return;
-  }
+function _applyNewElementsData(data){
   newZoneRows = []; newStationRows = []; newLineRows = []; newValleyRows = [];
   for (const r of data){
     if (r.type === 'zone' && r.geometry){
@@ -2065,10 +2104,11 @@ async function fetchNewElements(){
         Surface: String(computePolygonAreaM2(r.geometry.coordinates[0]))
       });
     } else if (r.type === 'station' && r.geometry){
-      const [lon, lat] = r.geometry.coordinates;
+      const coords = r.geometry.coordinates;
       newStationRows.push({
         Station: r.name, Vallee: r.valley, Ligne_stat: r.ligne_stat || '', Zone: '',
-        Latitude: String(lat), Longitude: String(lon), Geometry: `SRID=4326;POINT(${lon} ${lat})`,
+        Latitude: String(coords[1]), Longitude: String(coords[0]),
+        Geometry: 'SRID=4326;POINT(' + coords[0] + ' ' + coords[1] + ')',
         'Last Check': ''
       });
     } else if (r.type === 'line' && r.geometry){
@@ -2083,6 +2123,57 @@ async function fetchNewElements(){
   populateValleyDropdowns();
   if (enriched) onDataUpdated();
   if (leafletMap) renderMap(false);
+}
+/* Appends one batch of drawn rows to in-memory state without clearing first.
+ * Called right after offline queueing so the element is immediately usable
+ * (on map, in dropdowns) without waiting for sync. */
+function applyNewElementLocally(rows){
+  for (const r of rows){
+    if (r.type === 'zone' && r.geometry){
+      newZoneRows.push({
+        Nom: r.name, Vallee: r.valley, Geometry: geoJsonPolygonToWKT(r.geometry),
+        Surface: String(computePolygonAreaM2(r.geometry.coordinates[0]))
+      });
+    } else if (r.type === 'station' && r.geometry){
+      const coords = r.geometry.coordinates;
+      newStationRows.push({
+        Station: r.name, Vallee: r.valley, Ligne_stat: r.ligne_stat || '', Zone: '',
+        Latitude: String(coords[1]), Longitude: String(coords[0]),
+        Geometry: 'SRID=4326;POINT(' + coords[0] + ' ' + coords[1] + ')',
+        'Last Check': ''
+      });
+    } else if (r.type === 'line' && r.geometry){
+      newLineRows.push(r);
+    } else if (r.type === 'valley' && r.name){
+      newValleyRows.push(r.name);
+    }
+  }
+  rebuildMergedTables();
+  rebuildValleyHex();
+  populateFormReferenceOptions();
+  populateValleyDropdowns();
+  if (enriched) onDataUpdated();
+  if (leafletMap) renderMap(false);
+}
+async function fetchNewElements(){
+  try {
+    const { data, error } = await window.sb.from('new_elements').select('*').order('id');
+    if (error) throw new Error(error.message);
+    _dbSave('new_elements', data);
+    _applyNewElementsData(data);
+  } catch(e) {
+    const cached = _dbLoad('new_elements');
+    _applyNewElementsData(cached ? cached.payload : []);
+    // Also apply elements that are locally queued but not yet synced
+    const pending = getOfflineQueue().filter(function(item){ return item.table === 'new_elements'; });
+    const pendingRows = [];
+    for (var _pi = 0; _pi < pending.length; _pi++){
+      const prows = pending[_pi].rows || [];
+      for (var _pri = 0; _pri < prows.length; _pri++) pendingRows.push(prows[_pri]);
+    }
+    if (pendingRows.length) applyNewElementLocally(pendingRows);
+    if (!cached) console.warn('new_elements: offline, no cache');
+  }
 }
 function subscribeNewElements(){
   fetchNewElements();
@@ -5432,41 +5523,43 @@ function discardDrawnElement(){
 async function saveDrawnElement(){
   const statusEl = document.getElementById('drawSaveStatus');
   const name = document.getElementById('drawName').value.trim();
-  if (!name){ statusEl.innerHTML = `<span class="err">${drawMode === 'line' ? 'Line name' : 'Name'} is required.</span>`; return; }
+  if (!name){ statusEl.innerHTML = '<span class="err">' + (drawMode === 'line' ? 'Line name' : 'Name') + ' is required.</span>'; return; }
   const valley = document.getElementById('drawValley').value;
   if (!valley){ statusEl.innerHTML = '<span class="err">Valley is required.</span>'; return; }
 
-  // A "New Line" is not its own geometry type — it reuses the exact same station (point) logic as
-  // "New Station", just once per clicked point, all sharing `name` as their Ligne_stat. That alone is
-  // enough for them to render as a brand-new rat line in "Overlay all rat lines" (which already just
-  // groups every station by Ligne_stat and connects them) — no separate line-geometry/color path needed.
-  let rowOrRows;
+  // A "New Line" reuses the station (point) logic — N points, same Ligne_stat.
+  // Normalize all cases to an array for insertOrQueue.
+  let rows;
   if (drawMode === 'station'){
     const [lat, lon] = drawPoints[0];
-    rowOrRows = { type: 'station', name, valley, ligne_stat: document.getElementById('drawLigneStat').value.trim() || null,
-      geometry: { type: 'Point', coordinates: [lon, lat] } };
+    rows = [{ type: 'station', name, valley,
+      ligne_stat: document.getElementById('drawLigneStat').value.trim() || null,
+      geometry: { type: 'Point', coordinates: [lon, lat] } }];
   } else if (drawMode === 'zone'){
-    const ring = drawPoints.map(([lat,lon]) => [lon, lat]);
+    const ring = drawPoints.map(function(p){ return [p[1], p[0]]; });
     ring.push(ring[0]);
-    rowOrRows = { type: 'zone', name, valley, geometry: { type: 'Polygon', coordinates: [ring] } };
-  } else { // line -> N station rows sharing one new Ligne_stat
-    rowOrRows = drawPoints.map(([lat,lon], i) => ({
-      type: 'station', name: `${name}-${i+1}`, valley, ligne_stat: name,
-      geometry: { type: 'Point', coordinates: [lon, lat] }
-    }));
+    rows = [{ type: 'zone', name, valley, geometry: { type: 'Polygon', coordinates: [ring] } }];
+  } else { // line → N station rows sharing one Ligne_stat
+    rows = drawPoints.map(function(p, i){
+      return { type: 'station', name: name + '-' + (i+1), valley, ligne_stat: name,
+        geometry: { type: 'Point', coordinates: [p[1], p[0]] } };
+    });
   }
 
   statusEl.innerHTML = 'Saving…';
   try {
-    const { error } = await window.sb.from('new_elements').insert(rowOrRows);
-    if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
+    const result = await insertOrQueue('new_elements', rows);
+    // Apply immediately to local state so element is on the map right away
+    applyNewElementLocally(rows);
+    statusEl.innerHTML = result.queued
+      ? '<span class="ok">✓ Saved offline — will sync when back online.</span>'
+      : '<span class="ok">✓ Saved.</span>';
     if (drawPreviewLayer){ leafletMap.removeLayer(drawPreviewLayer); drawPreviewLayer = null; }
     drawMode = null; drawPoints = [];
-    await fetchNewElements();
-    setTimeout(() => { document.getElementById('drawFormBox').style.display = 'none'; }, 1200);
+    if (!result.queued) await fetchNewElements();
+    setTimeout(function(){ document.getElementById('drawFormBox').style.display = 'none'; }, 1500);
   } catch (err) {
-    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+    statusEl.innerHTML = '<span class="err">Error: ' + escapeHtml(err.message) + '</span>';
   }
 }
 
@@ -5502,14 +5595,17 @@ async function saveNewValley(){
   }
   statusEl.innerHTML = 'Saving…';
   try {
-    const { error } = await window.sb.from('new_elements').insert({ type: 'valley', name, valley: null, geometry: null });
-    if (error) throw error;
-    statusEl.innerHTML = '<span class="ok">✓ Saved.</span>';
+    const rows = [{ type: 'valley', name, valley: null, geometry: null }];
+    const result = await insertOrQueue('new_elements', rows);
+    applyNewElementLocally(rows);
+    statusEl.innerHTML = result.queued
+      ? '<span class="ok">✓ Saved offline — will sync when back online.</span>'
+      : '<span class="ok">✓ Saved.</span>';
     drawMode = null;
-    await fetchNewElements();
-    setTimeout(() => { document.getElementById('drawFormBox').style.display = 'none'; }, 1200);
+    if (!result.queued) await fetchNewElements();
+    setTimeout(function(){ document.getElementById('drawFormBox').style.display = 'none'; }, 1500);
   } catch (err) {
-    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+    statusEl.innerHTML = '<span class="err">Error: ' + escapeHtml(err.message) + '</span>';
   }
 }
 
