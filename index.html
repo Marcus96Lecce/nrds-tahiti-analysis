@@ -4183,11 +4183,19 @@ function onDataUpdated(){
   if (unmatched.length){
     html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
   }
-  const topZones = topPriorityZones(20, includeStaleInPriority);
-  html += `<div class="map-flex-row" style="margin-top:10px;">
-    <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(topZones)}</div>
-    <div class="map-combined-box" id="priorityCalcBox" style="display:${priorityDetailsOpen?'':'none'};">${renderPriorityCalcBox(topZones)}</div>
-  </div>`;
+  let topZones = [];
+  let priorityHtml = '';
+  try {
+    topZones = topPriorityZones(20, includeStaleInPriority);
+    priorityHtml = `<div class="map-flex-row" style="margin-top:10px;">
+      <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(topZones)}</div>
+      <div class="map-combined-box" id="priorityCalcBox" style="display:${priorityDetailsOpen?'':'none'};">${renderPriorityCalcBox(topZones)}</div>
+    </div>`;
+  } catch(e) {
+    console.error('[topPriorityZones] crash:', e);
+    priorityHtml = `<div class="warn" style="margin-top:10px;">⚠ Priority zones error: ${escapeHtml(String(e))} — <button class="secondary" onclick="onDataUpdated()">Retry</button></div>`;
+  }
+  html += priorityHtml;
   html += renderLastPlantingDropdown(mainRows);
   document.getElementById('buildSummary').innerHTML = html;
   document.getElementById('enrichedDownloadButtons').innerHTML = `
