@@ -53,6 +53,11 @@
     padding:1px 4px;border-radius:4px;white-space:nowrap;line-height:1.5;
     transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.22);
   }
+  .station-code-label{
+    font-size:9px;font-weight:600;color:#222;background:rgba(255,255,255,.85);
+    padding:0 3px;border-radius:3px;white-space:nowrap;line-height:1.4;
+    transform:translate(5px,-50%);pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.2);
+  }
 
   /* ── Layout ── */
   .wrap{max-width:1020px;margin:0 auto;padding:22px 20px;}
@@ -2608,6 +2613,7 @@ function renderHrStations(){
     marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
     marker.bindPopup(html);
     marker.addTo(entry.stationsLayer);
+    L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(entry.stationsLayer);
   }
 }
 function toggleHrZoneUserLoc(checked){
@@ -3029,6 +3035,7 @@ function renderPffPickerStations(){
     L.circleMarker([lat, lon], { radius: 3.5, color: '#444', weight: 1, fillColor: '#fff', fillOpacity: 0.9 })
       .bindTooltip(`Station ${st['Station']} (${st['Vallee']})`, { sticky: true, direction: 'top' })
       .addTo(entry.stationsLayer);
+    L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(entry.stationsLayer);
   });
 }
 // Shows every already-submitted PFF point as a dim reference layer (thin dark stroke, smaller radius)
@@ -3423,6 +3430,7 @@ function renderIbsStations(){
     marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
     marker.bindPopup(html);
     marker.addTo(entry.stationsLayer);
+    L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(entry.stationsLayer);
   }
 }
 function toggleIbsZoneNames(checked){
@@ -5282,6 +5290,13 @@ function smallLabelIcon(text, color){
   const span = color ? `<span style="color:${color};">${escapeHtml(text)}</span>` : escapeHtml(text);
   return L.divIcon({ className: 'map-text-label', html: span, iconSize: [0,0] });
 }
+// Small always-on label for a rat station's code (e.g. "C6", "A2"), placed just to the right of its
+// dot (not centered on top of it, unlike smallLabelIcon) so the label and the small circle marker
+// don't visually overlap. Shared by every "Overlay all rat stations" checkbox in the app (main map,
+// HR zone picker, PFF picker, IBS picker) — each just adds one of these next to its existing dot.
+function stationLabelIcon(text){
+  return L.divIcon({ className: 'station-code-label', html: escapeHtml(text||''), iconSize: [0,0] });
+}
 
 function ensureMap(){
   if (leafletMap) return;
@@ -6085,6 +6100,7 @@ function renderMap(shouldFit){
       marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       marker.bindPopup(html);
       marker.addTo(stationsOverlayGroup);
+      L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(stationsOverlayGroup);
       boundsLatLngs.push([lat, lon]);
     }
   }
