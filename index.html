@@ -6181,7 +6181,7 @@ function computeZoneUrgency(d, pastLookup, unitGeomMap){
              nrdsCount: recent ? recent.totalIndividuals : 0,
              topoType:topo.type, habitatRisk:habitatRisk, restorePrep:restorePrep,
              urgency:urgency, tier:tier,
-             driver: habitatRisk * alpha >= restorePrep * (1-alpha) ? 'risk' : 'prep' };
+             driver: (projPct > 0 && habitatRisk * alpha >= restorePrep * (1-alpha)) ? 'risk' : 'prep' };
   } catch(e){ return null; }
 }
 
