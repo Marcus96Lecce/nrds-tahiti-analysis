@@ -1205,18 +1205,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
             <option value="Plantation">Plantation</option>
             <option value="Entretien des plantations (cleaning around plantation)">Entretien des plantations (cleaning around plantation)</option>
             <option value="Coupe du sous-bois (cutting undergrowth)">Coupe du sous-bois (cutting undergrowth)</option>
+            <option value="Pépinière">Pépinière — nursery registration</option>
           </select>
         </label>
-        <label class="muted">Type of day work:
+        <label id="hrTypeLbl" class="muted">Type of day work:
           <select id="hrType" required>
             <option value="">Choose…</option>
             <option value="Chantier bénévole">Chantier bénévole (volunteer)</option>
             <option value="Routine">Routine (non-volunteer staff)</option>
           </select>
         </label>
-        <label class="muted">Number of people: <input type="number" id="hrPeople" min="0" step="1" required style="width:80px;"></label>
+        <label id="hrPeopleLbl" class="muted">Number of people: <input type="number" id="hrPeople" min="0" step="1" required style="width:80px;"></label>
       </div>
-      <div class="row" style="margin-bottom:10px;">
+      <div id="hrStationsRow" class="row" style="margin-bottom:10px;">
         <label class="muted">Rat station(s), comma-separated: <input type="text" id="hrStations" list="hrStationList" placeholder="e.g. A5,A6"></label>
         <datalist id="hrStationList"></datalist>
       </div>
@@ -1236,60 +1237,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div id="hrSpeciesRows"></div>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
       </div>
+      <div id="hrPepFields" style="margin-bottom:10px;display:none;">
+        <div class="muted" style="margin-bottom:6px;font-weight:600;">🌱 Pépinière details</div>
+        <div class="row" style="margin-bottom:8px;">
+          <label class="muted">Valley:
+            <select id="pepMapValley" onchange="onPepMapValleyChange()">
+              <option value="all">All valleys</option>
+              <option value="Papehue">Papehue</option>
+              <option value="Maruapo">Maruapo</option>
+              <option value="Hopa">Hopa</option>
+            </select>
+          </label>
+          <label class="muted"><input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)"> Show other pépinières</label>
+          <label class="muted"><input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)"> Show zone names</label>
+          <label class="muted"><input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)"> Show my location</label>
+          <span id="pepUserLocationStatus" class="muted"></span>
+        </div>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery GPS location:</div>
+        <div id="pepPickerMap" class="geo-picker-map"></div>
+        <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
+          <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
+          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
+        </div>
+        <div class="row" style="margin-bottom:6px;">
+          <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01" style="width:200px;"></label>
+          <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
+          <label class="muted">Zone / Area: <input type="text" id="pepZone" list="pepZoneList" placeholder="e.g. Papehue-PEP01" style="width:160px;"></label>
+          <datalist id="pepZoneList"></datalist>
+        </div>
+        <div style="margin-bottom:6px;">
+          <label class="muted">Notes (optional): <input type="text" id="pepNotes" style="width:100%;"></label>
+        </div>
+      </div>
       <button type="submit">Submit action</button>
       <span id="hrSubmitStatus" class="muted"></span>
-      <div id="hrPepiniereSection" style="margin-top:10px;display:none;">
-        <details>
-          <summary style="cursor:pointer;font-size:13px;color:#555;list-style:none;display:flex;align-items:center;gap:6px;">
-            <span style="font-size:11px;border:1px solid #ccc;border-radius:3px;padding:1px 6px;background:#f5f5f5;">▶</span>
-            🌱 Pépinière — nursery source for these plantings <span class="muted">(optional)</span>
-          </summary>
-          <div style="margin-top:10px;padding:10px;background:#f7faf6;border-radius:6px;border:1px solid #d0e8d0;">
-            <div class="row" style="margin-bottom:8px;">
-              <label class="muted">Valley:
-                <select id="pepMapValley" onchange="onPepMapValleyChange()">
-                  <option value="all">All valleys</option>
-                  <option value="Papehue">Papehue</option>
-                  <option value="Maruapo">Maruapo</option>
-                  <option value="Hopa">Hopa</option>
-                </select>
-              </label>
-              <label class="muted">
-                <input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)">
-                Show other pépinières
-              </label>
-              <label class="muted">
-                <input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)">
-                Show zone names
-              </label>
-              <label class="muted">
-                <input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)">
-                Show my location
-              </label>
-              <span id="pepUserLocationStatus" class="muted"></span>
-            </div>
-            <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery location:</div>
-            <div id="pepPickerMap" class="geo-picker-map"></div>
-            <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
-              <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
-              <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
-            </div>
-            <div class="row" style="margin-bottom:6px;">
-              <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01, Nursery-Maruapo" style="width:200px;"></label>
-              <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
-            </div>
-            <div class="row" style="margin-bottom:6px;">
-              <label class="muted">Date: <input type="date" id="pepDate"></label>
-              <label class="muted">Observer: <input type="text" id="pepObserver" placeholder="e.g. Marco Elia" style="width:160px;"></label>
-              <label class="muted">Zone: <input type="text" id="pepZone" list="pepZoneList" placeholder="nursery zone/area" style="width:160px;"></label>
-              <datalist id="pepZoneList"></datalist>
-            </div>
-            <div style="margin-bottom:4px;">
-              <label class="muted">Notes (optional): <input type="text" id="pepNotes" style="width:100%;"></label>
-            </div>
-          </div>
-        </details>
-      </div>
     </form>
     </details>
   </div>
@@ -2305,24 +2286,28 @@ function onHrValleyChange(){
 function onHrActionChange(){
   const action = document.getElementById('hrAction').value;
   const isPlantation = action === 'Plantation';
+  const isPep = action === 'Pépinière';
   const isCleaningType = action === 'Entretien des plantations (cleaning around plantation)' || action === 'Coupe du sous-bois (cutting undergrowth)';
+
   document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
   document.getElementById('hrEvalRow').style.display = isPlantation ? '' : 'none';
   document.getElementById('hrSpeciesSection').style.display = isPlantation ? '' : 'none';
-  document.getElementById('hrPepiniereSection').style.display = isPlantation ? '' : 'none';
+  document.getElementById('hrPepFields').style.display = isPep ? '' : 'none';
+  document.getElementById('hrTypeLbl').style.display = isPep ? 'none' : '';
+  document.getElementById('hrPeopleLbl').style.display = isPep ? 'none' : '';
+  document.getElementById('hrStationsRow').style.display = isPep ? 'none' : '';
+
+  // Toggle required based on action
+  document.getElementById('hrType').required = !isPep;
+  document.getElementById('hrPeople').required = !isPep;
+
   if (!isCleaningType){ document.getElementById('hrPctArrival').value = ''; document.getElementById('hrPctEnd').value = ''; }
-  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; clearPepPoint(); }
-  if (isPlantation){
-    // Pre-fill pépinière date/observer from the parent HR form as a convenience default
-    const hrDate = document.getElementById('hrDate').value;
-    const hrObserver = document.getElementById('hrName').value;
-    if (!document.getElementById('pepDate').value && hrDate) document.getElementById('pepDate').value = hrDate;
-    if (!document.getElementById('pepObserver').value && hrObserver) document.getElementById('pepObserver').value = hrObserver;
-    // Create the picker map lazily if the HR <details> is already open (it has a visible container then)
-    if (document.getElementById('hrDetails').open){
-      ensurePepPickerMap();
-      if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
-    }
+  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; }
+  if (!isPep){ clearPepPoint(); ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; }); }
+
+  if (isPep && document.getElementById('hrDetails').open){
+    ensurePepPickerMap();
+    if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
   }
 }
 
@@ -2357,28 +2342,39 @@ async function submitHabitatForm(evt){
     }).filter(Boolean);
 
     const action = document.getElementById('hrAction').value;
+
+    // ── Pépinière: standalone action → submits to pepinieres table only ──
+    if (action === 'Pépinière'){
+      const pepName = document.getElementById('pepName').value.trim();
+      if (!pepName) throw new Error('Enter a Name/ID for the Pépinière.');
+      if (pepPickedLat == null) throw new Error('Tap/click the map to set the nursery GPS location.');
+      const pepPlantsVal = document.getElementById('pepPlants').value;
+      if (!pepPlantsVal || +pepPlantsVal < 0) throw new Error('Enter the number of plants (≥ 0).');
+      const pepRow = {
+        name: pepName,
+        lat: pepPickedLat, lon: pepPickedLon,
+        number_of_plants: parseInt(pepPlantsVal, 10),
+        date: document.getElementById('hrDate').value,
+        observer: document.getElementById('hrName').value,
+        zone: document.getElementById('pepZone').value,
+        notes: document.getElementById('pepNotes').value,
+      };
+      const result = await insertOrQueue('pepinieres', [pepRow]);
+      statusEl.innerHTML = result.queued
+        ? '<span class="ok">✓ Pépinière saved offline — will sync when back online.</span>'
+        : '<span class="ok">✓ Pépinière registered — map updating…</span>';
+      if (!result.queued) await fetchPepinieres();
+      document.getElementById('hrForm').reset();
+      document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
+      clearPepPoint();
+      ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+      onHrActionChange();
+      return;
+    }
+
     if (action === 'Plantation' && species.length === 0){
       statusEl.innerHTML = '<span class="err">Add at least one planted species — required for a Plantation action.</span>';
       return;
-    }
-    // Pépinière validation (optional section — only require if user started filling it)
-    let pepRow = null;
-    if (action === 'Plantation'){
-      const pepName = document.getElementById('pepName').value.trim();
-      if (pepName || pepPickedLat != null){
-        if (!pepName) throw new Error('Enter a Name/ID for the Pépinière (required when a location is set).');
-        if (pepPickedLat == null) throw new Error('Tap/click the map to record the Pépinière location (required when a name is entered).');
-        const pepPlantsVal = document.getElementById('pepPlants').value;
-        if (!pepPlantsVal || +pepPlantsVal < 0) throw new Error('Enter a valid number of plants for the Pépinière.');
-        pepRow = {
-          name: pepName, lat: pepPickedLat, lon: pepPickedLon,
-          number_of_plants: parseInt(pepPlantsVal, 10),
-          date: document.getElementById('pepDate').value,
-          observer: document.getElementById('pepObserver').value,
-          zone: document.getElementById('pepZone').value,
-          notes: document.getElementById('pepNotes').value,
-        };
-      }
     }
 
     const newRow = {
@@ -2397,10 +2393,9 @@ async function submitHabitatForm(evt){
       species,
     };
     const result = await insertOrQueue('habitat_restoration', [newRow]);
-    if (pepRow) await insertOrQueue('pepinieres', [pepRow]);
     statusEl.innerHTML = result.queued
-      ? `<span class="ok">✓ Saved offline${pepRow ? ' (including Pépinière data)' : ''} — will upload automatically once you're back online.</span>`
-      : `<span class="ok">✓ Submitted${pepRow ? ' — Pépinière saved too' : ''} — updating the charts and map above…</span>`;
+      ? '<span class="ok">✓ Saved offline — will upload automatically once you\'re back online.</span>'
+      : '<span class="ok">✓ Submitted — updating the charts and map above…</span>';
     if (!result.queued) await fetchHabitatRestoration();
     document.getElementById('hrForm').reset();
     document.getElementById('hrSpeciesRows').innerHTML = '';
@@ -2408,8 +2403,6 @@ async function submitHabitatForm(evt){
     document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
     hrZoneSelectedUnit = null;
     if (hrZonePickerEntry) renderHrZonePicker(false);
-    clearPepPoint();
-    ['pepName','pepPlants','pepDate','pepObserver','pepZone','pepNotes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     onHrActionChange();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
@@ -2554,11 +2547,9 @@ function toggleHrZoneUserLoc(checked){
   }
 }
 
-/* ---------------- Pépinière picker (inside HR Plantation form) ----------------
-   A small Leaflet picker map (same pattern as the PFF picker) embedded within the Plantation
-   action form, letting the user record the nursery source location for a planting action.
-   The pépinière section is optional — if Name/ID and map location are left blank, no row is
-   written to the `pepinieres` Supabase table; but if either is touched, both are required. */
+/* ---------------- Pépinière picker (HR form — Pépinière action) ----------------
+   A small Leaflet picker map embedded in the HR form when Action = "Pépinière".
+   Pépinière is now a standalone action type; GPS + Name/ID + plant count are required. */
 let pepPickerEntry = null;
 let pepMapValleyFilter = 'all', pepShowOthers = false, pepShowZoneNames = false;
 let pepUserLocWatchId = null, pepUserLocFirstFix = true;
@@ -2676,7 +2667,8 @@ function onHrDetailsToggle(open){
   if (!open) return;
   ensureHrZonePickerMap();
   if (hrZonePickerEntry) hrZonePickerEntry.map.invalidateSize();
-  if (document.getElementById('hrAction').value === 'Plantation'){
+  const act = document.getElementById('hrAction').value;
+  if (act === 'Plantation' || act === 'Pépinière'){
     ensurePepPickerMap();
     if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
   }
