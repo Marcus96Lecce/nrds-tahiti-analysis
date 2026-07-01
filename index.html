@@ -1225,53 +1225,60 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div id="hrSpeciesRows"></div>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
       </div>
-      <div id="hrPepiniereSection" style="margin-bottom:10px;display:none;">
-        <div style="font-weight:600;margin-bottom:6px;">Pépinière <span class="muted">(optional — nursery source for these plantings)</span></div>
-        <div class="row" style="margin-bottom:8px;">
-          <label class="muted">Valley:
-            <select id="pepMapValley" onchange="onPepMapValleyChange()">
-              <option value="all">All valleys</option>
-              <option value="Papehue">Papehue</option>
-              <option value="Maruapo">Maruapo</option>
-              <option value="Hopa">Hopa</option>
-            </select>
-          </label>
-          <label class="muted">
-            <input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)">
-            Show other pépinières
-          </label>
-          <label class="muted">
-            <input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)">
-            Show zone names
-          </label>
-          <label class="muted">
-            <input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)">
-            Show my location
-          </label>
-          <span id="pepUserLocationStatus" class="muted"></span>
-        </div>
-        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery location:</div>
-        <div id="pepPickerMap" class="geo-picker-map"></div>
-        <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
-          <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
-          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
-        </div>
-        <div class="row" style="margin-bottom:6px;">
-          <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01, Nursery-Maruapo" style="width:200px;"></label>
-          <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
-        </div>
-        <div class="row" style="margin-bottom:6px;">
-          <label class="muted">Date: <input type="date" id="pepDate"></label>
-          <label class="muted">Observer: <input type="text" id="pepObserver" placeholder="e.g. Marco Elia" style="width:160px;"></label>
-          <label class="muted">Zone: <input type="text" id="pepZone" list="pepZoneList" placeholder="nursery zone/area" style="width:160px;"></label>
-          <datalist id="pepZoneList"></datalist>
-        </div>
-        <div style="margin-bottom:6px;">
-          <label class="muted">Notes (optional): <input type="text" id="pepNotes" style="width:100%;"></label>
-        </div>
-      </div>
       <button type="submit">Submit action</button>
       <span id="hrSubmitStatus" class="muted"></span>
+      <div id="hrPepiniereSection" style="margin-top:10px;display:none;">
+        <details>
+          <summary style="cursor:pointer;font-size:13px;color:#555;list-style:none;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;border:1px solid #ccc;border-radius:3px;padding:1px 6px;background:#f5f5f5;">▶</span>
+            🌱 Pépinière — nursery source for these plantings <span class="muted">(optional)</span>
+          </summary>
+          <div style="margin-top:10px;padding:10px;background:#f7faf6;border-radius:6px;border:1px solid #d0e8d0;">
+            <div class="row" style="margin-bottom:8px;">
+              <label class="muted">Valley:
+                <select id="pepMapValley" onchange="onPepMapValleyChange()">
+                  <option value="all">All valleys</option>
+                  <option value="Papehue">Papehue</option>
+                  <option value="Maruapo">Maruapo</option>
+                  <option value="Hopa">Hopa</option>
+                </select>
+              </label>
+              <label class="muted">
+                <input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)">
+                Show other pépinières
+              </label>
+              <label class="muted">
+                <input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)">
+                Show zone names
+              </label>
+              <label class="muted">
+                <input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)">
+                Show my location
+              </label>
+              <span id="pepUserLocationStatus" class="muted"></span>
+            </div>
+            <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery location:</div>
+            <div id="pepPickerMap" class="geo-picker-map"></div>
+            <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
+              <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
+              <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
+            </div>
+            <div class="row" style="margin-bottom:6px;">
+              <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01, Nursery-Maruapo" style="width:200px;"></label>
+              <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
+            </div>
+            <div class="row" style="margin-bottom:6px;">
+              <label class="muted">Date: <input type="date" id="pepDate"></label>
+              <label class="muted">Observer: <input type="text" id="pepObserver" placeholder="e.g. Marco Elia" style="width:160px;"></label>
+              <label class="muted">Zone: <input type="text" id="pepZone" list="pepZoneList" placeholder="nursery zone/area" style="width:160px;"></label>
+              <datalist id="pepZoneList"></datalist>
+            </div>
+            <div style="margin-bottom:4px;">
+              <label class="muted">Notes (optional): <input type="text" id="pepNotes" style="width:100%;"></label>
+            </div>
+          </div>
+        </details>
+      </div>
     </form>
     </details>
   </div>
