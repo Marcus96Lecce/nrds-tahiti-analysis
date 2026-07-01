@@ -1744,6 +1744,29 @@ async function syncOfflineQueue(){
   if (syncedTables.has('pff_observations')) fetchPffObservations();
   if (syncedTables.has('bird_surveys')) fetchBirdSurveys();
 }
+function queueItemLabel(item){
+  const TABLE_NAMES = {
+    habitat_restoration: 'Habitat Restoration', deratisation: 'Dératisation',
+    pff_observations: 'PFF Observation', bird_surveys: 'Bird Survey (IBS)', pepinieres: 'Pépinière'
+  };
+  const name = TABLE_NAMES[item.table] || item.table;
+  const r = item.rows && item.rows[0];
+  if (!r) return name;
+  const parts = [];
+  if (r.action || r.Action)       parts.push(escapeHtml((r.action || r.Action || '').split('(')[0].trim()));
+  if (r.unit_name || r.Unit_Name) parts.push(escapeHtml(r.unit_name || r.Unit_Name));
+  if (r.valley || r.Valley)       parts.push(escapeHtml(r.valley || r.Valley));
+  if (r.date || r.Date)           parts.push(escapeHtml(r.date || r.Date));
+  if (r.name || r.Name)           parts.push('<span class="muted">'+escapeHtml(r.name || r.Name)+'</span>');
+  // pff_observations: multiple rows
+  if (item.table === 'pff_observations' && item.rows.length > 1)
+    parts.push(`${item.rows.length} points`);
+  return `<b>${name}</b>${parts.length ? ' — ' + parts.join(' · ') : ''}`;
+}
+function removeFromQueue(id){
+  if (!confirm('Remove this item from the offline queue? It will NOT be uploaded.')) return;
+  saveOfflineQueue(getOfflineQueue().filter(item => item.id !== id));
+}
 function renderOfflineBanner(){
   const banner = document.getElementById('offlineBanner');
   if (!banner) return;
@@ -1751,12 +1774,33 @@ function renderOfflineBanner(){
   const online = navigator.onLine;
   if (online && !queue.length){ banner.style.display = 'none'; return; }
   banner.style.display = '';
-  const statusTxt = online ? 'Online' : '🔴 Offline — Habitat Restoration / Dératisation / PFF submissions below are being saved on this device only';
-  const queueTxt = queue.length
-    ? `${queue.length} submission${queue.length===1?'':'s'} saved locally, not yet uploaded.`
-    : 'No submissions waiting to upload.';
-  banner.innerHTML = `<b>${statusTxt}</b> — ${queueTxt}` +
-    (queue.length ? ` <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;margin-left:6px;" onclick="syncOfflineQueue()" ${online?'':'disabled'}>Sync now</button>` : '');
+  const statusDot = online ? '🟡' : '🔴';
+  const statusTxt = online ? 'Online' : 'Offline — forms are being saved on this device only';
+  let html = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span><b>${statusDot} ${statusTxt}</b></span>`;
+  if (queue.length){
+    html += `<span class="muted">${queue.length} submission${queue.length===1?'':'s'} queued</span>
+    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="syncOfflineQueue()" ${online?'':'disabled'}>⬆ Sync now</button>`;
+  } else {
+    html += `<span class="muted">No submissions waiting.</span>`;
+  }
+  html += `</div>`;
+  if (queue.length){
+    html += `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">`;
+    for (const item of queue){
+      const t = new Date(item.queuedAt);
+      const when = isNaN(t) ? '' : t.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      html += `<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e0c060;border-radius:6px;padding:7px 10px;">
+        <span style="flex:1;font-size:13px;">${queueItemLabel(item)}</span>
+        <span class="muted" style="font-size:11.5px;white-space:nowrap;">${when}</span>
+        <button type="button" onclick="removeFromQueue('${escapeHtml(item.id)}')"
+          style="background:none;border:1px solid #ccc;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:13px;color:#c0392b;"
+          title="Remove from queue (will NOT be uploaded)">✕</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  banner.innerHTML = html;
 }
 window.addEventListener('online', () => { renderOfflineBanner(); syncOfflineQueue(); });
 window.addEventListener('offline', () => renderOfflineBanner());
