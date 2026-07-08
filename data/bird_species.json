@@ -973,5 +973,40 @@
       }
     ],
     "audio": []
+  },
+  {
+    "id": "butorides_striata",
+    "commonName": "Striated Heron",
+    "scientificName": "Butorides striata",
+    "status": "Native",
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Striated_heron_%28Butorides_striata_striata%29.JPG/1280px-Striated_heron_%28Butorides_striata_striata%29.JPG",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Striated_heron_(Butorides_striata_striata).JPG"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Butorides_striata_striata%2C_Rio_de_Janeiro%2C_Brazil_423402865.jpg/1280px-Butorides_striata_striata%2C_Rio_de_Janeiro%2C_Brazil_423402865.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Butorides_striata_striata,_Rio_de_Janeiro,_Brazil_423402865.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Striated_heron_%28Butorides_striata%29_with_fish_Rio_Napo_2.jpg/1280px-Striated_heron_%28Butorides_striata%29_with_fish_Rio_Napo_2.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Striated_heron_(Butorides_striata)_with_fish_Rio_Napo_2.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/XC346389_-_Striated_Heron_-_Butorides_striata.mp3",
+        "attribution": "Wikimedia Commons (Xeno-canto XC346389)",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:XC346389_-_Striated_Heron_-_Butorides_striata.mp3"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Striated_heron_call_recorded_in_April_2016_at_Kallar%2C_Kerala.wav",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Striated_heron_call_recorded_in_April_2016_at_Kallar,_Kerala.wav"
+      }
+    ]
   }
 ]
