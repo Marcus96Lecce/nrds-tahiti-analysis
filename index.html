@@ -3703,6 +3703,11 @@ function birdObsTopColor(species){
   if (species && species.length) return species[0].color || '#666';
   return '#666';
 }
+// Formats a species' age-class picks (Chick/Juvenile/Adult, only meaningful for an exact count —
+// see the conditional checkboxes in renderBirdObsPendingSpecies) for display in map/chart popups.
+function birdAgeClassesLabel(s){
+  return (s.ageClasses && s.ageClasses.length) ? ', ' + s.ageClasses.map(a => a.charAt(0).toUpperCase()+a.slice(1)).join('+') : '';
+}
 
 function _applyBirdObsData(data){
   birdObservations = data || [];
@@ -3896,7 +3901,7 @@ function selectBirdSpecies(catalogId){
   const s = birdSpeciesCatalog.find(x => x.id === catalogId);
   if (!s) return;
   const id = ++birdObsPendingIdCounter;
-  birdObsPendingSpecies.push({ id, name: s.commonName, scientificName: s.scientificName, status: s.status, quantity: 1, quantityType: 'individuals', detectionType: 'seen', color: BIRD_STATUS_COLORS[s.status] || '#888888', isCustom: false });
+  birdObsPendingSpecies.push({ id, name: s.commonName, scientificName: s.scientificName, status: s.status, quantity: 1, quantityType: 'individuals', detectionType: 'seen', ageClasses: [], color: BIRD_STATUS_COLORS[s.status] || '#888888', isCustom: false });
   renderBirdObsPendingSpecies();
 }
 function addCustomBirdSpecies(){
@@ -3904,7 +3909,7 @@ function addCustomBirdSpecies(){
   const name = nameEl.value.trim();
   if (!name) return;
   const id = ++birdObsPendingIdCounter;
-  birdObsPendingSpecies.push({ id, name, scientificName: null, status: null, quantity: 1, quantityType: 'individuals', detectionType: 'seen', color: '#888888', isCustom: true });
+  birdObsPendingSpecies.push({ id, name, scientificName: null, status: null, quantity: 1, quantityType: 'individuals', detectionType: 'seen', ageClasses: [], color: '#888888', isCustom: true });
   renderBirdObsPendingSpecies();
   nameEl.value = '';
 }
@@ -3922,7 +3927,7 @@ function renderBirdObsPendingSpecies(){
       <input type="color" class="bird-color-swatch" value="${escapeHtml(p.color || BIRD_STATUS_COLORS[p.status] || '#888888')}" title="Marker color for this species on the map/chart" onchange="onBirdObsPendingFieldChange(${p.id},'color',this.value)">
       <span style="min-width:120px;font-size:13px;">${escapeHtml(p.name)}${p.isCustom ? ' <span class="muted" style="font-size:11px;">(custom)</span>' : ''}</span>
       <input type="number" min="1" step="1" value="${p.quantity}" style="width:64px;" onchange="onBirdObsPendingFieldChange(${p.id},'quantity',this.value)">
-      <select onchange="onBirdObsPendingFieldChange(${p.id},'quantityType',this.value)">
+      <select onchange="onBirdObsPendingQuantityTypeChange(${p.id},this.value)">
         <option value="individuals" ${p.quantityType==='individuals'?'selected':''}>exact count</option>
         <option value="group" ${p.quantityType==='group'?'selected':''}>flock/group (estimate)</option>
       </select>
@@ -3930,8 +3935,31 @@ function renderBirdObsPendingSpecies(){
         <option value="seen" ${p.detectionType==='seen'?'selected':''}>Seen</option>
         <option value="heard" ${p.detectionType==='heard'?'selected':''}>Heard</option>
       </select>
+      ${p.quantityType==='individuals' ? `
+      <span class="row" style="gap:8px;align-items:center;font-size:12px;" title="Age class of the counted individuals (pick any that apply)">
+        ${['chick','juvenile','adult'].map(ac => `
+          <label class="muted" style="display:flex;align-items:center;gap:3px;">
+            <input type="checkbox" ${(p.ageClasses||[]).includes(ac)?'checked':''} onchange="onBirdObsPendingAgeClassToggle(${p.id},'${ac}',this.checked)">${ac.charAt(0).toUpperCase()+ac.slice(1)}
+          </label>`).join('')}
+      </span>` : ''}
       <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removeBirdObsPendingSpecies(${p.id})">×</button>
     </div>`).join('');
+}
+function onBirdObsPendingQuantityTypeChange(id, value){
+  const p = birdObsPendingSpecies.find(p => p.id === id);
+  if (!p) return;
+  p.quantityType = value;
+  // full re-render (not just a state mutation, unlike the other pending fields) because the age-class
+  // checkboxes only exist in the DOM when quantityType === 'individuals' — switching to "group" needs
+  // to remove them, switching back needs to add them.
+  renderBirdObsPendingSpecies();
+}
+function onBirdObsPendingAgeClassToggle(id, ageClass, checked){
+  const p = birdObsPendingSpecies.find(p => p.id === id);
+  if (!p) return;
+  if (!p.ageClasses) p.ageClasses = [];
+  if (checked){ if (!p.ageClasses.includes(ageClass)) p.ageClasses.push(ageClass); }
+  else { p.ageClasses = p.ageClasses.filter(a => a !== ageClass); }
 }
 function onBirdObsPendingFieldChange(id, field, value){
   const p = birdObsPendingSpecies.find(p => p.id === id);
@@ -3968,7 +3996,7 @@ async function submitBirdObsForm(evt){
       canopy_cover: document.getElementById('boCanopyCover').value || null,
       wind_beaufort: wind ? parseInt(wind, 10) : null,
       rain: document.getElementById('boRain').value || null,
-      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, color: p.color, isCustom: p.isCustom })),
+      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, ageClasses: p.quantityType==='individuals' ? (p.ageClasses||[]) : [], color: p.color, isCustom: p.isCustom })),
       notes: document.getElementById('boNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_observations', [newRow]);
@@ -5642,7 +5670,7 @@ function renderBirdObsChart(container){
     const x = xCenter(i);
     const species = r.species || [];
     const color = birdObsTopColor(species);
-    const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
+    const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''}${birdAgeClassesLabel(s)})`).join(', ') || '—';
     const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${r.observation_type==='nest'?'🪺 Nest — ':''}${escapeHtml(r.date)}</div>
       <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
       <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
@@ -6657,7 +6685,7 @@ function renderMap(shouldFit){
       const species = r.species || [];
       const color = birdObsTopColor(species);
       const isNest = r.observation_type === 'nest';
-      const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
+      const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''}${birdAgeClassesLabel(s)})`).join(', ') || '—';
       const html = `<b>${isNest ? '🪺 Nest' : '🐦 Bird observation'}</b><br>` +
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
         `Species: ${speciesTxt}<br>` +
