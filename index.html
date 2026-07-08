@@ -1605,7 +1605,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="muted">Date: <input type="date" id="boDate" required></label>
         <label class="muted">Observer: <input type="text" id="boObserver" placeholder="e.g. Marco Elia" required style="width:160px;"></label>
         <label class="muted">What are you logging?
-          <select id="boObsType">
+          <select id="boObsType" onchange="onBirdObsTypeChange()">
             <option value="sighting">Bird sighting</option>
             <option value="nest">Nest</option>
           </select>
@@ -3922,6 +3922,9 @@ function renderBirdObsPendingSpecies(){
     wrap.innerHTML = '<div class="muted" style="font-size:12px;font-style:italic;">No species added yet — use "+ Add species" below.</div>';
     return;
   }
+  // Age class (Chick/Juvenile/Adult) doesn't apply to a Nest observation — only to an exact-count
+  // bird sighting — so it's suppressed entirely while "Nest" is selected, regardless of quantityType.
+  const isNest = document.getElementById('boObsType').value === 'nest';
   wrap.innerHTML = birdObsPendingSpecies.map(p => `
     <div class="row" style="align-items:center;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;flex-wrap:wrap;">
       <input type="color" class="bird-color-swatch" value="${escapeHtml(p.color || BIRD_STATUS_COLORS[p.status] || '#888888')}" title="Marker color for this species on the map/chart" onchange="onBirdObsPendingFieldChange(${p.id},'color',this.value)">
@@ -3935,7 +3938,7 @@ function renderBirdObsPendingSpecies(){
         <option value="seen" ${p.detectionType==='seen'?'selected':''}>Seen</option>
         <option value="heard" ${p.detectionType==='heard'?'selected':''}>Heard</option>
       </select>
-      ${p.quantityType==='individuals' ? `
+      ${(p.quantityType==='individuals' && !isNest) ? `
       <span class="row" style="gap:8px;align-items:center;font-size:12px;" title="Age class of the counted individuals (pick any that apply)">
         ${['chick','juvenile','adult'].map(ac => `
           <label class="muted" style="display:flex;align-items:center;gap:3px;">
@@ -3944,6 +3947,9 @@ function renderBirdObsPendingSpecies(){
       </span>` : ''}
       <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removeBirdObsPendingSpecies(${p.id})">×</button>
     </div>`).join('');
+}
+function onBirdObsTypeChange(){
+  renderBirdObsPendingSpecies();
 }
 function onBirdObsPendingQuantityTypeChange(id, value){
   const p = birdObsPendingSpecies.find(p => p.id === id);
@@ -3986,17 +3992,18 @@ async function submitBirdObsForm(evt){
   statusEl.innerHTML = 'Submitting…';
   try {
     const wind = document.getElementById('boWindBeaufort').value;
+    const obsType = document.getElementById('boObsType').value;
     const newRow = {
       date: document.getElementById('boDate').value,
       observer: document.getElementById('boObserver').value.trim(),
-      observation_type: document.getElementById('boObsType').value,
+      observation_type: obsType,
       lat: birdObsPickedLat,
       lon: birdObsPickedLon,
       sky: document.getElementById('boSky').value || null,
       canopy_cover: document.getElementById('boCanopyCover').value || null,
       wind_beaufort: wind ? parseInt(wind, 10) : null,
       rain: document.getElementById('boRain').value || null,
-      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, ageClasses: p.quantityType==='individuals' ? (p.ageClasses||[]) : [], color: p.color, isCustom: p.isCustom })),
+      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, ageClasses: (p.quantityType==='individuals' && obsType!=='nest') ? (p.ageClasses||[]) : [], color: p.color, isCustom: p.isCustom })),
       notes: document.getElementById('boNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_observations', [newRow]);
