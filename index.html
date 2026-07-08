@@ -225,6 +225,10 @@
   .bird-color-swatch{width:22px;height:22px;padding:0;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:none;flex-shrink:0;}
   .bird-color-swatch::-webkit-color-swatch-wrapper{padding:2px;}
   .bird-color-swatch::-webkit-color-swatch{border:none;border-radius:2px;}
+  .bird-photo-preview{position:relative;width:64px;height:64px;flex-shrink:0;}
+  .bird-photo-preview img{width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);}
+  .bird-photo-preview .x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:none;font-size:11px;line-height:18px;text-align:center;cursor:pointer;padding:0;}
+  .bird-obs-thumb{width:44px;height:44px;border-radius:5px;object-fit:cover;cursor:zoom-in;border:1px solid rgba(255,255,255,.6);}
 
   /* ── Bird photo lightbox (click a species thumbnail to enlarge) ── */
   .bird-lightbox-backdrop{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;}
@@ -1667,6 +1671,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Species observed</div>
       <div id="boSpeciesList" style="margin-bottom:8px;"></div>
       <button type="button" class="secondary" style="padding:6px 14px;font-size:13px;margin-bottom:14px;" onclick="openBirdSpeciesModal()">+ Add species</button>
+
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Photos (optional, up to 5 — your own photo of what you saw, not a catalog reference photo):</label>
+        <input type="file" id="boPhotoFiles" accept="image/*" multiple onchange="onBirdObsPhotoFilesSelected(event)">
+        <div id="boPhotoPreview" class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap;"></div>
+        <div class="muted" style="font-size:11px;margin-top:4px;">Needs an internet connection to upload — if you're offline, the observation still saves, just without the photo(s).</div>
+      </div>
 
       <div style="margin-bottom:10px;">
         <label class="muted" style="display:block;margin-bottom:4px;">Notes:</label>
@@ -3684,6 +3695,8 @@ let birdObsPickedLat = null, birdObsPickedLon = null;
 let birdObsUserLocWatchId = null, birdObsUserLocFirstFix = true;
 let birdObsPendingSpecies = [];
 let birdObsPendingIdCounter = 0;
+let birdObsSelectedPhotoFiles = []; // File objects, uploaded to Supabase Storage on submit
+const BIRD_OBS_MAX_PHOTOS = 5;
 
 const BIRD_STATUS_COLORS = { 'Endemic-CR': '#d62728', 'Endemic': '#ff7f0e', 'Native': '#2a8f2a', 'Migrant': '#1f77b4', 'Introduced': '#888888' };
 // Most conservation-significant species present wins the marker color on a multi-species observation point.
@@ -3707,6 +3720,15 @@ function birdObsTopColor(species){
 // see the conditional checkboxes in renderBirdObsPendingSpecies) for display in map/chart popups.
 function birdAgeClassesLabel(s){
   return (s.ageClasses && s.ageClasses.length) ? ', ' + s.ageClasses.map(a => a.charAt(0).toUpperCase()+a.slice(1)).join('+') : '';
+}
+// Small clickable thumbnail row for a bird_observations row's own uploaded field photos (not the
+// species catalog's reference photos) — used in both the map popup and the chart's click-to-pin
+// popup, opening the same generic lightbox via openObservationPhotoLightbox().
+function birdObsPhotoThumbsHtml(r){
+  if (!r.photo_urls || !r.photo_urls.length) return '';
+  return `<br><div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">` +
+    r.photo_urls.map((u,i) => `<img class="bird-obs-thumb" src="${escapeHtml(u)}" onclick="openObservationPhotoLightbox('${escapeHtml(String(r.id))}',${i})">`).join('') +
+    `</div>`;
 }
 
 function _applyBirdObsData(data){
@@ -3859,13 +3881,28 @@ function renderBirdSpeciesModalList(filterText){
 }
 
 /* ---- Photo lightbox (click a species thumbnail in the picker modal to enlarge) ---- */
+// Generic photo lightbox — holds the actual photos array + a title/subtitle directly (not a lookup
+// key) so it can show either a catalog species' reference photos or a field observation's own
+// uploaded photos through the same UI. photos: [{url, attribution?, sourceUrl?}].
 let birdLightboxState = null;
+function openLightboxWithPhotos(photos, index, title, subtitle){
+  if (!photos || !photos.length) return;
+  birdLightboxState = { photos, index: Math.max(0, Math.min(index, photos.length-1)), title, subtitle };
+  renderBirdPhotoLightbox();
+  document.getElementById('birdPhotoLightbox').style.display = 'flex';
+}
 function openBirdPhotoLightbox(catalogId, index){
   const s = birdSpeciesCatalog.find(x => x.id === catalogId);
   if (!s || !s.photos || !s.photos.length) return;
-  birdLightboxState = { catalogId, index: Math.max(0, Math.min(index, s.photos.length-1)) };
-  renderBirdPhotoLightbox();
-  document.getElementById('birdPhotoLightbox').style.display = 'flex';
+  openLightboxWithPhotos(s.photos, index, s.commonName, s.scientificName);
+}
+// Field photos a user attached to their own Birds Observation submission (not a catalog reference
+// photo) — obsId is the bird_observations row id, resolved from the already-loaded birdObservations.
+function openObservationPhotoLightbox(obsId, index){
+  const r = birdObservations.find(x => String(x.id) === String(obsId));
+  if (!r || !r.photo_urls || !r.photo_urls.length) return;
+  const photos = r.photo_urls.map(u => ({ url: u }));
+  openLightboxWithPhotos(photos, index, 'Field photo', r.date || '');
 }
 function closeBirdPhotoLightbox(){
   document.getElementById('birdPhotoLightbox').style.display = 'none';
@@ -3873,22 +3910,20 @@ function closeBirdPhotoLightbox(){
 }
 function renderBirdPhotoLightbox(){
   if (!birdLightboxState) return;
-  const s = birdSpeciesCatalog.find(x => x.id === birdLightboxState.catalogId);
-  if (!s) return;
-  const photo = s.photos[birdLightboxState.index];
+  const { photos, index, title, subtitle } = birdLightboxState;
+  const photo = photos[index];
   document.getElementById('birdLightboxImg').src = photo.url;
   document.getElementById('birdLightboxCaption').innerHTML =
-    `${escapeHtml(s.commonName)} <span style="font-style:italic;opacity:.85;">(${escapeHtml(s.scientificName||'')})</span> — ${birdLightboxState.index+1}/${s.photos.length}` +
+    `${escapeHtml(title||'')} ${subtitle ? `<span style="font-style:italic;opacity:.85;">(${escapeHtml(subtitle)})</span>` : ''} — ${index+1}/${photos.length}` +
     (photo.attribution ? ` · <a href="${escapeHtml(photo.sourceUrl||photo.url)}" target="_blank" rel="noopener">${escapeHtml(photo.attribution)}</a>` : '');
-  const multi = s.photos.length > 1;
+  const multi = photos.length > 1;
   document.getElementById('birdLightboxPrev').style.display = multi ? '' : 'none';
   document.getElementById('birdLightboxNext').style.display = multi ? '' : 'none';
 }
 function birdLightboxStep(delta){
   if (!birdLightboxState) return;
-  const s = birdSpeciesCatalog.find(x => x.id === birdLightboxState.catalogId);
-  if (!s) return;
-  birdLightboxState.index = (birdLightboxState.index + delta + s.photos.length) % s.photos.length;
+  const { photos } = birdLightboxState;
+  birdLightboxState.index = (birdLightboxState.index + delta + photos.length) % photos.length;
   renderBirdPhotoLightbox();
 }
 document.addEventListener('keydown', e => {
@@ -3977,6 +4012,49 @@ function removeBirdObsPendingSpecies(id){
   renderBirdObsPendingSpecies();
 }
 
+/* ---- Photo upload (optional, own field photo — separate from the catalog's reference photos) ---- */
+function onBirdObsPhotoFilesSelected(evt){
+  const files = [...evt.target.files];
+  evt.target.value = ''; // clears the picker so re-selecting the same file again later still fires onchange
+  for (const f of files){
+    if (birdObsSelectedPhotoFiles.length >= BIRD_OBS_MAX_PHOTOS) break;
+    birdObsSelectedPhotoFiles.push(f);
+  }
+  renderBirdObsPhotoPreview();
+}
+function removeBirdObsPhotoFile(index){
+  birdObsSelectedPhotoFiles.splice(index, 1);
+  renderBirdObsPhotoPreview();
+}
+function renderBirdObsPhotoPreview(){
+  const wrap = document.getElementById('boPhotoPreview');
+  wrap.innerHTML = birdObsSelectedPhotoFiles.map((f, i) => `
+    <div class="bird-photo-preview">
+      <img src="${URL.createObjectURL(f)}" alt="${escapeHtml(f.name)}">
+      <button type="button" class="x" onclick="removeBirdObsPhotoFile(${i})" title="Remove">×</button>
+    </div>`).join('');
+}
+// Uploads every selected file to the "bird-photos" Storage bucket and returns the array of public
+// URLs. Silently skipped (returns null, not thrown) when offline or on any upload error — a photo
+// upload failure should never block the rest of the observation from being submitted/queued.
+async function uploadBirdObsPhotos(){
+  if (!birdObsSelectedPhotoFiles.length) return { urls: [], failed: false };
+  if (!navigator.onLine) return { urls: [], failed: true };
+  const urls = [];
+  try {
+    for (const file of birdObsSelectedPhotoFiles){
+      const path = `${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`.replace(/\s+/g, '_');
+      const { error: upErr } = await window.sb.storage.from('bird-photos').upload(path, file);
+      if (upErr) throw upErr;
+      const { data } = window.sb.storage.from('bird-photos').getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+    return { urls, failed: false };
+  } catch (e){
+    return { urls, failed: true }; // return whatever succeeded before the failure, flagged
+  }
+}
+
 /* ---- Submit ---- */
 async function submitBirdObsForm(evt){
   evt.preventDefault();
@@ -3993,6 +4071,9 @@ async function submitBirdObsForm(evt){
   try {
     const wind = document.getElementById('boWindBeaufort').value;
     const obsType = document.getElementById('boObsType').value;
+    // Photos upload separately (Storage, not the row insert itself) — done first so the row already
+    // has photo_urls populated when it goes through insertOrQueue, rather than a two-step patch.
+    const photoResult = await uploadBirdObsPhotos();
     const newRow = {
       date: document.getElementById('boDate').value,
       observer: document.getElementById('boObserver').value.trim(),
@@ -4004,16 +4085,22 @@ async function submitBirdObsForm(evt){
       wind_beaufort: wind ? parseInt(wind, 10) : null,
       rain: document.getElementById('boRain').value || null,
       species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, ageClasses: (p.quantityType==='individuals' && obsType!=='nest') ? (p.ageClasses||[]) : [], color: p.color, isCustom: p.isCustom })),
+      photo_urls: photoResult.urls.length ? photoResult.urls : null,
       notes: document.getElementById('boNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_observations', [newRow]);
     const kindLabel = newRow.observation_type === 'nest' ? 'Nest' : 'Observation';
+    const photoNote = photoResult.failed
+      ? ' <span class="err">(photo upload failed/offline — submitted without photos)</span>'
+      : (photoResult.urls.length ? ` — ${photoResult.urls.length} photo${photoResult.urls.length===1?'':'s'} attached` : '');
     statusEl.innerHTML = result.queued
-      ? '<span class="ok">✓ Saved offline — will upload when back online.</span>'
-      : `<span class="ok">✓ ${kindLabel} submitted (${newRow.species.length} species).</span>`;
+      ? `<span class="ok">✓ Saved offline — will upload when back online.</span>${photoResult.failed ? ' <span class="err">(photos need internet — not attached)</span>' : ''}`
+      : `<span class="ok">✓ ${kindLabel} submitted (${newRow.species.length} species)${photoNote}</span>`;
     document.getElementById('birdObsForm').reset();
     birdObsPendingSpecies = [];
     renderBirdObsPendingSpecies();
+    birdObsSelectedPhotoFiles = [];
+    renderBirdObsPhotoPreview();
     clearBirdObsPoint();
     document.getElementById('boDate').value = new Date().toISOString().slice(0,10);
     if (!result.queued) await fetchBirdObservations();
@@ -4025,8 +4112,8 @@ async function submitBirdObsForm(evt){
 function downloadBirdObservations(){
   const rows = birdObservations;
   if (!rows.length){ alert('No Bird Observation records loaded yet.'); return; }
-  const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]) }));
-  const fields = ['id','date','observer','observation_type','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','notes','created_at'];
+  const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]), photo_urls: (r.photo_urls||[]).join(' | ') }));
+  const fields = ['id','date','observer','observation_type','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','photo_urls','notes','created_at'];
   downloadCSV('bird_observations.csv', flat, fields);
 }
 
@@ -5683,7 +5770,7 @@ function renderBirdObsChart(container){
       <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
       <div><b>Sky:</b> ${escapeHtml(r.sky||'—')} · <b>Wind:</b> ${r.wind_beaufort ?? '—'} · <b>Rain:</b> ${escapeHtml(r.rain||'—')} · <b>Canopy:</b> ${escapeHtml(r.canopy_cover||'—')}</div>
       ${r.notes ? `<div><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}
-      <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>`) - 1;
+      <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>${birdObsPhotoThumbsHtml(r)}`) - 1;
     chronoSvg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
     chronoSvg += svgEl('title',{},`${r.date} — ${species.length} species\nClick for full details`);
     chronoSvg += svgEl('rect',{x:x-barW/2,y:cmT,width:barW,height:barHc,fill:color});
@@ -6697,7 +6784,8 @@ function renderMap(shouldFit){
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
         `Species: ${speciesTxt}<br>` +
         `Sky: ${escapeHtml(r.sky || '—')} · Wind: ${r.wind_beaufort ?? '—'} · Rain: ${escapeHtml(r.rain || '—')} · Canopy: ${escapeHtml(r.canopy_cover || '—')}` +
-        (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
+        (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '') +
+        birdObsPhotoThumbsHtml(r);
       // Nests get a square marker (birdNestIcon) instead of the round circleMarker dot used for a
       // plain sighting — same idea/at-a-glance distinction requested for this map layer.
       const marker = isNest
