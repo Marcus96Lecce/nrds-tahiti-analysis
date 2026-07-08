@@ -836,14 +836,15 @@
         "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Estrilda_astrild_MHNT.jpg/1280px-Estrilda_astrild_MHNT.jpg",
         "attribution": "Wikimedia Commons",
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Estrilda_astrild_MHNT.jpg"
-      },
-      {
-        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Waxbill_on_coin%2C_Ascension_Island.JPG/250px-Waxbill_on_coin%2C_Ascension_Island.JPG",
-        "attribution": "Wikimedia Commons",
-        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Waxbill_on_coin,_Ascension_Island.JPG"
       }
     ],
-    "audio": []
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/7d/Estrilda_astrild_-_Common_Waxbill_XC431984.mp3",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Estrilda_astrild_-_Common_Waxbill_XC431984.mp3"
+      }
+    ]
   },
   {
     "id": "streptopelia_chinensis",

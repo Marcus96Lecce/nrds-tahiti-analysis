@@ -58,6 +58,9 @@
     padding:0 3px;border-radius:3px;white-space:nowrap;line-height:1.4;
     transform:translate(5px,-50%);pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.2);
   }
+  /* Reset Leaflet's default .leaflet-div-icon white-box/border so our own square nest marker
+     (a solid-colored <div> in the icon's html) is the only visible shape, not a double border. */
+  .bird-nest-icon{background:none !important;border:none !important;}
 
   /* ── Layout ── */
   .wrap{max-width:1020px;margin:0 auto;padding:22px 20px;}
@@ -1601,10 +1604,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="row" style="margin-bottom:10px;flex-wrap:wrap;">
         <label class="muted">Date: <input type="date" id="boDate" required></label>
         <label class="muted">Observer: <input type="text" id="boObserver" placeholder="e.g. Marco Elia" required style="width:160px;"></label>
+        <label class="muted">What are you logging?
+          <select id="boObsType">
+            <option value="sighting">Bird sighting</option>
+            <option value="nest">Nest</option>
+          </select>
+        </label>
       </div>
 
       <div style="margin-bottom:10px;">
-        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the observation point:</div>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the observation point (same point for a sighting or a nest):</div>
         <div class="row" style="margin-bottom:6px;flex-wrap:wrap;">
           <label class="muted"><input type="checkbox" id="boUserLocToggle" onchange="toggleBirdObsUserLoc(this.checked)"> My location</label>
           <span id="boUserLocStatus" class="muted"></span>
@@ -3952,6 +3961,7 @@ async function submitBirdObsForm(evt){
     const newRow = {
       date: document.getElementById('boDate').value,
       observer: document.getElementById('boObserver').value.trim(),
+      observation_type: document.getElementById('boObsType').value,
       lat: birdObsPickedLat,
       lon: birdObsPickedLon,
       sky: document.getElementById('boSky').value || null,
@@ -3962,9 +3972,10 @@ async function submitBirdObsForm(evt){
       notes: document.getElementById('boNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_observations', [newRow]);
+    const kindLabel = newRow.observation_type === 'nest' ? 'Nest' : 'Observation';
     statusEl.innerHTML = result.queued
       ? '<span class="ok">✓ Saved offline — will upload when back online.</span>'
-      : `<span class="ok">✓ Observation submitted (${newRow.species.length} species).</span>`;
+      : `<span class="ok">✓ ${kindLabel} submitted (${newRow.species.length} species).</span>`;
     document.getElementById('birdObsForm').reset();
     birdObsPendingSpecies = [];
     renderBirdObsPendingSpecies();
@@ -3980,7 +3991,7 @@ function downloadBirdObservations(){
   const rows = birdObservations;
   if (!rows.length){ alert('No Bird Observation records loaded yet.'); return; }
   const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]) }));
-  const fields = ['id','date','observer','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','notes','created_at'];
+  const fields = ['id','date','observer','observation_type','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','notes','created_at'];
   downloadCSV('bird_observations.csv', flat, fields);
 }
 
@@ -5632,7 +5643,7 @@ function renderBirdObsChart(container){
     const species = r.species || [];
     const color = birdObsTopColor(species);
     const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
-    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)}</div>
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${r.observation_type==='nest'?'🪺 Nest — ':''}${escapeHtml(r.date)}</div>
       <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
       <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
       <div><b>Sky:</b> ${escapeHtml(r.sky||'—')} · <b>Wind:</b> ${r.wind_beaufort ?? '—'} · <b>Rain:</b> ${escapeHtml(r.rain||'—')} · <b>Canopy:</b> ${escapeHtml(r.canopy_cover||'—')}</div>
@@ -5871,6 +5882,16 @@ function smallLabelIcon(text, color){
 // HR zone picker, PFF picker, IBS picker) — each just adds one of these next to its existing dot.
 function stationLabelIcon(text){
   return L.divIcon({ className: 'station-code-label', html: escapeHtml(text||''), iconSize: [0,0] });
+}
+// Square marker for a "Nest" observation_type row in Birds Observation — visually distinct from the
+// round circleMarker dot used for a plain sighting, at a glance on the map, same idea as PFF's
+// hull-vs-circle status distinction elsewhere in this app.
+function birdNestIcon(color){
+  return L.divIcon({
+    className: 'bird-nest-icon',
+    html: `<div style="width:14px;height:14px;background:${color};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);"></div>`,
+    iconSize: [14,14], iconAnchor: [7,7],
+  });
 }
 
 function ensureMap(){
@@ -6635,13 +6656,18 @@ function renderMap(shouldFit){
       if (!isFinite(lat) || !isFinite(lon)) continue;
       const species = r.species || [];
       const color = birdObsTopColor(species);
+      const isNest = r.observation_type === 'nest';
       const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
-      const html = `<b>🐦 Bird observation</b><br>` +
+      const html = `<b>${isNest ? '🪺 Nest' : '🐦 Bird observation'}</b><br>` +
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
         `Species: ${speciesTxt}<br>` +
         `Sky: ${escapeHtml(r.sky || '—')} · Wind: ${r.wind_beaufort ?? '—'} · Rain: ${escapeHtml(r.rain || '—')} · Canopy: ${escapeHtml(r.canopy_cover || '—')}` +
         (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
-      const marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
+      // Nests get a square marker (birdNestIcon) instead of the round circleMarker dot used for a
+      // plain sighting — same idea/at-a-glance distinction requested for this map layer.
+      const marker = isNest
+        ? L.marker([lat, lon], { icon: birdNestIcon(color) })
+        : L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
       marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
       marker.bindPopup(html);
       marker.addTo(pointLayerGroup);
@@ -6809,7 +6835,8 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Native']}"></span>Native</span>
       <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Migrant']}"></span>Migrant</span>
       <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
-      <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = the most conservation-significant species present, using its own color as picked when submitted (defaults to the status color above, editable per detection)</span>`;
+      <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = the most conservation-significant species present, using its own color as picked when submitted (defaults to the status color above, editable per detection)</span>
+      <span class="legend-item">● round dot = sighting &nbsp; ▪ square = nest</span>`;
   }
   if (!mapLayers.size){
     legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
