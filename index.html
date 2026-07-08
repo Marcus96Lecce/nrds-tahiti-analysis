@@ -3877,7 +3877,7 @@ function selectBirdSpecies(catalogId){
   const s = birdSpeciesCatalog.find(x => x.id === catalogId);
   if (!s) return;
   const id = ++birdObsPendingIdCounter;
-  birdObsPendingSpecies.push({ id, name: s.commonName, scientificName: s.scientificName, status: s.status, quantity: 1, quantityType: 'individuals', isCustom: false });
+  birdObsPendingSpecies.push({ id, name: s.commonName, scientificName: s.scientificName, status: s.status, quantity: 1, quantityType: 'individuals', detectionType: 'seen', isCustom: false });
   renderBirdObsPendingSpecies();
 }
 function addCustomBirdSpecies(){
@@ -3885,7 +3885,7 @@ function addCustomBirdSpecies(){
   const name = nameEl.value.trim();
   if (!name) return;
   const id = ++birdObsPendingIdCounter;
-  birdObsPendingSpecies.push({ id, name, scientificName: null, status: null, quantity: 1, quantityType: 'individuals', isCustom: true });
+  birdObsPendingSpecies.push({ id, name, scientificName: null, status: null, quantity: 1, quantityType: 'individuals', detectionType: 'seen', isCustom: true });
   renderBirdObsPendingSpecies();
   nameEl.value = '';
 }
@@ -3906,6 +3906,10 @@ function renderBirdObsPendingSpecies(){
       <select onchange="onBirdObsPendingFieldChange(${p.id},'quantityType',this.value)">
         <option value="individuals" ${p.quantityType==='individuals'?'selected':''}>exact count</option>
         <option value="group" ${p.quantityType==='group'?'selected':''}>flock/group (estimate)</option>
+      </select>
+      <select onchange="onBirdObsPendingFieldChange(${p.id},'detectionType',this.value)" title="How was this species detected?">
+        <option value="seen" ${p.detectionType==='seen'?'selected':''}>Seen</option>
+        <option value="heard" ${p.detectionType==='heard'?'selected':''}>Heard</option>
       </select>
       <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removeBirdObsPendingSpecies(${p.id})">×</button>
     </div>`).join('');
@@ -3944,7 +3948,7 @@ async function submitBirdObsForm(evt){
       canopy_cover: document.getElementById('boCanopyCover').value || null,
       wind_beaufort: wind ? parseInt(wind, 10) : null,
       rain: document.getElementById('boRain').value || null,
-      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, isCustom: p.isCustom })),
+      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, detectionType: p.detectionType, isCustom: p.isCustom })),
       notes: document.getElementById('boNotes').value.trim() || null,
     };
     const result = await insertOrQueue('bird_observations', [newRow]);
@@ -5617,7 +5621,7 @@ function renderBirdObsChart(container){
     const x = xCenter(i);
     const species = r.species || [];
     const color = BIRD_STATUS_COLORS[birdObsTopStatus(species)] || '#666';
-    const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''})`).join(', ') || '—';
+    const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
     const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)}</div>
       <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
       <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
@@ -6622,7 +6626,7 @@ function renderMap(shouldFit){
       const species = r.species || [];
       const topStatus = birdObsTopStatus(species);
       const color = BIRD_STATUS_COLORS[topStatus] || '#666';
-      const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''})`).join(', ') || '—';
+      const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''})`).join(', ') || '—';
       const html = `<b>🐦 Bird observation</b><br>` +
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
         `Species: ${speciesTxt}<br>` +
