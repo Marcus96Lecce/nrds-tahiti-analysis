@@ -213,11 +213,22 @@
   .bird-modal-head{padding:14px 18px 10px;border-bottom:1px solid var(--border);}
   .bird-modal-head .row{align-items:center;}
   .bird-modal-body{padding:10px 18px 16px;overflow-y:auto;flex:1;}
-  .bird-species-card{display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fafcf9;}
-  .bird-species-thumb{width:56px;height:56px;border-radius:6px;object-fit:cover;background:#e8ece7;flex-shrink:0;}
-  .bird-species-thumb-empty{width:56px;height:56px;border-radius:6px;background:#e8ece7;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#9aa69a;}
-  .bird-species-info{flex:1;min-width:0;}
-  .bird-species-info audio{height:28px;width:100%;max-width:220px;margin-top:3px;}
+  .bird-species-card{display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fafcf9;flex-wrap:wrap;}
+  .bird-species-thumbs{display:flex;gap:4px;flex-shrink:0;}
+  .bird-species-thumb{width:52px;height:52px;border-radius:6px;object-fit:cover;background:#e8ece7;flex-shrink:0;cursor:zoom-in;}
+  .bird-species-thumb-empty{width:52px;height:52px;border-radius:6px;background:#e8ece7;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:#9aa69a;}
+  .bird-species-info{flex:1;min-width:160px;}
+  .bird-species-info audio{height:28px;width:100%;max-width:220px;margin-top:3px;display:block;}
+
+  /* ── Bird photo lightbox (click a species thumbnail to enlarge) ── */
+  .bird-lightbox-backdrop{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;flex-direction:column;padding:20px;}
+  .bird-lightbox-img{max-width:90vw;max-height:78vh;object-fit:contain;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  .bird-lightbox-caption{color:#fff;margin-top:12px;font-size:13px;text-align:center;max-width:90vw;}
+  .bird-lightbox-caption a{color:#bcd9bc;}
+  .bird-lightbox-close{position:absolute;top:16px;right:20px;padding:6px 12px;}
+  .bird-lightbox-nav{position:absolute;top:50%;transform:translateY(-50%);padding:10px 16px;font-size:22px;line-height:1;}
+  .bird-lightbox-prev{left:16px;}
+  .bird-lightbox-next{right:16px;}
 
   /* ── Mobile ── */
   @media(max-width:760px){
@@ -1183,6 +1194,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
     <div class="bird-modal-body" id="boModalList"></div>
   </div>
+</div>
+
+<div id="birdPhotoLightbox" class="bird-lightbox-backdrop" style="display:none;" onclick="if(event.target===this) closeBirdPhotoLightbox()">
+  <button type="button" class="secondary bird-lightbox-close" onclick="closeBirdPhotoLightbox()">✕</button>
+  <button type="button" class="secondary bird-lightbox-nav bird-lightbox-prev" id="birdLightboxPrev" onclick="birdLightboxStep(-1)">‹</button>
+  <img id="birdLightboxImg" class="bird-lightbox-img" src="" alt="">
+  <button type="button" class="secondary bird-lightbox-nav bird-lightbox-next" id="birdLightboxNext" onclick="birdLightboxStep(1)">›</button>
+  <div id="birdLightboxCaption" class="bird-lightbox-caption"></div>
 </div>
 
 <div class="wrap" id="submitView" style="display:none;">
@@ -3793,20 +3812,67 @@ function renderBirdSpeciesModalList(filterText){
     wrap.innerHTML = '<div class="muted" style="font-style:italic;">No catalog match — use "Add by name" above instead.</div>';
     return;
   }
-  wrap.innerHTML = list.map(s => `
+  wrap.innerHTML = list.map(s => {
+    const photos = s.photos || [];
+    const audio = s.audio || [];
+    const thumbs = photos.length
+      ? `<div class="bird-species-thumbs">${photos.map((p,i) => `
+          <img class="bird-species-thumb" src="${escapeHtml(p.url)}" alt="${escapeHtml(s.commonName)}" loading="lazy"
+               onclick="openBirdPhotoLightbox('${escapeHtml(s.id)}',${i})"
+               onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'bird-species-thumb-empty',textContent:'🐦'}))">`).join('')}</div>`
+      : `<div class="bird-species-thumbs"><div class="bird-species-thumb-empty">🐦</div></div>`;
+    return `
     <div class="bird-species-card">
-      ${s.photoUrl
-        ? `<img class="bird-species-thumb" src="${escapeHtml(s.photoUrl)}" alt="${escapeHtml(s.commonName)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-           <div class="bird-species-thumb-empty" style="display:none;">🐦</div>`
-        : `<div class="bird-species-thumb-empty">🐦</div>`}
+      ${thumbs}
       <div class="bird-species-info">
         <div style="font-weight:600;font-size:13px;">${escapeHtml(s.commonName)} <span class="swatch" style="background:${BIRD_STATUS_COLORS[s.status]||'#999'};"></span></div>
         <div class="muted" style="font-style:italic;font-size:12px;">${escapeHtml(s.scientificName||'')} · ${escapeHtml(s.status||'')}</div>
-        ${s.audioUrl ? `<audio controls preload="none" src="${escapeHtml(s.audioUrl)}"></audio>` : '<span class="muted" style="font-size:11px;">No recording available</span>'}
+        ${audio.length ? audio.map(a => `<audio controls preload="none" src="${escapeHtml(a.url)}"></audio>`).join('') : '<span class="muted" style="font-size:11px;">No recording available</span>'}
       </div>
       <button type="button" class="secondary" style="padding:5px 12px;font-size:12.5px;flex-shrink:0;" onclick="selectBirdSpecies('${escapeHtml(s.id)}')">Select</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+
+/* ---- Photo lightbox (click a species thumbnail in the picker modal to enlarge) ---- */
+let birdLightboxState = null;
+function openBirdPhotoLightbox(catalogId, index){
+  const s = birdSpeciesCatalog.find(x => x.id === catalogId);
+  if (!s || !s.photos || !s.photos.length) return;
+  birdLightboxState = { catalogId, index: Math.max(0, Math.min(index, s.photos.length-1)) };
+  renderBirdPhotoLightbox();
+  document.getElementById('birdPhotoLightbox').style.display = 'flex';
+}
+function closeBirdPhotoLightbox(){
+  document.getElementById('birdPhotoLightbox').style.display = 'none';
+  birdLightboxState = null;
+}
+function renderBirdPhotoLightbox(){
+  if (!birdLightboxState) return;
+  const s = birdSpeciesCatalog.find(x => x.id === birdLightboxState.catalogId);
+  if (!s) return;
+  const photo = s.photos[birdLightboxState.index];
+  document.getElementById('birdLightboxImg').src = photo.url;
+  document.getElementById('birdLightboxCaption').innerHTML =
+    `${escapeHtml(s.commonName)} <span style="font-style:italic;opacity:.85;">(${escapeHtml(s.scientificName||'')})</span> — ${birdLightboxState.index+1}/${s.photos.length}` +
+    (photo.attribution ? ` · <a href="${escapeHtml(photo.sourceUrl||photo.url)}" target="_blank" rel="noopener">${escapeHtml(photo.attribution)}</a>` : '');
+  const multi = s.photos.length > 1;
+  document.getElementById('birdLightboxPrev').style.display = multi ? '' : 'none';
+  document.getElementById('birdLightboxNext').style.display = multi ? '' : 'none';
+}
+function birdLightboxStep(delta){
+  if (!birdLightboxState) return;
+  const s = birdSpeciesCatalog.find(x => x.id === birdLightboxState.catalogId);
+  if (!s) return;
+  birdLightboxState.index = (birdLightboxState.index + delta + s.photos.length) % s.photos.length;
+  renderBirdPhotoLightbox();
+}
+document.addEventListener('keydown', e => {
+  if (!birdLightboxState) return;
+  if (e.key === 'Escape') closeBirdPhotoLightbox();
+  else if (e.key === 'ArrowLeft') birdLightboxStep(-1);
+  else if (e.key === 'ArrowRight') birdLightboxStep(1);
+});
 function selectBirdSpecies(catalogId){
   const s = birdSpeciesCatalog.find(x => x.id === catalogId);
   if (!s) return;

@@ -4,587 +4,973 @@
     "commonName": "Tahiti Monarch",
     "scientificName": "Pomarea nigra",
     "status": "Endemic-CR",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Pomarea_nigra_635804580.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Pomarea_nigra_635804580.jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Pomarea_nigra_-_Reizo_Knapp_-_627377111.jpeg/1280px-Pomarea_nigra_-_Reizo_Knapp_-_627377111.jpeg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pomarea_nigra_-_Reizo_Knapp_-_627377111.jpeg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Monarcha_nigra_-_1786-1789_-_Print_-_Iconographia_Zoologica_-_Special_Collections_University_of_Amsterdam_-_UBA01_IZ16500179.tif/lossy-page1-1280px-Monarcha_nigra_-_1786-1789_-_Print_-_Iconographia_Zoologica_-_Special_Collections_University_of_Amsterdam_-_UBA01_IZ16500179.tif.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Monarcha_nigra_-_1786-1789_-_Print_-_Iconographia_Zoologica_-_Special_Collections_University_of_Amsterdam_-_UBA01_IZ16500179.tif"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "pomarea_whitneyi",
     "commonName": "Fatu Hiva Monarch",
     "scientificName": "Pomarea whitneyi",
     "status": "Endemic-CR",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Fatuhiva_Monarch_imported_from_iNaturalist_photo_395655088_on_22_August_2024.jpg/330px-Fatuhiva_Monarch_imported_from_iNaturalist_photo_395655088_on_22_August_2024.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Fatu_Hiva_monarch",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Fatuhiva_Monarch_imported_from_iNaturalist_photo_395655088_on_22_August_2024.jpg/1280px-Fatuhiva_Monarch_imported_from_iNaturalist_photo_395655088_on_22_August_2024.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fatuhiva_Monarch_imported_from_iNaturalist_photo_395655088_on_22_August_2024.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "ptilinopus_huttoni",
     "commonName": "Rapa Fruit Dove",
     "scientificName": "Ptilinopus huttoni",
     "status": "Endemic-CR",
-    "photoUrl": null,
-    "photoAttribution": null,
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Rapa_fruit_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [],
+    "audio": []
   },
   {
     "id": "puffinus_myrtae",
     "commonName": "Rapa Shearwater",
     "scientificName": "Puffinus myrtae",
     "status": "Endemic-CR",
-    "photoUrl": null,
-    "photoAttribution": null,
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Rapa_shearwater",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [],
+    "audio": []
   },
   {
     "id": "alopecoenas_erythropterus",
     "commonName": "Polynesian Ground-Dove",
     "scientificName": "Alopecoenas erythropterus",
     "status": "Endemic-CR",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Pampusana_erythroptera_-_James_Eaton_-_395654879.jpeg/330px-Pampusana_erythroptera_-_James_Eaton_-_395654879.jpeg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Polynesian_ground_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Pampusana_erythroptera_-_James_Eaton_-_395654879.jpeg/1280px-Pampusana_erythroptera_-_James_Eaton_-_395654879.jpeg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pampusana_erythroptera_-_James_Eaton_-_395654879.jpeg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/97/Gallicolumba_erythroptera.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gallicolumba_erythroptera.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/PhlegoenasKeulemans.jpg/500px-PhlegoenasKeulemans.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:PhlegoenasKeulemans.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "ptilinopus_purpuratus",
     "commonName": "Grey-green Fruit Dove",
     "scientificName": "Ptilinopus purpuratus",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Grey-green_fruit_dove.jpg/330px-Grey-green_fruit_dove.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Grey-green_fruit_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Grey-green_fruit_dove.jpg/500px-Grey-green_fruit_dove.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grey-green_fruit_dove.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "ducula_aurorae",
     "commonName": "Society Imperial Pigeon",
     "scientificName": "Ducula aurorae",
     "status": "Endemic-CR",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Polynesian_Imperial_Pigeon.jpg/330px-Polynesian_Imperial_Pigeon.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Polynesian_imperial_pigeon",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Polynesian_Imperial_Pigeon.jpg/1280px-Polynesian_Imperial_Pigeon.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Polynesian_Imperial_Pigeon.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "ducula_galeata",
     "commonName": "Marquesan Imperial Pigeon",
     "scientificName": "Ducula galeata",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Ducula_galeata_Nuku_Hiva.jpg/330px-Ducula_galeata_Nuku_Hiva.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Nuku_Hiva_imperial_pigeon",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Ducula_galeata_Nuku_Hiva.jpg/500px-Ducula_galeata_Nuku_Hiva.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ducula_galeata_Nuku_Hiva.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "todiramphus_veneratus",
     "commonName": "Tahiti Kingfisher",
     "scientificName": "Todiramphus veneratus",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d6/Society_kingfisher_%28Todiramphus_veneratus%29.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Society_kingfisher_(Todiramphus_veneratus).jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Todiramphus_veneratus_by_John_Gerrard_Keulemans.jpg/500px-Todiramphus_veneratus_by_John_Gerrard_Keulemans.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Todiramphus_veneratus_by_John_Gerrard_Keulemans.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Society_kingfisher_%28Todiramphus_veneratus%29.jpg/330px-Society_kingfisher_%28Todiramphus_veneratus%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Society_kingfisher_(Todiramphus_veneratus).jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "todiramphus_gambieri",
     "commonName": "Marquesas/Mangareva Kingfisher",
     "scientificName": "Todiramphus gambieri",
     "status": "Endemic-CR",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Niau_Kingfisher%2C_%C3%8Eles_Tuamotu-Gambier%2C_PF_imported_from_iNaturalist_photo_395655001.jpg/330px-Niau_Kingfisher%2C_%C3%8Eles_Tuamotu-Gambier%2C_PF_imported_from_iNaturalist_photo_395655001.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Mangareva_kingfisher",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Niau_Kingfisher%2C_%C3%8Eles_Tuamotu-Gambier%2C_PF_imported_from_iNaturalist_photo_395655001.jpg/1280px-Niau_Kingfisher%2C_%C3%8Eles_Tuamotu-Gambier%2C_PF_imported_from_iNaturalist_photo_395655001.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Niau_Kingfisher,_%C3%8Eles_Tuamotu-Gambier,_PF_imported_from_iNaturalist_photo_395655001.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "todiramphus_godeffroyi",
     "commonName": "Marquesas Kingfisher",
     "scientificName": "Todiramphus godeffroyi",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Marquesan_kingfisher_%28Todiramphus_godeffroyi%29_-_crop.png/330px-Marquesan_kingfisher_%28Todiramphus_godeffroyi%29_-_crop.png",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Marquesan_kingfisher",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Marquesan_kingfisher_%28Todiramphus_godeffroyi%29_-_crop.png/500px-Marquesan_kingfisher_%28Todiramphus_godeffroyi%29_-_crop.png",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Marquesan_kingfisher_(Todiramphus_godeffroyi)_-_crop.png"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "vini_peruviana",
     "commonName": "Blue Lorikeet",
     "scientificName": "Vini peruviana",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/2/27/Lori_p%C3%A9ruviana.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Blue_lorikeet",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/27/Lori_p%C3%A9ruviana.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lori_p%C3%A9ruviana.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Vini_peruviana%2C_Rangiroa%2C_Tuamotu%2C_Polynesia.jpg/330px-Vini_peruviana%2C_Rangiroa%2C_Tuamotu%2C_Polynesia.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vini_peruviana,_Rangiroa,_Tuamotu,_Polynesia.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Vini_peruviana_-captive-8a.jpg/500px-Vini_peruviana_-captive-8a.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vini_peruviana_-captive-8a.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "vini_ultramarina",
     "commonName": "Ultramarine Lorikeet",
     "scientificName": "Vini ultramarina",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Vini_Ultramarina_-_Ua_Huka_-_Hane_-_Marquesas_Islands.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Vini_Ultramarina_-_Ua_Huka_-_Hane_-_Marquesas_Islands.jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/The_Loriidae_-_Plate_XXVII.jpg/1280px-The_Loriidae_-_Plate_XXVII.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Loriidae_-_Plate_XXVII.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/Vini_Ultramarina_-_Ua_Huka_-_Hane_-_Marquesas_Islands.jpg/500px-Vini_Ultramarina_-_Ua_Huka_-_Hane_-_Marquesas_Islands.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vini_Ultramarina_-_Ua_Huka_-_Hane_-_Marquesas_Islands.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "vini_kuhlii",
     "commonName": "Kuhl's Lorikeet",
     "scientificName": "Vini kuhlii",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Vini_kuhlii_109930405.jpg/330px-Vini_kuhlii_109930405.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Kuhl's_lorikeet",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Vini_kuhlii_109930405.jpg/1280px-Vini_kuhlii_109930405.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vini_kuhlii_109930405.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "prosobonia_parvirostris",
     "commonName": "Tuamotu Sandpiper",
     "scientificName": "Prosobonia parvirostris",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Tuamotu_sandpiper.jpg/330px-Tuamotu_sandpiper.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Tuamotu_sandpiper",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Tuamotu_sandpiper.jpg/500px-Tuamotu_sandpiper.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tuamotu_sandpiper.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "acrocephalus_caffer",
     "commonName": "Tahiti Reed-Warbler",
     "scientificName": "Acrocephalus caffer",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Acrocephalus_caffer_musae.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Acrocephalus_caffer_musae.jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Naturalis_Biodiversity_Center_-_RMNH.AVES.66034_1_-_Acrocephalus_caffer_caffer_%28Sparrman%2C_1786%29_-_Sylviidae_-_bird_skin_specimen.jpeg/1280px-Naturalis_Biodiversity_Center_-_RMNH.AVES.66034_1_-_Acrocephalus_caffer_caffer_%28Sparrman%2C_1786%29_-_Sylviidae_-_bird_skin_specimen.jpeg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Naturalis_Biodiversity_Center_-_RMNH.AVES.66034_1_-_Acrocephalus_caffer_caffer_(Sparrman,_1786)_-_Sylviidae_-_bird_skin_specimen.jpeg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "acrocephalus_atyphus",
     "commonName": "Tuamotu Reed-Warbler",
     "scientificName": "Acrocephalus atyphus",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Acrocephalus_atyphus_457387853.jpg/330px-Acrocephalus_atyphus_457387853.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Tuamotu_reed_warbler",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Acrocephalus_atyphus_457387853.jpg/500px-Acrocephalus_atyphus_457387853.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Acrocephalus_atyphus_457387853.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "acrocephalus_rimitarae",
     "commonName": "Rimatara Reed-Warbler",
     "scientificName": "Acrocephalus rimitarae",
     "status": "Endemic-CR",
-    "photoUrl": null,
-    "photoAttribution": null,
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Rimatara_reed_warbler",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [],
+    "audio": []
   },
   {
     "id": "acrocephalus_mendanae",
     "commonName": "Marquesan Reed-Warbler",
     "scientificName": "Acrocephalus mendanae",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Acrocephalus_mendanae_-_R%C3%A9mi_Bigonneau_-_443436672.jpeg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Acrocephalus_mendanae_-_R%C3%A9mi_Bigonneau_-_443436672.jpeg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/AcrocephalusMendanaeKeulemans.jpg/1280px-AcrocephalusMendanaeKeulemans.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:AcrocephalusMendanaeKeulemans.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Acrocephalus_mendanae_-_R%C3%A9mi_Bigonneau_-_443436672.jpeg/500px-Acrocephalus_mendanae_-_R%C3%A9mi_Bigonneau_-_443436672.jpeg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Acrocephalus_mendanae_-_R%C3%A9mi_Bigonneau_-_443436672.jpeg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "gallicolumba_rubescens",
     "commonName": "Marquesas Ground-Dove",
     "scientificName": "Gallicolumba rubescens",
     "status": "Endemic",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Marquesan_ground_dove_%28cropped%29.jpg/330px-Marquesan_ground_dove_%28cropped%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Marquesan_ground_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Marquesan_ground_dove_%28cropped%29.jpg/1280px-Marquesan_ground_dove_%28cropped%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Marquesan_ground_dove_(cropped).jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "foulehaio_carunculatus",
     "commonName": "Wattled Honeyeater",
     "scientificName": "Foulehaio carunculatus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wattled_Honeyeater_%28Foulehaio_carunculata%29.jpg/330px-Wattled_Honeyeater_%28Foulehaio_carunculata%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Polynesian_wattled_honeyeater",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wattled_Honeyeater_%28Foulehaio_carunculata%29.jpg/1280px-Wattled_Honeyeater_%28Foulehaio_carunculata%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wattled_Honeyeater_(Foulehaio_carunculata).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Eastern_wattled-honeyeater_%28Foulehaio_carunculatus%29_Upolu.jpg/1280px-Eastern_wattled-honeyeater_%28Foulehaio_carunculatus%29_Upolu.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Eastern_wattled-honeyeater_(Foulehaio_carunculatus)_Upolu.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "nesofregetta_fuliginosa",
     "commonName": "Polynesian Storm-Petrel",
     "scientificName": "Nesofregetta fuliginosa",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Nesofregetta_fuliginosa_in_flight_iNaturalist_395655266.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Nesofregetta_fuliginosa_in_flight_iNaturalist_395655266.jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Nesofregetta_fuliginosa_dist.jpg/500px-Nesofregetta_fuliginosa_dist.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nesofregetta_fuliginosa_dist.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Nesofregetta_fuliginosa_in_flight_iNaturalist_395655266.jpg/1280px-Nesofregetta_fuliginosa_in_flight_iNaturalist_395655266.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nesofregetta_fuliginosa_in_flight_iNaturalist_395655266.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "pterodroma_rostrata",
     "commonName": "Tahiti Petrel",
     "scientificName": "Pterodroma rostrata",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Tahitipetrel1.jpg/330px-Tahitipetrel1.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Tahiti_petrel",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Tahitipetrel1.jpg/500px-Tahitipetrel1.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tahitipetrel1.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Tahitipetrel.jpg/500px-Tahitipetrel.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tahitipetrel.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "pterodroma_ultima",
     "commonName": "Murphy's Petrel",
     "scientificName": "Pterodroma ultima",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Murphy%27s_Petrel_%28Pterodroma_ultima%29_in_Pitcairn_Islands.jpg/330px-Murphy%27s_Petrel_%28Pterodroma_ultima%29_in_Pitcairn_Islands.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Murphy's_petrel",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Murphy%27s_Petrel_%28Pterodroma_ultima%29_in_Pitcairn_Islands.jpg/1280px-Murphy%27s_Petrel_%28Pterodroma_ultima%29_in_Pitcairn_Islands.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Murphy's_Petrel_(Pterodroma_ultima)_in_Pitcairn_Islands.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Murphy%27s_petrel%2C_Ducie_island2.jpg/1280px-Murphy%27s_petrel%2C_Ducie_island2.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Murphy's_petrel,_Ducie_island2.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "pterodroma_alba",
     "commonName": "Phoenix Petrel",
     "scientificName": "Pterodroma alba",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Pterodroma_alba_-_June_2024.jpg/330px-Pterodroma_alba_-_June_2024.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Phoenix_petrel",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Pterodroma_alba_-_June_2024.jpg/1280px-Pterodroma_alba_-_June_2024.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pterodroma_alba_-_June_2024.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "puffinus_pacificus",
     "commonName": "Wedge-tailed Shearwater",
     "scientificName": "Puffinus pacificus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/2/29/Wedge-tailed_Shearwater_2395575851.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Wedge-tailed_Shearwater_2395575851.jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Starr_031124-0008_Sporobolus_virginicus.jpg/1280px-Starr_031124-0008_Sporobolus_virginicus.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Starr_031124-0008_Sporobolus_virginicus.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Wedge-tail_morphs.jpg/500px-Wedge-tail_morphs.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wedge-tail_morphs.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Puffinus_pacificus_MHNT_ZOO_2010_11_42_ilot_Lagon_Nv.Cal%C3%A9donie_de_Naurois.jpg/1280px-Puffinus_pacificus_MHNT_ZOO_2010_11_42_ilot_Lagon_Nv.Cal%C3%A9donie_de_Naurois.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Puffinus_pacificus_MHNT_ZOO_2010_11_42_ilot_Lagon_Nv.Cal%C3%A9donie_de_Naurois.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3b/Wedge-tailed_Shearwater07_audio.ogg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wedge-tailed_Shearwater07_audio.ogg"
+      }
+    ]
   },
   {
     "id": "fregata_minor",
     "commonName": "Great Frigatebird",
     "scientificName": "Fregata minor",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Male_greater_frigate_bird_displaying.jpg/330px-Male_greater_frigate_bird_displaying.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Great_frigatebird",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Male_greater_frigate_bird_displaying.jpg/1280px-Male_greater_frigate_bird_displaying.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Male_greater_frigate_bird_displaying.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Male_Gal%C3%A1pagos_greater_frigate_bird.jpg/1280px-Male_Gal%C3%A1pagos_greater_frigate_bird.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Male_Gal%C3%A1pagos_greater_frigate_bird.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Great_Frigatebird%2C_chick.jpg/500px-Great_Frigatebird%2C_chick.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Great_Frigatebird,_chick.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "fregata_ariel",
     "commonName": "Lesser Frigatebird",
     "scientificName": "Fregata ariel",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Lesser_Frigatebird_from_Indonesia.jpg/330px-Lesser_Frigatebird_from_Indonesia.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Lesser_frigatebird",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Lesser_Frigatebird_from_Indonesia.jpg/1280px-Lesser_Frigatebird_from_Indonesia.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lesser_Frigatebird_from_Indonesia.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Fregata_ariel_MHNT.ZOO.2010.11.2.18.jpg/1280px-Fregata_ariel_MHNT.ZOO.2010.11.2.18.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fregata_ariel_MHNT.ZOO.2010.11.2.18.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Fregata_ariel_-_Labuan_Tawoa_-_Batuputih_%284%29.JPG/250px-Fregata_ariel_-_Labuan_Tawoa_-_Batuputih_%284%29.JPG",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fregata_ariel_-_Labuan_Tawoa_-_Batuputih_(4).JPG"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "sula_dactylatra",
     "commonName": "Masked Booby",
     "scientificName": "Sula dactylatra",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d7/Masked_Booby_-_Sula_dactylatra_%285613352337%29.jpg",
-    "photoAttribution": "Wikimedia Commons",
-    "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Masked_Booby_-_Sula_dactylatra_(5613352337).jpg",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Starr_080606-6808_Coronopus_didymus.jpg/1280px-Starr_080606-6808_Coronopus_didymus.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Starr_080606-6808_Coronopus_didymus.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Suladactylatrargemap.png/500px-Suladactylatrargemap.png",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Suladactylatrargemap.png"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Masked_Booby%2C_Grand_Turk%2C_TC.jpg/1280px-Masked_Booby%2C_Grand_Turk%2C_TC.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Masked_Booby,_Grand_Turk,_TC.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "sula_leucogaster",
     "commonName": "Brown Booby",
     "scientificName": "Sula leucogaster",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Atob%C3%A1-pardo.jpg/330px-Atob%C3%A1-pardo.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Brown_booby",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Atob%C3%A1-pardo.jpg/1280px-Atob%C3%A1-pardo.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Atob%C3%A1-pardo.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Brown_booby_%28Sula_leucogaster_leucogaster%29_Principe_3.jpg/1280px-Brown_booby_%28Sula_leucogaster_leucogaster%29_Principe_3.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Brown_booby_(Sula_leucogaster_leucogaster)_Principe_3.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Sula_brewsteri_%26_Sula_leucogaster%2C_verspreidingskaart_met_subspp%2C_a.png/1280px-Sula_brewsteri_%26_Sula_leucogaster%2C_verspreidingskaart_met_subspp%2C_a.png",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sula_brewsteri_&_Sula_leucogaster,_verspreidingskaart_met_subspp,_a.png"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "sula_sula",
     "commonName": "Red-footed Booby",
     "scientificName": "Sula sula",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Sula_sula_by_Gregg_Yan_01.jpg/330px-Sula_sula_by_Gregg_Yan_01.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Red-footed_booby",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Sula_sula_by_Gregg_Yan_01.jpg/500px-Sula_sula_by_Gregg_Yan_01.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sula_sula_by_Gregg_Yan_01.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Male_Gal%C3%A1pagos_red-footed_booby.jpg/1280px-Male_Gal%C3%A1pagos_red-footed_booby.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Male_Gal%C3%A1pagos_red-footed_booby.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Red_footed_booby_in_flight.jpg/250px-Red_footed_booby_in_flight.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Red_footed_booby_in_flight.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "phaethon_rubricauda",
     "commonName": "Red-tailed Tropicbird",
     "scientificName": "Phaethon rubricauda",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Red-tailed_Tropicbird_RWD2.jpg/330px-Red-tailed_Tropicbird_RWD2.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Red-tailed_tropicbird",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Red-tailed_Tropicbird_RWD2.jpg/500px-Red-tailed_Tropicbird_RWD2.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Red-tailed_Tropicbird_RWD2.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Redtailedtropicbirdrge.png/1280px-Redtailedtropicbirdrge.png",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Redtailedtropicbirdrge.png"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Starr_080607-7135_Phaethon_rubricauda.jpg/1280px-Starr_080607-7135_Phaethon_rubricauda.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Starr_080607-7135_Phaethon_rubricauda.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "phaethon_lepturus",
     "commonName": "White-tailed Tropicbird",
     "scientificName": "Phaethon lepturus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Phaethon_lepturus_%28Warwick%2C_Bermuda%29_%28cropped%29.jpg/330px-Phaethon_lepturus_%28Warwick%2C_Bermuda%29_%28cropped%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/White-tailed_tropicbird",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Phaethon_lepturus_%28Warwick%2C_Bermuda%29_%28cropped%29.jpg/1280px-Phaethon_lepturus_%28Warwick%2C_Bermuda%29_%28cropped%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Phaethon_lepturus_(Warwick,_Bermuda)_(cropped).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Phaethon_lepturus_-Midway_Atoll%2C_USA_-flying-8.jpg/500px-Phaethon_lepturus_-Midway_Atoll%2C_USA_-flying-8.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Phaethon_lepturus_-Midway_Atoll,_USA_-flying-8.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/White-tailed_Tropicbird.jpg/1280px-White-tailed_Tropicbird.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:White-tailed_Tropicbird.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "gygis_alba",
     "commonName": "White Tern",
     "scientificName": "Gygis alba",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Gygis_alba_Ascension_Island_1.jpg/330px-Gygis_alba_Ascension_Island_1.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Atlantic_white_tern",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Gygis_alba_Ascension_Island_1.jpg/1280px-Gygis_alba_Ascension_Island_1.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gygis_alba_Ascension_Island_1.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "anous_stolidus",
     "commonName": "Brown Noddy",
     "scientificName": "Anous stolidus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Common_noddy_%28Anous_stolidus_pileatus%29_in_flight_Michaelmas_Cay.jpg/330px-Common_noddy_%28Anous_stolidus_pileatus%29_in_flight_Michaelmas_Cay.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Brown_noddy",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Common_noddy_%28Anous_stolidus_pileatus%29_in_flight_Michaelmas_Cay.jpg/1280px-Common_noddy_%28Anous_stolidus_pileatus%29_in_flight_Michaelmas_Cay.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Common_noddy_(Anous_stolidus_pileatus)_in_flight_Michaelmas_Cay.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Common_Noddy_1_-_Michaelmas.jpg/960px-Common_Noddy_1_-_Michaelmas.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Common_Noddy_1_-_Michaelmas.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Brown_noddy_%28Anous_stolidus_pileatus%29_with_nesting_material_Rock_Islands.jpg/960px-Brown_noddy_%28Anous_stolidus_pileatus%29_with_nesting_material_Rock_Islands.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Brown_noddy_(Anous_stolidus_pileatus)_with_nesting_material_Rock_Islands.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "anous_minutus",
     "commonName": "Black Noddy",
     "scientificName": "Anous minutus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Anous_minutus_by_Gregg_Yan_02.jpg/330px-Anous_minutus_by_Gregg_Yan_02.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Black_noddy",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Anous_minutus_by_Gregg_Yan_02.jpg/1280px-Anous_minutus_by_Gregg_Yan_02.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Anous_minutus_by_Gregg_Yan_02.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Black_noddy_%28Anous_minutus_marcusi%29_in_flight_Rock_Islands.jpg/960px-Black_noddy_%28Anous_minutus_marcusi%29_in_flight_Rock_Islands.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Black_noddy_(Anous_minutus_marcusi)_in_flight_Rock_Islands.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Black_noddies_%28Anous_minutus_marcusi%29_Rock_Islands.jpg/960px-Black_noddies_%28Anous_minutus_marcusi%29_Rock_Islands.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Black_noddies_(Anous_minutus_marcusi)_Rock_Islands.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "onychoprion_fuscatus",
     "commonName": "Sooty Tern",
     "scientificName": "Onychoprion fuscatus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/TRINTA-R%C3%89IS-DAS-ROCAS_na_Ilha_da_Trindade_-_2022_%2852551310766%29.jpg/330px-TRINTA-R%C3%89IS-DAS-ROCAS_na_Ilha_da_Trindade_-_2022_%2852551310766%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Sooty_tern",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/TRINTA-R%C3%89IS-DAS-ROCAS_na_Ilha_da_Trindade_-_2022_%2852551310766%29.jpg/1280px-TRINTA-R%C3%89IS-DAS-ROCAS_na_Ilha_da_Trindade_-_2022_%2852551310766%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:TRINTA-R%C3%89IS-DAS-ROCAS_na_Ilha_da_Trindade_-_2022_(52551310766).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Onychoprion_fuscatus_Ascension_Island_7.jpg/960px-Onychoprion_fuscatus_Ascension_Island_7.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Onychoprion_fuscatus_Ascension_Island_7.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Sterna_fuscata.JPG/960px-Sterna_fuscata.JPG",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sterna_fuscata.JPG"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "onychoprion_lunatus",
     "commonName": "Grey-backed Tern",
     "scientificName": "Onychoprion lunatus",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/GRAT_nest.JPG/330px-GRAT_nest.JPG",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Spectacled_tern",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/GRAT_nest.JPG/1280px-GRAT_nest.JPG",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:GRAT_nest.JPG"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "sterna_sumatrana",
     "commonName": "Black-naped Tern",
     "scientificName": "Sterna sumatrana",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Black-naped_Tern_on_a_jetty_in_Ross_Island%2C_Andaman%2C_India.jpg/330px-Black-naped_Tern_on_a_jetty_in_Ross_Island%2C_Andaman%2C_India.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Black-naped_tern",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Black-naped_Tern_on_a_jetty_in_Ross_Island%2C_Andaman%2C_India.jpg/1280px-Black-naped_Tern_on_a_jetty_in_Ross_Island%2C_Andaman%2C_India.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Black-naped_Tern_on_a_jetty_in_Ross_Island,_Andaman,_India.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Black-naped_tern_%28Sterna_sumatrana%29_adult_breeding_plumage.jpg/1280px-Black-naped_tern_%28Sterna_sumatrana%29_adult_breeding_plumage.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Black-naped_tern_(Sterna_sumatrana)_adult_breeding_plumage.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Sterna_sumatrana_MHNT.ZOO.2010.11.131.15.jpg/1280px-Sterna_sumatrana_MHNT.ZOO.2010.11.131.15.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sterna_sumatrana_MHNT.ZOO.2010.11.131.15.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "pluvialis_fulva",
     "commonName": "Pacific Golden Plover",
     "scientificName": "Pluvialis fulva",
     "status": "Migrant",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Pluvialis_fulva_-Bering_Land_Bridge_National_Preserve%2C_Alaska%2C_USA-8.jpg/330px-Pluvialis_fulva_-Bering_Land_Bridge_National_Preserve%2C_Alaska%2C_USA-8.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Pacific_golden_plover",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Pluvialis_fulva_-Bering_Land_Bridge_National_Preserve%2C_Alaska%2C_USA-8.jpg/500px-Pluvialis_fulva_-Bering_Land_Bridge_National_Preserve%2C_Alaska%2C_USA-8.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pluvialis_fulva_-Bering_Land_Bridge_National_Preserve,_Alaska,_USA-8.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Pluvialis_fulva_2_-_Laem_Pak_Bia.jpg/1280px-Pluvialis_fulva_2_-_Laem_Pak_Bia.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pluvialis_fulva_2_-_Laem_Pak_Bia.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Pluvialis_fulva_4_-_Boat_Harbour.jpg/1280px-Pluvialis_fulva_4_-_Boat_Harbour.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pluvialis_fulva_4_-_Boat_Harbour.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "numenius_tahitiensis",
     "commonName": "Bristle-thighed Curlew",
     "scientificName": "Numenius tahitiensis",
     "status": "Migrant",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Bristle-thighed_Curlew.jpg/330px-Bristle-thighed_Curlew.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Bristle-thighed_curlew",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Bristle-thighed_Curlew.jpg/500px-Bristle-thighed_Curlew.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bristle-thighed_Curlew.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Bristle-thighed_Curlew_3.jpg/250px-Bristle-thighed_Curlew_3.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bristle-thighed_Curlew_3.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Bristle-thighed_Curlew_2.jpg/250px-Bristle-thighed_Curlew_2.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bristle-thighed_Curlew_2.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "acridotheres_tristis",
     "commonName": "Common Myna",
     "scientificName": "Acridotheres tristis",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Acridotheres_tristis00.jpg/330px-Acridotheres_tristis00.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Common_myna",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Acridotheres_tristis00.jpg/500px-Acridotheres_tristis00.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Acridotheres_tristis00.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/A_Common_Myna_in_Cage.jpg/1280px-A_Common_Myna_in_Cage.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Common_Myna_in_Cage.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Quand_les_martins_tristes%2C_Acridotheres_tristis%2C_se_battent_entre_eux.jpg/1280px-Quand_les_martins_tristes%2C_Acridotheres_tristis%2C_se_battent_entre_eux.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Quand_les_martins_tristes,_Acridotheres_tristis,_se_battent_entre_eux.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/c/c4/CommonMynaCalls.ogg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:CommonMynaCalls.ogg"
+      }
+    ]
   },
   {
     "id": "pycnonotus_cafer",
     "commonName": "Red-vented Bulbul",
     "scientificName": "Pycnonotus cafer",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Red-vented_bulbul_-_Jamnagar_2023-11-13.jpg/330px-Red-vented_bulbul_-_Jamnagar_2023-11-13.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Red-vented_bulbul",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Red-vented_bulbul_-_Jamnagar_2023-11-13.jpg/1280px-Red-vented_bulbul_-_Jamnagar_2023-11-13.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Red-vented_bulbul_-_Jamnagar_2023-11-13.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Red-vented_bulbul_%28Pycnonotus_cafer_humayuni%29.jpg/960px-Red-vented_bulbul_%28Pycnonotus_cafer_humayuni%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Red-vented_bulbul_(Pycnonotus_cafer_humayuni).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/PycnonotusMagrathiKeulemans.jpg/500px-PycnonotusMagrathiKeulemans.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:PycnonotusMagrathiKeulemans.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Redvented_Bulbul.ogg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Redvented_Bulbul.ogg"
+      }
+    ]
   },
   {
     "id": "estrilda_astrild",
     "commonName": "Common Waxbill",
     "scientificName": "Estrilda astrild",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Common_waxbill_%28Estrilda_astrild_jagoensis%29.jpg/330px-Common_waxbill_%28Estrilda_astrild_jagoensis%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Common_waxbill",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Common_waxbill_%28Estrilda_astrild_jagoensis%29.jpg/1280px-Common_waxbill_%28Estrilda_astrild_jagoensis%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Common_waxbill_(Estrilda_astrild_jagoensis).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Estrilda_astrild_MHNT.jpg/1280px-Estrilda_astrild_MHNT.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Estrilda_astrild_MHNT.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Waxbill_on_coin%2C_Ascension_Island.JPG/250px-Waxbill_on_coin%2C_Ascension_Island.JPG",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Waxbill_on_coin,_Ascension_Island.JPG"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "streptopelia_chinensis",
     "commonName": "Spotted Dove",
     "scientificName": "Streptopelia chinensis",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg/330px-Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Spotted_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg/1280px-Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Spotted_dove_(Spilopelia_chinensis_suratensis).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/A_young_spotted_dove.jpg/1280px-A_young_spotted_dove.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_young_spotted_dove.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Spilopelia_chinensis_Zhengzhou_20211126.jpg/1280px-Spilopelia_chinensis_Zhengzhou_20211126.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Spilopelia_chinensis_Zhengzhou_20211126.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/%E6%96%91%E9%B4%BF%E5%92%A7%E5%8F%AB%E7%9A%84%E8%81%B2.ogg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:%E6%96%91%E9%B4%BF%E5%92%A7%E5%8F%AB%E7%9A%84%E8%81%B2.ogg"
+      }
+    ]
   },
   {
     "id": "geopelia_striata",
     "commonName": "Zebra Dove",
     "scientificName": "Geopelia striata",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Geopelia_striata_1_crop_-_Chinese_Garden.jpg/330px-Geopelia_striata_1_crop_-_Chinese_Garden.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Zebra_dove",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Geopelia_striata_1_crop_-_Chinese_Garden.jpg/1280px-Geopelia_striata_1_crop_-_Chinese_Garden.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Geopelia_striata_1_crop_-_Chinese_Garden.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Zebra_dove_%28Geopelia_striata%29_-_Philippines.jpg/500px-Zebra_dove_%28Geopelia_striata%29_-_Philippines.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Zebra_dove_(Geopelia_striata)_-_Philippines.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Geopelia_striata-standing.jpg/500px-Geopelia_striata-standing.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Geopelia_striata-standing.jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Geopelia_striata_-_Zebra_Dove_XC347813.mp3",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Geopelia_striata_-_Zebra_Dove_XC347813.mp3"
+      }
+    ]
   },
   {
     "id": "passer_domesticus",
     "commonName": "House Sparrow",
     "scientificName": "Passer domesticus",
     "status": "Introduced",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/House_sparrow_male_in_Prospect_Park_%2853532%29.jpg/330px-House_sparrow_male_in_Prospect_Park_%2853532%29.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/House_sparrow",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/House_sparrow_male_in_Prospect_Park_%2853532%29.jpg/1280px-House_sparrow_male_in_Prospect_Park_%2853532%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:House_sparrow_male_in_Prospect_Park_(53532).jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/House_Sparrow%2C_England_-_May_09.jpg/1280px-House_Sparrow%2C_England_-_May_09.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:House_Sparrow,_England_-_May_09.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Passer_domesticus_male_head_and_plumage_%28Germany%2CEppelheim%29.jpg/1280px-Passer_domesticus_male_head_and_plumage_%28Germany%2CEppelheim%29.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Passer_domesticus_male_head_and_plumage_(Germany,Eppelheim).jpg"
+      }
+    ],
+    "audio": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/2c/House_Sparrow_%28Passer_domesticus%29_call.wav",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:House_Sparrow_(Passer_domesticus)_call.wav"
+      }
+    ]
   },
   {
     "id": "circus_approximans",
     "commonName": "Swamp Harrier",
     "scientificName": "Circus approximans",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Circus_approximans_-Hamilton_Zoo%2C_New_Zealand-8a.jpg/330px-Circus_approximans_-Hamilton_Zoo%2C_New_Zealand-8a.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Swamp_harrier",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Circus_approximans_-Hamilton_Zoo%2C_New_Zealand-8a.jpg/1280px-Circus_approximans_-Hamilton_Zoo%2C_New_Zealand-8a.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Circus_approximans_-Hamilton_Zoo,_New_Zealand-8a.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Circus_approximans_-_Peter_Murrel.jpg/500px-Circus_approximans_-_Peter_Murrel.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Circus_approximans_-_Peter_Murrel.jpg"
+      },
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Circus_approximans_-Coolart_Wetlands%2C_Mornington_Peninsula%2C_Australia_-flying.jpg/500px-Circus_approximans_-Coolart_Wetlands%2C_Mornington_Peninsula%2C_Australia_-flying.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Circus_approximans_-Coolart_Wetlands,_Mornington_Peninsula,_Australia_-flying.jpg"
+      }
+    ],
+    "audio": []
   },
   {
     "id": "urodynamis_taitensis",
     "commonName": "Long-tailed Koel",
     "scientificName": "Urodynamis taitensis",
     "status": "Native",
-    "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Urodynamis_taitensis_from_iNaturalist_photo_439923510.jpg/330px-Urodynamis_taitensis_from_iNaturalist_photo_439923510.jpg",
-    "photoAttribution": "Wikipedia",
-    "photoSourceUrl": "https://en.wikipedia.org/wiki/Long-tailed_koel",
-    "audioUrl": null,
-    "audioAttribution": null,
-    "audioSourceUrl": null
+    "photos": [
+      {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Urodynamis_taitensis_from_iNaturalist_photo_439923510.jpg/1280px-Urodynamis_taitensis_from_iNaturalist_photo_439923510.jpg",
+        "attribution": "Wikimedia Commons",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Urodynamis_taitensis_from_iNaturalist_photo_439923510.jpg"
+      }
+    ],
+    "audio": []
   }
 ]
