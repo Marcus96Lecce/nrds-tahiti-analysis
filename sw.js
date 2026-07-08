@@ -14,6 +14,7 @@ var PRECACHE = [
   BASE + 'data/management_unit.json',
   BASE + 'data/derat_tahiti.json',
   BASE + 'data/espece.json',
+  BASE + 'data/bird_species.json',
 ];
 
 /* Install: pre-cache app shell. Each URL cached independently so one

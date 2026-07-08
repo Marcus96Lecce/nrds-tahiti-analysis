@@ -207,6 +207,18 @@
   .map-container{flex:1;min-width:0;height:560px;border:1px solid var(--border);border-radius:var(--r);}
   .map-combined-box{flex:0 0 360px;max-height:560px;overflow-y:auto;background:#f7faf6;border:1px solid var(--border);border-radius:var(--r);padding:12px;}
 
+  /* ── Bird species picker modal ── */
+  .bird-modal-backdrop{position:fixed;inset:0;z-index:9998;background:rgba(20,30,20,.45);display:flex;align-items:center;justify-content:center;padding:16px;}
+  .bird-modal-box{background:#fff;border-radius:var(--r);box-shadow:var(--shadow-md);width:min(640px,100%);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
+  .bird-modal-head{padding:14px 18px 10px;border-bottom:1px solid var(--border);}
+  .bird-modal-head .row{align-items:center;}
+  .bird-modal-body{padding:10px 18px 16px;overflow-y:auto;flex:1;}
+  .bird-species-card{display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fafcf9;}
+  .bird-species-thumb{width:56px;height:56px;border-radius:6px;object-fit:cover;background:#e8ece7;flex-shrink:0;}
+  .bird-species-thumb-empty{width:56px;height:56px;border-radius:6px;background:#e8ece7;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#9aa69a;}
+  .bird-species-info{flex:1;min-width:0;}
+  .bird-species-info audio{height:28px;width:100%;max-width:220px;margin-top:3px;}
+
   /* ── Mobile ── */
   @media(max-width:760px){
     .wrap{padding:12px 12px;}
@@ -236,6 +248,8 @@
     .tabs{padding:3px;}
     .tabs button{padding:7px 12px;font-size:13px;}
     details.collapsible > summary{padding:13px 14px;font-size:14px;}
+    .bird-modal-backdrop{padding:0;}
+    .bird-modal-box{width:100%;height:100%;max-height:100%;border-radius:0;}
   }
 </style>
 <style>
@@ -961,7 +975,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_species" onchange="toggleMapLayer('species',this.checked)"> Planted species</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_birds" onchange="toggleMapLayer('birds',this.checked)"> 🐦 Bird observations</label>
         </div>
       </div>
       <label class="muted" style="margin-left:auto;">
@@ -1130,6 +1145,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button class="secondary" onclick="downloadBirdSurveys()">⬇ Bird Surveys (sessions)</button>
         <button class="secondary" onclick="downloadBirdContacts()">⬇ Bird Contacts (individual detections)</button>
         <button class="secondary" onclick="downloadPffObservations()">⬇ PFF Observations</button>
+        <button class="secondary" onclick="downloadBirdObservations()">⬇ Bird Observations</button>
         <button class="secondary" onclick="downloadPepinieres()">⬇ Pépinières</button>
         <button class="secondary" onclick="downloadAllActivityEntries()">⬇ Activity Entries</button>
         <button class="secondary" onclick="downloadAllActivityTypes()">⬇ Activity Types (definitions)</button>
@@ -1146,6 +1162,27 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+</div>
+
+<div id="birdSpeciesModal" class="bird-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeBirdSpeciesModal()">
+  <div class="bird-modal-box">
+    <div class="bird-modal-head">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;font-size:15px;">Add a species</h3>
+        <button type="button" class="secondary" style="padding:3px 10px;font-size:12px;" onclick="closeBirdSpeciesModal()">Done ✕</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <input type="text" id="boModalSearch" placeholder="Filter by common or scientific name…" style="width:100%;" oninput="renderBirdSpeciesModalList(this.value)">
+      </div>
+      <div class="row" style="margin-top:8px;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="muted">Can't find it?</span>
+        <input type="text" id="boCustomName" placeholder="Type a species/common name" style="flex:1;min-width:140px;">
+        <button type="button" class="secondary" style="padding:4px 10px;font-size:12px;" onclick="addCustomBirdSpecies()">Add by name</button>
+      </div>
+      <div class="muted" style="margin-top:6px;font-size:11px;">Photos &amp; songs load live from Wikipedia / Xeno-canto — need a data connection. The species list itself works offline.</div>
+    </div>
+    <div class="bird-modal-body" id="boModalList"></div>
+  </div>
 </div>
 
 <div class="wrap" id="submitView" style="display:none;">
@@ -1535,9 +1572,85 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="card">
+    <details id="birdObsDetails" ontoggle="onBirdObsDetailsToggle(this.open)">
+    <summary><h2 style="display:inline;margin:0;">5. Birds Observation</h2></summary>
+    <div class="hint">Log any bird sighting — one or more individuals of any species, anywhere in the field. Unlike "4. Invasive Bird Survey" (a fixed 10-minute Myna/Bulbul/Wattled-Honeyeater point count), this is open-ended: tap the map, note the conditions, then pick species from the built-in photo/song catalog — or add one by name if it's not listed.</div>
+    <form id="birdObsForm" onsubmit="submitBirdObsForm(event)">
+      <div class="row" style="margin-bottom:10px;flex-wrap:wrap;">
+        <label class="muted">Date: <input type="date" id="boDate" required></label>
+        <label class="muted">Observer: <input type="text" id="boObserver" placeholder="e.g. Marco Elia" required style="width:160px;"></label>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the observation point:</div>
+        <div class="row" style="margin-bottom:6px;flex-wrap:wrap;">
+          <label class="muted"><input type="checkbox" id="boUserLocToggle" onchange="toggleBirdObsUserLoc(this.checked)"> My location</label>
+          <span id="boUserLocStatus" class="muted"></span>
+        </div>
+        <div id="boPickerMap" class="geo-picker-map"></div>
+        <div class="row" style="margin-top:6px;margin-bottom:4px;align-items:center;">
+          <span class="muted" id="boPointReadout">Tap/click the map to set the observation point.</span>
+          <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearBirdObsPoint()">Clear point</button>
+        </div>
+      </div>
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Conditions <span style="font-weight:400;font-size:11px;text-transform:none;">(optional — visual estimates OK)</span></div>
+      <div class="row" style="margin-bottom:14px;flex-wrap:wrap;gap:12px;">
+        <label class="muted">Sky:
+          <select id="boSky">
+            <option value="">–</option>
+            <option value="clear">Clear / sunny</option>
+            <option value="partly_cloudy">Partly cloudy</option>
+            <option value="overcast">Overcast</option>
+          </select>
+        </label>
+        <label class="muted">Canopy cover:
+          <select id="boCanopyCover">
+            <option value="">–</option>
+            <option value="lt25">&lt;25%</option>
+            <option value="25-50">25–50%</option>
+            <option value="50-75">50–75%</option>
+            <option value="gt75">&gt;75%</option>
+          </select>
+        </label>
+        <label class="muted">Wind (Beaufort):
+          <select id="boWindBeaufort">
+            <option value="">–</option>
+            <option value="0">0 — Calm</option>
+            <option value="1">1 — Light air</option>
+            <option value="2">2 — Light breeze</option>
+            <option value="3">3 — Gentle breeze</option>
+            <option value="4">4 — Moderate breeze</option>
+            <option value="5">5 — Fresh breeze</option>
+          </select>
+        </label>
+        <label class="muted">Rain:
+          <select id="boRain">
+            <option value="none">None</option>
+            <option value="light">Light (mist/drizzle)</option>
+            <option value="heavy">Heavy</option>
+          </select>
+        </label>
+      </div>
+
+      <div style="font-weight:600;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Species observed</div>
+      <div id="boSpeciesList" style="margin-bottom:8px;"></div>
+      <button type="button" class="secondary" style="padding:6px 14px;font-size:13px;margin-bottom:14px;" onclick="openBirdSpeciesModal()">+ Add species</button>
+
+      <div style="margin-bottom:10px;">
+        <label class="muted" style="display:block;margin-bottom:4px;">Notes:</label>
+        <textarea id="boNotes" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;" placeholder="e.g. flock foraging in canopy, calling continuously"></textarea>
+      </div>
+      <button type="submit">Submit observation</button>
+      <span id="boSubmitStatus" class="muted"></span>
+    </form>
+    </details>
+  </div>
+
+  <div class="card">
     <details>
-    <summary><h2 style="display:inline;margin:0;">5. Activity Types</h2></summary>
-    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "6. Log an Activity" below.</div>
+    <summary><h2 style="display:inline;margin:0;">6. Activity Types</h2></summary>
+    <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "7. Log an Activity" below.</div>
     <div id="atListWrap"></div>
     <button type="button" class="secondary" id="atToggleBtn" onclick="toggleActivityTypeBuilder()" style="margin-top:10px;">+ Create New Activity Type</button>
     <form id="atForm" onsubmit="submitActivityTypeForm(event)" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
@@ -1568,9 +1681,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <div class="card">
     <details>
-    <summary><h2 style="display:inline;margin:0;">6. Log an Activity</h2></summary>
+    <summary><h2 style="display:inline;margin:0;">7. Log an Activity</h2></summary>
     <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
-    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "5. Activity Types" above first.</div>
+    <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "6. Activity Types" above first.</div>
     <form id="aeForm" onsubmit="submitActivityEntryForm(event)" style="display:none;">
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Activity type:
@@ -1772,6 +1885,7 @@ async function syncOfflineQueue(){
   if (syncedTables.has('deratisation')) fetchDeratisation();
   if (syncedTables.has('pff_observations')) fetchPffObservations();
   if (syncedTables.has('bird_surveys')) fetchBirdSurveys();
+  if (syncedTables.has('bird_observations')) fetchBirdObservations();
   if (syncedTables.has('new_elements')) fetchNewElements();
   if (syncedTables.has('pepinieres')) fetchPepinieres();
 }
@@ -1779,7 +1893,7 @@ function queueItemLabel(item){
   const TABLE_NAMES = {
     habitat_restoration: 'Habitat Restoration', deratisation: 'Dératisation',
     pff_observations: 'PFF Observation', bird_surveys: 'Bird Survey (IBS)',
-    pepinieres: 'Pépinière', new_elements: 'New Element'
+    bird_observations: 'Bird Observation', pepinieres: 'Pépinière', new_elements: 'New Element'
   };
   const r = item.rows && item.rows[0];
   if (!r) return '<b>' + escapeHtml(TABLE_NAMES[item.table] || item.table) + '</b>';
@@ -1977,12 +2091,13 @@ async function loadReferenceData(){
       throw new Error('Offline — no cache for ' + url);
     }
   }
-  const [mu, dt, es] = await Promise.all([
+  const [mu, dt, es, bs] = await Promise.all([
     fetchJson('data/management_unit.json', 'ref_mu'),
     fetchJson('data/derat_tahiti.json', 'ref_dt'),
     fetchJson('data/espece.json', 'ref_es'),
+    fetchJson('data/bird_species.json', 'ref_bs'),
   ]);
-  staticManagementUnit = mu; staticDeratTahiti = dt; tables.espece = es;
+  staticManagementUnit = mu; staticDeratTahiti = dt; tables.espece = es; birdSpeciesCatalog = bs || [];
   rebuildMergedTables();
   dataLoaded.ref = true;
   populateFormReferenceOptions();
@@ -3526,6 +3641,269 @@ async function submitBirdSurveyForm(evt){
   }
 }
 
+/* ---------------- Birds Observation (open species catalog: any species, individuals or flocks) ----------------
+   A second, more general sibling to "4. Invasive Bird Survey" above — reuses its map-picker and
+   Sky/Wind/Rain/Canopy covariate conventions, but isn't limited to Myna/Bulbul/Wattled HE: any species,
+   picked from the built-in photo/song catalog (data/bird_species.json, loaded once at startup into
+   birdSpeciesCatalog) or typed in by name if it isn't listed. One point per observation (unlike PFF's
+   multi-point queue) — "individuals or a flock" is expressed per species via quantityType, not via
+   multiple map points. */
+let birdObsPickerEntry = null;
+let birdObsPickedLat = null, birdObsPickedLon = null;
+let birdObsUserLocWatchId = null, birdObsUserLocFirstFix = true;
+let birdObsPendingSpecies = [];
+let birdObsPendingIdCounter = 0;
+
+const BIRD_STATUS_COLORS = { 'Endemic-CR': '#d62728', 'Endemic': '#ff7f0e', 'Native': '#2a8f2a', 'Migrant': '#1f77b4', 'Introduced': '#888888' };
+// Most conservation-significant species present wins the marker color on a multi-species observation point.
+const BIRD_STATUS_PRIORITY = ['Endemic-CR', 'Endemic', 'Native', 'Migrant', 'Introduced'];
+function birdObsTopStatus(species){
+  let best = null, bestRank = Infinity;
+  for (const s of species||[]){
+    const rank = BIRD_STATUS_PRIORITY.indexOf(s.status);
+    if (rank !== -1 && rank < bestRank){ bestRank = rank; best = s.status; }
+  }
+  return best; // null when every species is custom/unranked
+}
+
+function _applyBirdObsData(data){
+  birdObservations = data || [];
+  if (leafletMap) renderMap(false);
+  if (currentChartViews.has('birds')) renderAllCharts();
+}
+async function fetchBirdObservations(){
+  try {
+    const { data, error } = await window.sb.from('bird_observations').select('*').order('id');
+    if (error) return; // table may not exist yet
+    _applyBirdObsData(data);
+    _dbSave('birdObs', data);
+  } catch(e) {
+    var cached = _dbLoad('birdObs');
+    if (cached) { _applyBirdObsData(cached.payload); }
+  }
+}
+function subscribeBirdObservations(){
+  fetchBirdObservations();
+  try {
+    window.sb.channel('bird_observations_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bird_observations' }, () => fetchBirdObservations())
+      .subscribe();
+  } catch(e){ /* table not yet created — safe to ignore */ }
+}
+
+// Species catalog (data/bird_species.json) is loaded in loadReferenceData() alongside espece.json —
+// same offline-cache treatment (_dbSave/_dbLoad under key 'ref_bs'), so it works fully offline; only
+// the remote photoUrl/audioUrl (Wikipedia/Xeno-canto) need a live connection to actually load.
+
+/* ---- Map point picker (single point, overwritten on re-click — one observation = one point) ---- */
+function ensureBirdObsPickerMap(){
+  if (birdObsPickerEntry) return;
+  const map = L.map('boPickerMap', { scrollWheelZoom: true });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles &copy; Esri'
+  }).addTo(map);
+  birdObsPickerEntry = {
+    map,
+    zonesLayer: L.layerGroup().addTo(map),
+    pointLayer: L.layerGroup().addTo(map),
+    userLocLayer: L.layerGroup().addTo(map),
+  };
+  map.on('click', e => {
+    birdObsPickedLat = e.latlng.lat; birdObsPickedLon = e.latlng.lng;
+    renderBirdObsPoint();
+    document.getElementById('boPointReadout').textContent =
+      `Point set: ${birdObsPickedLat.toFixed(6)}, ${birdObsPickedLon.toFixed(6)}`;
+  });
+  renderBirdObsZones(true);
+}
+function renderBirdObsZones(shouldFit){
+  const entry = birdObsPickerEntry;
+  if (!entry) return;
+  entry.zonesLayer.clearLayers();
+  const boundsLatLngs = [];
+  for (const u of (tables.managementUnit||[])){
+    if (!u.Geometry) continue;
+    const rings = polygonPartsToLatLngRings(u.Geometry);
+    L.polygon(rings, { color:'#2e5e2c', weight:1, fillColor:'#ffffff', fillOpacity:0.06, interactive:false }).addTo(entry.zonesLayer);
+    rings.forEach(rs => rs.forEach(ring => ring.forEach(ll => boundsLatLngs.push(ll))));
+  }
+  if (shouldFit && boundsLatLngs.length) entry.map.fitBounds(boundsLatLngs, { padding: [10,10] });
+}
+function renderBirdObsPoint(){
+  const entry = birdObsPickerEntry;
+  if (!entry) return;
+  entry.pointLayer.clearLayers();
+  if (birdObsPickedLat == null) return;
+  L.circleMarker([birdObsPickedLat, birdObsPickedLon], {
+    radius: 8, color: '#1b5e20', weight: 2.5, fillColor: '#ffcc00', fillOpacity: 0.95
+  }).bindTooltip('Observation point', { permanent: false }).addTo(entry.pointLayer);
+}
+function clearBirdObsPoint(){
+  birdObsPickedLat = null; birdObsPickedLon = null;
+  renderBirdObsPoint();
+  document.getElementById('boPointReadout').textContent = 'Tap/click the map to set the observation point.';
+}
+function onBirdObsDetailsToggle(open){
+  if (!open) return;
+  ensureBirdObsPickerMap();
+  if (birdObsPickerEntry) birdObsPickerEntry.map.invalidateSize();
+  renderBirdObsPendingSpecies();
+}
+function toggleBirdObsUserLoc(checked){
+  const statusEl = document.getElementById('boUserLocStatus');
+  statusEl.textContent = '';
+  if (checked){
+    if (!navigator.geolocation){
+      statusEl.textContent = 'Geolocation not supported.';
+      document.getElementById('boUserLocToggle').checked = false; return;
+    }
+    birdObsUserLocFirstFix = true;
+    birdObsUserLocWatchId = navigator.geolocation.watchPosition(pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      const e = birdObsPickerEntry; if (!e) return;
+      e.userLocLayer.clearLayers();
+      L.circle([latitude, longitude], { radius: accuracy, color:'#4285f4', weight:1, fillColor:'#4285f4', fillOpacity:0.12 }).addTo(e.userLocLayer);
+      L.circleMarker([latitude, longitude], { radius:6, color:'#fff', weight:2, fillColor:'#4285f4', fillOpacity:1 }).addTo(e.userLocLayer);
+      if (birdObsUserLocFirstFix){ e.map.setView([latitude, longitude], 16); birdObsUserLocFirstFix = false; }
+      statusEl.textContent = `GPS: ±${Math.round(accuracy)} m`;
+    }, err => { statusEl.textContent = 'GPS error: ' + err.message; }, { enableHighAccuracy: true });
+  } else {
+    if (birdObsUserLocWatchId !== null){ navigator.geolocation.clearWatch(birdObsUserLocWatchId); birdObsUserLocWatchId = null; }
+    if (birdObsPickerEntry) birdObsPickerEntry.userLocLayer.clearLayers();
+    statusEl.textContent = '';
+  }
+}
+
+/* ---- Species picker modal (browse catalog with photo/song, or add a custom name) ---- */
+function openBirdSpeciesModal(){
+  document.getElementById('boModalSearch').value = '';
+  document.getElementById('boCustomName').value = '';
+  renderBirdSpeciesModalList('');
+  document.getElementById('birdSpeciesModal').style.display = 'flex';
+}
+function closeBirdSpeciesModal(){
+  document.getElementById('birdSpeciesModal').style.display = 'none';
+}
+function renderBirdSpeciesModalList(filterText){
+  const wrap = document.getElementById('boModalList');
+  const q = (filterText||'').trim().toLowerCase();
+  const list = !q ? birdSpeciesCatalog
+    : birdSpeciesCatalog.filter(s => (s.commonName||'').toLowerCase().includes(q) || (s.scientificName||'').toLowerCase().includes(q));
+  if (!list.length){
+    wrap.innerHTML = '<div class="muted" style="font-style:italic;">No catalog match — use "Add by name" above instead.</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(s => `
+    <div class="bird-species-card">
+      ${s.photoUrl
+        ? `<img class="bird-species-thumb" src="${escapeHtml(s.photoUrl)}" alt="${escapeHtml(s.commonName)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+           <div class="bird-species-thumb-empty" style="display:none;">🐦</div>`
+        : `<div class="bird-species-thumb-empty">🐦</div>`}
+      <div class="bird-species-info">
+        <div style="font-weight:600;font-size:13px;">${escapeHtml(s.commonName)} <span class="swatch" style="background:${BIRD_STATUS_COLORS[s.status]||'#999'};"></span></div>
+        <div class="muted" style="font-style:italic;font-size:12px;">${escapeHtml(s.scientificName||'')} · ${escapeHtml(s.status||'')}</div>
+        ${s.audioUrl ? `<audio controls preload="none" src="${escapeHtml(s.audioUrl)}"></audio>` : '<span class="muted" style="font-size:11px;">No recording available</span>'}
+      </div>
+      <button type="button" class="secondary" style="padding:5px 12px;font-size:12.5px;flex-shrink:0;" onclick="selectBirdSpecies('${escapeHtml(s.id)}')">Select</button>
+    </div>`).join('');
+}
+function selectBirdSpecies(catalogId){
+  const s = birdSpeciesCatalog.find(x => x.id === catalogId);
+  if (!s) return;
+  const id = ++birdObsPendingIdCounter;
+  birdObsPendingSpecies.push({ id, name: s.commonName, scientificName: s.scientificName, status: s.status, quantity: 1, quantityType: 'individuals', isCustom: false });
+  renderBirdObsPendingSpecies();
+}
+function addCustomBirdSpecies(){
+  const nameEl = document.getElementById('boCustomName');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  const id = ++birdObsPendingIdCounter;
+  birdObsPendingSpecies.push({ id, name, scientificName: null, status: null, quantity: 1, quantityType: 'individuals', isCustom: true });
+  renderBirdObsPendingSpecies();
+  nameEl.value = '';
+}
+
+/* ---- Pending species list on the main form (same "editable rows" family as pffPendingPoints) ---- */
+function renderBirdObsPendingSpecies(){
+  const wrap = document.getElementById('boSpeciesList');
+  if (!wrap) return;
+  if (!birdObsPendingSpecies.length){
+    wrap.innerHTML = '<div class="muted" style="font-size:12px;font-style:italic;">No species added yet — use "+ Add species" below.</div>';
+    return;
+  }
+  wrap.innerHTML = birdObsPendingSpecies.map(p => `
+    <div class="row" style="align-items:center;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;flex-wrap:wrap;">
+      <span class="swatch" style="background:${BIRD_STATUS_COLORS[p.status]||'#999'};"></span>
+      <span style="min-width:120px;font-size:13px;">${escapeHtml(p.name)}${p.isCustom ? ' <span class="muted" style="font-size:11px;">(custom)</span>' : ''}</span>
+      <input type="number" min="1" step="1" value="${p.quantity}" style="width:64px;" onchange="onBirdObsPendingFieldChange(${p.id},'quantity',this.value)">
+      <select onchange="onBirdObsPendingFieldChange(${p.id},'quantityType',this.value)">
+        <option value="individuals" ${p.quantityType==='individuals'?'selected':''}>exact count</option>
+        <option value="group" ${p.quantityType==='group'?'selected':''}>flock/group (estimate)</option>
+      </select>
+      <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removeBirdObsPendingSpecies(${p.id})">×</button>
+    </div>`).join('');
+}
+function onBirdObsPendingFieldChange(id, field, value){
+  const p = birdObsPendingSpecies.find(p => p.id === id);
+  if (!p) return;
+  p[field] = field === 'quantity' ? (parseInt(value,10) || 1) : value;
+}
+function removeBirdObsPendingSpecies(id){
+  birdObsPendingSpecies = birdObsPendingSpecies.filter(p => p.id !== id);
+  renderBirdObsPendingSpecies();
+}
+
+/* ---- Submit ---- */
+async function submitBirdObsForm(evt){
+  evt.preventDefault();
+  const statusEl = document.getElementById('boSubmitStatus');
+  if (birdObsPickedLat == null){
+    statusEl.innerHTML = '<span class="err">Tap/click the map to set the observation point.</span>';
+    return;
+  }
+  if (!birdObsPendingSpecies.length){
+    statusEl.innerHTML = '<span class="err">Add at least one species — use "+ Add species".</span>';
+    return;
+  }
+  statusEl.innerHTML = 'Submitting…';
+  try {
+    const wind = document.getElementById('boWindBeaufort').value;
+    const newRow = {
+      date: document.getElementById('boDate').value,
+      observer: document.getElementById('boObserver').value.trim(),
+      lat: birdObsPickedLat,
+      lon: birdObsPickedLon,
+      sky: document.getElementById('boSky').value || null,
+      canopy_cover: document.getElementById('boCanopyCover').value || null,
+      wind_beaufort: wind ? parseInt(wind, 10) : null,
+      rain: document.getElementById('boRain').value || null,
+      species: birdObsPendingSpecies.map(p => ({ name: p.name, scientificName: p.scientificName, status: p.status, quantity: p.quantity, quantityType: p.quantityType, isCustom: p.isCustom })),
+      notes: document.getElementById('boNotes').value.trim() || null,
+    };
+    const result = await insertOrQueue('bird_observations', [newRow]);
+    statusEl.innerHTML = result.queued
+      ? '<span class="ok">✓ Saved offline — will upload when back online.</span>'
+      : `<span class="ok">✓ Observation submitted (${newRow.species.length} species).</span>`;
+    document.getElementById('birdObsForm').reset();
+    birdObsPendingSpecies = [];
+    renderBirdObsPendingSpecies();
+    clearBirdObsPoint();
+    document.getElementById('boDate').value = new Date().toISOString().slice(0,10);
+    if (!result.queued) await fetchBirdObservations();
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function downloadBirdObservations(){
+  const rows = birdObservations;
+  if (!rows.length){ alert('No Bird Observation records loaded yet.'); return; }
+  const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]) }));
+  const fields = ['id','date','observer','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','notes','created_at'];
+  downloadCSV('bird_observations.csv', flat, fields);
+}
+
 /* ---------------- Activity Types + Log an Activity (generic, team-defined) ----------------
    Lets the valley management team define brand-new kinds of conservation activity beyond Habitat
    Restoration/Dératisation (predator control, biosecurity, nest monitoring, translocation, disease
@@ -3617,6 +3995,8 @@ const ACTIVITY_TYPE_PRESETS = [
 let activityTypes = [];
 let activityEntries = [];
 let birdSurveys = [];
+let birdObservations = [];
+let birdSpeciesCatalog = [];
 
 async function fetchActivityTypes(){
   const { data, error } = await window.sb.from('activity_types').select('*').order('id');
@@ -4006,6 +4386,7 @@ whenSupabaseReady(() => {
   subscribeActivityTypes();
   subscribeActivityEntries();
   subscribeBirdSurveys();
+  subscribeBirdObservations();
   syncOfflineQueue(); // picks up anything queued in a previous session, if we're online now
 });
 loadReferenceData();
@@ -4013,6 +4394,8 @@ document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('ibsDate').value = new Date().toISOString().slice(0,10);
+document.getElementById('boDate').value = new Date().toISOString().slice(0,10);
+renderBirdObsPendingSpecies();
 (function setDefaultIbsTime(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
   document.getElementById('ibsTimeStart').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -4546,6 +4929,7 @@ const CHART_DEFS = [
   { key: 'workforce', label: 'People involved (volunteer vs routine)', render: c => renderWorkforce(c) },
   { key: 'derat',     label: 'Bait consumption (Checks)',             render: c => renderDeratChart(c) },
   { key: 'pff',       label: 'Little Fire Ant (PFF)',                 render: c => renderPffChart(c) },
+  { key: 'birds',     label: 'Birds Observation',                     render: c => renderBirdObsChart(c) },
 ];
 
 function renderAllCharts(){
@@ -5092,6 +5476,117 @@ function renderPffChart(container){
   </div>`;
   const hint = `<div class="hint" style="margin-bottom:6px;">Little Fire Ant (Wasmannia auropunctata, PFF) detections over time${chartValley !== 'all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ' across the LIFE STOP EXTINCTION work area'} — pair this with the map's "Little Fire Ant (PFF)" layer to see where, not just when. Colony delimiting follows Vanderwoude (2008)'s LFA SOP.</div>`;
   area.innerHTML = hint + colonyHtml + '<hr style="margin:14px 0;border-color:var(--border);">' + summary + svg + legend;
+}
+
+// Same "no Valley field of its own" situation as PFF above (reuses inferPffValley's generic
+// point-in-polygon lookup despite the name — it isn't actually PFF-specific). Two views: which
+// species are seen most (horizontal bar, like renderSpecies' most-planted chart) and when
+// observations happened (one bar per observation, chronological, like renderPffChart's own chart).
+function renderBirdObsChart(container){
+  hideChartPopup();
+  const area = container || document.getElementById('chartArea');
+
+  const chartValley = document.getElementById('chartValley').value;
+  const rows = (birdObservations||[])
+    .filter(r => {
+      if (!r.date) return false;
+      if (!inDateRange(r.date, chartDateFrom, chartDateTo)) return false;
+      if (chartValley !== 'all'){
+        const v = inferPffValley(+r.lat, +r.lon);
+        if (v !== chartValley) return false;
+      }
+      return true;
+    })
+    .map(r => ({ ...r, ts: new Date(r.date).getTime() }))
+    .sort((a,b) => a.ts - b.ts);
+
+  const valleyLabel = chartValley === 'all' ? 'all valleys' : chartValley;
+  if (!rows.length){ area.innerHTML = `<span class="muted">No bird observations for ${escapeHtml(valleyLabel)} in this date range.</span>`; return; }
+
+  // ── Species frequency (horizontal bars, most-observed first) ──
+  const agg = new Map();
+  for (const r of rows){
+    for (const s of (r.species||[])){
+      if (!agg.has(s.name)) agg.set(s.name, { total: 0, obsCount: 0, status: s.status, isCustom: s.isCustom, dates: [] });
+      const e = agg.get(s.name);
+      e.total += (+s.quantity || 0);
+      e.obsCount += 1;
+      if (!e.status && s.status) e.status = s.status;
+      e.dates.push(r.date);
+    }
+  }
+  const specData = [...agg.entries()].map(([name,v]) => ({ name, ...v })).sort((a,b) => b.total - a.total);
+  const barH = 24, gap = 9, mL = 170, mR = 50, mT = 10, mB = 10;
+  const specW = 700, specH = mT+mB + specData.length*(barH+gap);
+  const maxTotal = Math.max(...specData.map(d => d.total), 1);
+  const xScale = v => v/maxTotal*(specW-mL-mR);
+  let specSvg = `<svg viewBox="0 0 ${specW} ${specH}" width="${specW}" height="${specH}" xmlns="http://www.w3.org/2000/svg">`;
+  specData.forEach((d,i) => {
+    const y = mT + i*(barH+gap);
+    const w = xScale(d.total);
+    const color = BIRD_STATUS_COLORS[d.status] || '#7f7f7f';
+    const sortedDates = [...d.dates].sort().reverse();
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(d.name)}</div>
+      <div><b>Status:</b> ${escapeHtml(d.status || (d.isCustom ? 'custom entry, not in catalog' : 'not specified'))}</div>
+      <div><b>Total individuals/groups:</b> ${d.total}</div>
+      <div><b>Observations:</b> ${d.obsCount}</div>
+      <div style="margin-top:4px;"><b>Most recent:</b> ${sortedDates.slice(0,5).map(escapeHtml).join(', ')}${sortedDates.length>5?` (+${sortedDates.length-5} more)`:''}</div>`) - 1;
+    specSvg += svgEl('text',{x:mL-8,y:y+barH*0.7,'text-anchor':'end','font-size':12,fill:'#23291f'}, d.name);
+    specSvg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${d.name}: ${d.total} (${d.obsCount} observations)\nClick for full details`)}` +
+           svgEl('rect',{x:mL,y:y,width:Math.max(w,2),height:barH,fill:color,rx:3}) + `</g>`;
+    specSvg += svgEl('text',{x:mL+w+6,y:y+barH*0.7,'font-size':12,fill:'#23291f'}, d.total);
+  });
+  specSvg += `</svg>`;
+
+  // ── Chronological, one bar per observation, colored by top-priority species status ──
+  const W = Math.max(700, rows.length*45), H = 320, cmL = 50, cmR = 20, cmT = 20, cmB = 80;
+  const slotW = (W-cmL-cmR)/rows.length;
+  const xCenter = i => cmL + (i+0.5)*slotW;
+  const barW = Math.min(30, slotW*0.6);
+  const barHc = H-cmT-cmB;
+  let chronoSvg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  chronoSvg += svgEl('line',{x1:cmL,x2:cmL,y1:cmT,y2:H-cmB,stroke:'#9aa69a'});
+  chronoSvg += svgEl('line',{x1:cmL,x2:W-cmR,y1:H-cmB,y2:H-cmB,stroke:'#9aa69a'});
+  rows.forEach((r,i) => {
+    const x = xCenter(i);
+    const species = r.species || [];
+    const color = BIRD_STATUS_COLORS[birdObsTopStatus(species)] || '#666';
+    const speciesTxt = species.map(s => `${s.name} (${s.quantity}${s.quantityType==='group'?' est.':''})`).join(', ') || '—';
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)}</div>
+      <div><b>Observer:</b> ${escapeHtml(r.observer||'—')}</div>
+      <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
+      <div><b>Sky:</b> ${escapeHtml(r.sky||'—')} · <b>Wind:</b> ${r.wind_beaufort ?? '—'} · <b>Rain:</b> ${escapeHtml(r.rain||'—')} · <b>Canopy:</b> ${escapeHtml(r.canopy_cover||'—')}</div>
+      ${r.notes ? `<div><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}
+      <div><b>Coordinates:</b> ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}</div>`) - 1;
+    chronoSvg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
+    chronoSvg += svgEl('title',{},`${r.date} — ${species.length} species\nClick for full details`);
+    chronoSvg += svgEl('rect',{x:x-barW/2,y:cmT,width:barW,height:barHc,fill:color});
+    chronoSvg += svgEl('text',{x,y:H-cmB+14,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H-cmB+14})`}, r.date);
+    chronoSvg += `</g>`;
+  });
+  chronoSvg += `</svg>`;
+
+  const totalObs = rows.length;
+  const totalDetections = specData.reduce((s,d) => s+d.obsCount, 0);
+  const topSpecies = specData[0];
+  const summary = `<div class="grid3" style="margin-bottom:10px;">
+    <div class="stat"><div class="num">${totalObs}</div><div class="lbl">observations recorded</div></div>
+    <div class="stat"><div class="num">${specData.length}</div><div class="lbl">distinct species/entries</div></div>
+    <div class="stat"><div class="num">${totalDetections}</div><div class="lbl">species-observation pairs</div></div>
+    <div class="stat"><div class="num" style="font-size:16px;">${escapeHtml(topSpecies ? topSpecies.name : '—')}</div><div class="lbl">most-observed species</div></div>
+  </div>`;
+  const legend = `<div style="margin-top:8px;">
+    <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic-CR']}"></span>Endemic-CR</span>
+    <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic']}"></span>Endemic</span>
+    <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Native']}"></span>Native</span>
+    <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Migrant']}"></span>Migrant</span>
+    <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
+    <br><span class="muted">Top chart: total individuals/groups observed per species, click a bar for recent dates. Bottom chart: one bar per observation in chronological order, colored by the most conservation-significant species present — click for the full record. Valley filter is applied via GPS point-in-polygon lookup${chartValley !== 'all' ? ` — showing <b>${escapeHtml(valleyLabel)}</b> only` : ''}. Zone and Station filters do not apply to this data.</span>
+  </div>`;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Bird sightings over time${chartValley !== 'all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ' across the LIFE STOP EXTINCTION work area'} — pair with the map's "🐦 Bird observations" layer for the spatial view.</div>`;
+  area.innerHTML = hint + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Most-observed species</div>' + specSvg
+    + '<hr style="margin:14px 0;border-color:var(--border);">'
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Observations over time</div>' + summary + chronoSvg + legend;
 }
 
 function pctColor(pct){
@@ -6052,6 +6547,29 @@ function renderMap(shouldFit){
     }
   }
 
+  if (mapLayers.has('birds')){
+    // Bird observations have no Valley field of their own (same reasoning as PFF above) — the
+    // geolocation point is the only location data, so this layer ignores the map's Valley filter too.
+    for (const r of birdObservations){
+      const lat = +r.lat, lon = +r.lon;
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      const species = r.species || [];
+      const topStatus = birdObsTopStatus(species);
+      const color = BIRD_STATUS_COLORS[topStatus] || '#666';
+      const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''})`).join(', ') || '—';
+      const html = `<b>🐦 Bird observation</b><br>` +
+        `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
+        `Species: ${speciesTxt}<br>` +
+        `Sky: ${escapeHtml(r.sky || '—')} · Wind: ${r.wind_beaufort ?? '—'} · Rain: ${escapeHtml(r.rain || '—')} · Canopy: ${escapeHtml(r.canopy_cover || '—')}` +
+        (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
+      const marker = L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
+      marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+      marker.bindPopup(html);
+      marker.addTo(pointLayerGroup);
+      boundsLatLngs.push([lat, lon]);
+    }
+  }
+
   if (mapLayers.has('all_obs') || mapLayers.has('species')){
     const showAll = mapLayers.has('all_obs'), showSpecies = mapLayers.has('species');
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
@@ -6204,6 +6722,15 @@ function renderMap(shouldFit){
       <br><span class="legend-item"><span class="swatch" style="background:#fdae6b;border:2px solid #ff7f0e;"></span>estimated colony (≥3 nearby detections)</span>
       <span class="legend-item"><span class="swatch" style="background:#ff7f0e;border:2px solid #d62728;"></span>colony with a confirmed centre</span>
       <span class="legend-item">dashed outer ring = recommended ${PFF_CONTAINMENT_BUFFER_M}m containment buffer (LFA delimiting SOP)</span>`;
+  }
+  if (mapLayers.has('birds')){
+    legend += sep() + `
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic-CR']}"></span>Endemic (Critically Endangered)</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic']}"></span>Endemic</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Native']}"></span>Native</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Migrant']}"></span>Migrant</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
+      <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = most conservation-significant species present in that observation</span>`;
   }
   if (!mapLayers.size){
     legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
