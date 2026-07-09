@@ -1425,10 +1425,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <span class="muted" id="pffPickerReadout">Tap/click the map to add a point — you can add several before submitting.</span>
         <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearAllPffPoints()">Clear all points</button>
       </div>
-      <div class="row" style="margin-bottom:6px;align-items:center;">
-        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('pffGpxInput').click()">📥 Import GPX waypoints</button>
+      <div class="row" style="margin-bottom:6px;align-items:center;flex-wrap:wrap;">
+        <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('pffGpxInput').click()">📥 Import GPX file…</button>
         <input type="file" id="pffGpxInput" accept=".gpx" onchange="onPffGpxFileSelected(event)" style="display:none;">
-        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65) — every saved waypoint in the file is added as a pending point below, using the Status chosen above. Track logs aren't supported, only individually saved waypoints.</span>
+        <button type="button" class="secondary" id="pffGpsFolderBtn" style="display:none;padding:4px 9px;font-size:12px;" onclick="startGpsFolderImport()">🔌 Import from connected GPS…</button>
+        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65). "Import GPX file" reads one file you pick by hand. "Import from connected GPS" (Chrome/Edge desktop only) reads straight off the device once you grant access to its GPX folder — each point's on-device color sets its status automatically (Black = Negative, Orange/Amber = Positive; anything else falls back to the Status selected above). Track logs aren't supported, only individually saved waypoints. Already-submitted points (same day, within ~20m) are skipped automatically, so re-importing is safe.</span>
+        <div id="pffGpsRangePanel" style="display:none;width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;">
+          <div class="muted" style="margin-bottom:6px;">Import waypoints from <b id="pffGpsFolderName">the selected folder</b> for:</div>
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" onclick="runGpsFolderImport('today')">Today only</button>
+            <span class="muted">or a range:</span>
+            <label class="muted">From <input type="date" id="pffGpsRangeFrom"></label>
+            <label class="muted">To <input type="date" id="pffGpsRangeTo"></label>
+            <button type="button" onclick="runGpsFolderImport('range')">Load range</button>
+            <button type="button" class="secondary" onclick="document.getElementById('pffGpsRangePanel').style.display='none'">Cancel</button>
+          </div>
+        </div>
       </div>
       <div id="pffPendingList" style="margin-bottom:10px;"></div>
       <button type="submit">Submit PFF point(s)</button>
@@ -2483,6 +2495,7 @@ function _applyPffData(data) {
   if (leafletMap) renderMap(false);
   if (currentChartViews.has('pff')) renderAllCharts();
   if (pffPickerEntry){ renderPffPickerColonies(); renderPffPickerExisting(); }
+  if (enriched) onDataUpdated(); // keeps the home page's "total actions" count in sync
 }
 async function fetchPffObservations(){
   try {
@@ -2941,6 +2954,7 @@ function _applyPepData(data) {
   zones.sort();
   document.getElementById('pepZoneList').innerHTML = zones.map(function(z) { return '<option value="' + escapeHtml(z) + '">'; }).join('');
   if (pepPickerEntry) renderPepPickerOthers();
+  if (enriched) onDataUpdated();
 }
 async function fetchPepinieres(){
   try {
@@ -3123,19 +3137,60 @@ function parseGpxWaypoints(xmlText){
     const cmt = el.getElementsByTagName('cmt')[0]?.textContent || '';
     const desc = el.getElementsByTagName('desc')[0]?.textContent || '';
     const time = el.getElementsByTagName('time')[0]?.textContent || '';
-    return { lat, lon, name, cmt, desc, time };
+    const sym = el.getElementsByTagName('sym')[0]?.textContent || '';
+    return { lat, lon, name, cmt, desc, time, sym };
   }).filter(w => isFinite(w.lat) && isFinite(w.lon));
+}
+// Waypoint symbol -> PFF status, per Marco's on-device convention (confirmed 2026-07-08): on his
+// GPSMAP 65 "Navaid, Black" = Negative, "Navaid, Orange" and "Navaid, Amber" = Positive (both warmer
+// icons read as "red" on the device's small screen — there's no icon literally named "Red" in his
+// data). Any other/unrecognized symbol (or a device with a different icon set) falls back to whatever
+// Status is selected in the form above, and is flagged (guessed:true) so it can be double-checked.
+function pffStatusFromSym(sym, fallbackStatus){
+  if (sym === 'Navaid, Black') return { status: 'Negative', guessed: false };
+  if (sym === 'Navaid, Orange' || sym === 'Navaid, Amber') return { status: 'Positive', guessed: false };
+  return { status: fallbackStatus || null, guessed: true };
+}
+// GPSMAP timestamps are UTC; Tahiti is UTC-10 year-round (no DST) — shift before taking the date part,
+// otherwise points taken in the local evening land on the wrong (next) day.
+function pffLocalDateFromIso(iso){
+  const t = new Date(iso);
+  t.setUTCHours(t.getUTCHours() - 10);
+  return t.toISOString().slice(0, 10);
+}
+// Within ~20m and the same local date as an already-loaded PFF observation counts as "already
+// submitted" — keeps GPX (re-)imports idempotent instead of piling up duplicates for waypoints from a
+// previous session that are still sitting on the device's memory card.
+function isDuplicatePffPoint(lat, lon, localDate){
+  const R = 6371000;
+  for (const r of pffObservations){
+    if (r.date !== localDate) continue;
+    const rl = +r.lat, rn = +r.lon;
+    if (!isFinite(rl) || !isFinite(rn)) continue;
+    const dLat = (rl - lat) * Math.PI/180, dLon = (rn - lon) * Math.PI/180;
+    const la1 = lat*Math.PI/180, la2 = rl*Math.PI/180;
+    const h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+    if (2*R*Math.asin(Math.sqrt(h)) <= 20) return true;
+  }
+  return false;
+}
+function addPffPendingFromWaypoint(w, status, guessed){
+  const localDate = w.time ? pffLocalDateFromIso(w.time) : null;
+  if (localDate && isDuplicatePffPoint(w.lat, w.lon, localDate)) return 'dupe';
+  if (!status) return 'unclassified';
+  const label = [w.name, w.cmt, w.desc].filter(Boolean).join(' — ');
+  const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '') + (guessed ? ' — unrecognized GPS symbol, verify status' : '');
+  const id = ++pffPendingIdCounter;
+  const marker = L.circleMarker([w.lat, w.lon], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(pffPickerEntry.map);
+  pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, surveyMethod: '', marker });
+  return 'added';
 }
 async function onPffGpxFileSelected(event){
   const file = event.target.files[0];
   const statusEl = document.getElementById('pffGpxStatus');
   event.target.value = ''; // clears the picked filename so the same file can be re-imported later
   if (!file) return;
-  const status = document.getElementById('pffStatus').value;
-  if (!status){
-    statusEl.innerHTML = '<span class="err">Choose a Status above first — it will be applied to every imported point (fine-tune individual points in the list below afterward).</span>';
-    return;
-  }
+  const fallbackStatus = document.getElementById('pffStatus').value;
   try {
     const waypoints = parseGpxWaypoints(await file.text());
     if (!waypoints.length){
@@ -3143,19 +3198,153 @@ async function onPffGpxFileSelected(event){
       return;
     }
     ensurePffPickerMap();
+    let added = 0, dupes = 0, unclassified = 0, guessedCount = 0;
     for (const w of waypoints){
-      const id = ++pffPendingIdCounter;
-      const marker = L.circleMarker([w.lat, w.lon], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(pffPickerEntry.map);
-      const label = [w.name, w.cmt, w.desc].filter(Boolean).join(' — ');
-      const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '');
-      pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, surveyMethod: '', marker });
+      const { status, guessed } = pffStatusFromSym(w.sym, fallbackStatus);
+      const result = addPffPendingFromWaypoint(w, status, guessed);
+      if (result === 'added') { added++; if (guessed) guessedCount++; }
+      else if (result === 'dupe') dupes++;
+      else unclassified++;
     }
     renderPffPendingList();
-    const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
-    if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
-    statusEl.innerHTML = `<span class="ok">✓ Imported ${waypoints.length} waypoint${waypoints.length===1?'':'s'} as "${escapeHtml(status)}" — review/edit them below before submitting.</span>`;
+    if (added){
+      const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
+      if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
+    }
+    if (!added && unclassified){
+      statusEl.innerHTML = '<span class="err">None of these waypoints use a recognized color, and no fallback Status is selected above — choose one and re-import.</span>';
+      return;
+    }
+    statusEl.innerHTML = `<span class="ok">✓ Added ${added} point${added===1?'':'s'} from this file` +
+      (dupes ? `, skipped ${dupes} already submitted` : '') +
+      (guessedCount ? `, ${guessedCount} used the fallback Status (unrecognized symbol — check them below)` : '') +
+      ` — review/edit below before submitting.</span>`;
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+/* ---------------- Import GPX waypoints straight from a connected GPS's memory card ----------------
+   Uses the File System Access API (Chrome/Edge and other Chromium browsers on desktop only — not
+   Firefox, not Safari, not iOS/Android — so the button feature-detects itself out of existence
+   elsewhere, see initGpsFolderButton()). The user grants access to their Garmin's GPX folder once;
+   the FileSystemDirectoryHandle is then remembered in IndexedDB (localStorage can't hold a handle) so
+   future imports are a single click + a quick native permission re-confirm, not a full re-navigation.
+   If the device is later plugged into a different USB port/drive letter, the remembered handle can go
+   stale — openGpsDirHandle() detects that and transparently falls back to showDirectoryPicker again. */
+const GPX_DIR_DB_NAME = 'nrds_gpx_dir', GPX_DIR_STORE = 'handles', GPX_DIR_KEY = 'gpxFolder';
+function gpxDirDb(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(GPX_DIR_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(GPX_DIR_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function getStoredGpxDirHandle(){
+  try {
+    const db = await gpxDirDb();
+    return await new Promise((resolve) => {
+      const req = db.transaction(GPX_DIR_STORE, 'readonly').objectStore(GPX_DIR_STORE).get(GPX_DIR_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) { return null; }
+}
+async function setStoredGpxDirHandle(handle){
+  const db = await gpxDirDb();
+  return new Promise((resolve) => {
+    const tx = db.transaction(GPX_DIR_STORE, 'readwrite');
+    tx.objectStore(GPX_DIR_STORE).put(handle, GPX_DIR_KEY);
+    tx.oncomplete = () => resolve();
+  });
+}
+function initGpsFolderButton(){
+  if (window.showDirectoryPicker) document.getElementById('pffGpsFolderBtn').style.display = '';
+}
+// Gets a usable directory handle: reuses + re-verifies the remembered one if possible, otherwise
+// (first use, or the remembered one no longer resolves — e.g. a different USB port/drive letter) asks
+// the user to pick the folder via the native picker and remembers the new handle for next time.
+async function openGpsDirHandle(){
+  let handle = await getStoredGpxDirHandle();
+  if (handle) {
+    try {
+      let perm = await handle.queryPermission({ mode: 'read' });
+      if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'read' });
+      if (perm === 'granted') {
+        await handle.entries().next(); // touches the handle so a disconnected/renamed drive throws here, not later
+        return handle;
+      }
+    } catch (err) { /* stale handle — fall through to re-picking below */ }
+  }
+  handle = await window.showDirectoryPicker({ id: 'nrds-gpx-folder' });
+  await setStoredGpxDirHandle(handle);
+  return handle;
+}
+async function startGpsFolderImport(){
+  const statusEl = document.getElementById('pffGpxStatus');
+  try {
+    const handle = await openGpsDirHandle();
+    document.getElementById('pffGpsFolderName').textContent = `"${handle.name}"`;
+    document.getElementById('pffGpsRangePanel').style.display = '';
+    statusEl.innerHTML = '';
+  } catch (err) {
+    if (err.name !== 'AbortError') statusEl.innerHTML = `<span class="err">Could not access the GPS folder: ${escapeHtml(err.message)}</span>`;
+  }
+}
+// Non-recursive by design: only scans files directly inside the picked folder (matching
+// Waypoints*.gpx, same as what's normally right under Garmin/GPX). Subfolders like "Archive", "Nav",
+// "Current" or a personal sorting folder are skipped — point the picker directly at one of those if
+// you ever need to import from there instead.
+async function runGpsFolderImport(mode){
+  const statusEl = document.getElementById('pffGpxStatus');
+  const fallbackStatus = document.getElementById('pffStatus').value;
+  let fromDate, toDate;
+  if (mode === 'today') {
+    fromDate = toDate = pffLocalDateFromIso(new Date().toISOString());
+  } else {
+    fromDate = document.getElementById('pffGpsRangeFrom').value;
+    toDate = document.getElementById('pffGpsRangeTo').value;
+    if (!fromDate || !toDate){
+      statusEl.innerHTML = '<span class="err">Pick both a "From" and "To" date.</span>';
+      return;
+    }
+  }
+  document.getElementById('pffGpsRangePanel').style.display = 'none';
+  statusEl.innerHTML = 'Reading GPS folder…';
+  try {
+    const handle = await openGpsDirHandle();
+    ensurePffPickerMap();
+    let filesScanned = 0, added = 0, dupes = 0, guessedCount = 0, unclassified = 0;
+    for await (const [name, entry] of handle.entries()){
+      if (entry.kind !== 'file' || !/^waypoints.*\.gpx$/i.test(name)) continue;
+      filesScanned++;
+      let waypoints;
+      try { waypoints = parseGpxWaypoints(await (await entry.getFile()).text()); }
+      catch (e) { continue; } // skip an unparseable file rather than aborting the whole import
+      for (const w of waypoints){
+        if (!w.time) continue; // can't date it against the requested range — skip rather than guess
+        const localDate = pffLocalDateFromIso(w.time);
+        if (localDate < fromDate || localDate > toDate) continue;
+        const { status, guessed } = pffStatusFromSym(w.sym, fallbackStatus);
+        const result = addPffPendingFromWaypoint(w, status, guessed);
+        if (result === 'added') { added++; if (guessed) guessedCount++; }
+        else if (result === 'dupe') dupes++;
+        else unclassified++;
+      }
+    }
+    renderPffPendingList();
+    if (added){
+      const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
+      if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
+    }
+    statusEl.innerHTML = `<span class="ok">✓ Scanned ${filesScanned} file(s) for ${fromDate}${toDate!==fromDate?' → '+toDate:''}: added ${added} new point(s)` +
+      (dupes ? `, skipped ${dupes} already submitted` : '') +
+      (guessedCount ? `, ${guessedCount} used the fallback Status above (unrecognized symbol — check them below)` : '') +
+      (unclassified ? `, ${unclassified} skipped (unrecognized symbol and no fallback Status selected)` : '') +
+      `.</span>`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Error reading GPS folder: ${escapeHtml(err.message)}</span>`;
   }
 }
 
@@ -3398,6 +3587,7 @@ function _applyBirdData(data) {
   ids.sort();
   var dl = document.getElementById('ibsStationList');
   if (dl) dl.innerHTML = ids.map(function(id) { return '<option value="' + escapeHtml(id) + '">'; }).join('');
+  if (enriched) onDataUpdated();
 }
 async function fetchBirdSurveys(){
   try {
@@ -3735,6 +3925,7 @@ function _applyBirdObsData(data){
   birdObservations = data || [];
   if (leafletMap) renderMap(false);
   if (currentChartViews.has('birds')) renderAllCharts();
+  if (enriched) onDataUpdated();
 }
 async function fetchBirdObservations(){
   try {
@@ -4230,10 +4421,20 @@ async function fetchActivityEntries(){
   activityEntries = data || [];
   renderActivityEntriesPreview();
 }
+// fetchActivityEntries() above only loads the latest 30 (for the "recent entries" preview table) —
+// too few to use for the home page's "total actions" count, so a real count query runs separately.
+let activityEntriesTotalCount = null;
+async function fetchActivityEntriesCount(){
+  try {
+    const { count, error } = await window.sb.from('activity_entries').select('*', { count: 'exact', head: true });
+    if (!error){ activityEntriesTotalCount = count || 0; if (enriched) onDataUpdated(); }
+  } catch(e){}
+}
 function subscribeActivityEntries(){
   fetchActivityEntries();
+  fetchActivityEntriesCount();
   window.sb.channel('activity_entries_changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_entries' }, () => fetchActivityEntries())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_entries' }, () => { fetchActivityEntries(); fetchActivityEntriesCount(); })
     .subscribe();
 }
 
@@ -4603,6 +4804,7 @@ whenSupabaseReady(() => {
   syncOfflineQueue(); // picks up anything queued in a previous session, if we're online now
 });
 loadReferenceData();
+initGpsFolderButton();
 document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('pffDate').value = new Date().toISOString().slice(0,10);
 document.getElementById('aeDate').value = new Date().toISOString().slice(0,10);
@@ -5013,6 +5215,22 @@ function onDataUpdated(){
   mainRows.forEach(r => counts[r.Location_Precision]++);
   const habitatCount = mainRows.length;
   const deratCount = (tables.deratisation||[]).length;
+  // Every kind of field action the app can log, not just the original two (Habitat Restoration /
+  // Dératisation) — PFF, Invasive Bird Survey, Birds Observation, Pépinières, and generic Activity
+  // Types entries (real total via fetchActivityEntriesCount(), since the entries array itself is
+  // capped at the latest 30 for the "recent entries" preview table).
+  const pffCount = (pffObservations||[]).length;
+  const ibsCount = (birdSurveys||[]).length;
+  const birdObsCount = (birdObservations||[]).length;
+  const pepCount = (pepinieres||[]).length;
+  const activityCount = activityEntriesTotalCount != null ? activityEntriesTotalCount : (activityEntries||[]).length;
+  const totalActionsCount = habitatCount + deratCount + pffCount + ibsCount + birdObsCount + pepCount + activityCount;
+  const actionBreakdownParts = [
+    [habitatCount, 'habitat restoration'], [deratCount, 'dératisation'], [pffCount, 'PFF'],
+    [ibsCount, 'invasive bird survey'], [birdObsCount, 'bird observation'], [pepCount, 'pépinière'],
+    [activityCount, 'other activity'],
+  ].filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`);
+  const actionBreakdownText = actionBreakdownParts.join(' · ') || 'no actions recorded yet';
 
   const cleaningSummary = weightedCleaningPctSummary();
   const valleyOrder = ['Papehue','Maruapo','Hopa'];
@@ -5030,7 +5248,7 @@ function onDataUpdated(){
     : 'No plantation recorded yet';
 
   let html = `<div class="grid3">
-    <div class="stat"><div class="num">${habitatCount + deratCount}</div><div class="lbl">total actions</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${habitatCount} habitat restoration · ${deratCount} dératisation</div></div>
+    <div class="stat"><div class="num">${totalActionsCount}</div><div class="lbl">total actions</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${actionBreakdownText}</div></div>
     <div class="stat"><div class="num">${cleaningSummary.overall != null ? cleaningSummary.overall.toFixed(0)+'%' : '—'}</div><div class="lbl">area-weighted cleaning %</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${cleaningByValleyText}</div></div>
     <div class="stat"><div class="num" style="font-size:15px;">${cuttingText}</div><div class="lbl">last cleaning action (cutting / entretien): zone, valley & % cleaned</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${plantationText}</div></div>
   </div>`;
