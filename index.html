@@ -1429,7 +1429,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('pffGpxInput').click()">📥 Import GPX file…</button>
         <input type="file" id="pffGpxInput" accept=".gpx" onchange="onPffGpxFileSelected(event)" style="display:none;">
         <button type="button" class="secondary" id="pffGpsFolderBtn" style="display:none;padding:4px 9px;font-size:12px;" onclick="startGpsFolderImport()">🔌 Import from connected GPS…</button>
-        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65). "Import GPX file" reads one file you pick by hand. "Import from connected GPS" (Chrome/Edge desktop only) reads straight off the device once you grant access to its top-level folder — it searches every subfolder automatically for any .gpx file, so it works whatever folder structure your GPS uses. Each point's on-device color sets its status automatically (Black = Negative, Orange/Amber = Positive; anything else falls back to the Status selected above). Track logs aren't supported, only individually saved waypoints. Already-submitted points (same day, within ~20m) are skipped automatically, so re-importing is safe.</span>
+        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65). "Import GPX file" reads one file you pick by hand. "Import from connected GPS" (Chrome/Edge desktop only) reads straight off the device once you grant access to its top-level folder — it searches every subfolder automatically for any .gpx file, so it works whatever folder structure your GPS uses. Each point's on-device color/icon sets its status automatically, learned once per symbol and shared with the whole team (see below the first time a new one shows up). Track logs aren't supported, only individually saved waypoints. Already-submitted points (same day, within ~20m) are skipped automatically, so re-importing is safe.</span>
         <div id="pffGpsRangePanel" style="display:none;width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;">
           <div class="muted" style="margin-bottom:6px;">Import waypoints from <b id="pffGpsFolderName">the selected folder</b> for:</div>
           <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1441,6 +1441,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
             <button type="button" class="secondary" onclick="document.getElementById('pffGpsRangePanel').style.display='none'">Cancel</button>
           </div>
         </div>
+        <div id="pffUnknownSymPanel" style="display:none;width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff8ec;"></div>
       </div>
       <div id="pffPendingList" style="margin-bottom:10px;"></div>
       <button type="submit">Submit PFF point(s)</button>
@@ -2516,6 +2517,32 @@ function subscribePffObservations(){
     .subscribe();
 }
 
+// GPS symbol/color -> PFF status, shared team-wide (see supabase_schema_pff_symbol_map.sql and
+// pffStatusFromSym() further down). Loaded the same way as every other reference table, with a
+// realtime subscription so a mapping saved on one device/browser is picked up by everyone else
+// without a reload.
+let pffSymbolMap = {};
+async function fetchPffSymbolMap(){
+  try {
+    const { data, error } = await window.sb.from('pff_symbol_map').select('*');
+    if (error) throw new Error(error.message);
+    pffSymbolMap = {};
+    for (const r of data) pffSymbolMap[r.sym] = r.status;
+    _dbSave('pffSymbolMap', data);
+  } catch(e) {
+    var cached = _dbLoad('pffSymbolMap');
+    pffSymbolMap = {};
+    if (cached) { for (const r of cached.payload) pffSymbolMap[r.sym] = r.status; }
+    else console.warn('PFF symbol map: offline, no cache');
+  }
+}
+function subscribePffSymbolMap(){
+  fetchPffSymbolMap();
+  window.sb.channel('pff_symbol_map_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pff_symbol_map' }, () => fetchPffSymbolMap())
+    .subscribe();
+}
+
 function maybeBuildEnriched(){
   if (!dataLoaded.ref || !dataLoaded.habitat) return;
   onDataUpdated();
@@ -3141,15 +3168,17 @@ function parseGpxWaypoints(xmlText){
     return { lat, lon, name, cmt, desc, time, sym };
   }).filter(w => isFinite(w.lat) && isFinite(w.lon));
 }
-// Waypoint symbol -> PFF status, per Marco's on-device convention (confirmed 2026-07-08): on his
-// GPSMAP 65 "Navaid, Black" = Negative, "Navaid, Orange" and "Navaid, Amber" = Positive (both warmer
-// icons read as "red" on the device's small screen — there's no icon literally named "Red" in his
-// data). Any other/unrecognized symbol (or a device with a different icon set) falls back to whatever
-// Status is selected in the form above, and is flagged (guessed:true) so it can be double-checked.
-function pffStatusFromSym(sym, fallbackStatus){
-  if (sym === 'Navaid, Black') return { status: 'Negative', guessed: false };
-  if (sym === 'Navaid, Orange' || sym === 'Navaid, Amber') return { status: 'Positive', guessed: false };
-  return { status: fallbackStatus || null, guessed: true };
+// Waypoint symbol -> PFF status, via the shared pff_symbol_map table (see
+// supabase_schema_pff_symbol_map.sql) instead of a hardcoded color scheme in the code — different GPS
+// models use very different icon names for what a person calls "red" (a Garmin GPSMAP 65 uses "Navaid,
+// Orange"/"Navaid, Amber" for Positive; a second Garmin unit used a literal "Navaid, Red" instead), and
+// hardcoding meant every new device needed a code change + deploy. Returns the mapped status string
+// ('Positive'/'Centre de colonie'/'Negative'), the sentinel 'IGNORE' (deliberately not a PFF point, per
+// a saved mapping), or undefined if this exact symbol has never been classified before — callers must
+// buffer those and let the user classify them once via the in-app review panel (see
+// renderPffUnknownSymPanel/applyPffUnknownSymMapping below), never guess silently.
+function pffStatusFromSym(sym){
+  return Object.prototype.hasOwnProperty.call(pffSymbolMap, sym) ? pffSymbolMap[sym] : undefined;
 }
 // GPSMAP timestamps are UTC; Tahiti is UTC-10 year-round (no DST) — shift before taking the date part,
 // otherwise points taken in the local evening land on the wrong (next) day.
@@ -3174,23 +3203,37 @@ function isDuplicatePffPoint(lat, lon, localDate){
   }
   return false;
 }
-function addPffPendingFromWaypoint(w, status, guessed){
+function addPffPendingFromWaypoint(w, status){
   const localDate = w.time ? pffLocalDateFromIso(w.time) : null;
   if (localDate && isDuplicatePffPoint(w.lat, w.lon, localDate)) return 'dupe';
-  if (!status) return 'unclassified';
   const label = [w.name, w.cmt, w.desc].filter(Boolean).join(' — ');
-  const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '') + (guessed ? ' — unrecognized GPS symbol, verify status' : '');
+  const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '');
   const id = ++pffPendingIdCounter;
   const marker = L.circleMarker([w.lat, w.lon], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(pffPickerEntry.map);
   pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, surveyMethod: '', marker });
   return 'added';
+}
+// Classifies a batch of already-parsed waypoints using the shared symbol map: adds/dedupes/ignores
+// whatever's already known, and buffers anything unrecognized into pffUnknownSymBuffer (grouped by
+// exact symbol string) for renderPffUnknownSymPanel() to show afterward. Shared by both GPX import
+// paths (single-file and connected-GPS-folder) so they classify identically.
+let pffUnknownSymBuffer = {};
+function classifyPffWaypoints(waypoints){
+  let added = 0, dupes = 0, ignored = 0;
+  for (const w of waypoints){
+    const status = pffStatusFromSym(w.sym);
+    if (status === undefined) { (pffUnknownSymBuffer[w.sym] ||= []).push(w); continue; }
+    if (status === 'IGNORE') { ignored++; continue; }
+    const result = addPffPendingFromWaypoint(w, status);
+    if (result === 'added') added++; else dupes++;
+  }
+  return { added, dupes, ignored };
 }
 async function onPffGpxFileSelected(event){
   const file = event.target.files[0];
   const statusEl = document.getElementById('pffGpxStatus');
   event.target.value = ''; // clears the picked filename so the same file can be re-imported later
   if (!file) return;
-  const fallbackStatus = document.getElementById('pffStatus').value;
   try {
     const waypoints = parseGpxWaypoints(await file.text());
     if (!waypoints.length){
@@ -3198,30 +3241,73 @@ async function onPffGpxFileSelected(event){
       return;
     }
     ensurePffPickerMap();
-    let added = 0, dupes = 0, unclassified = 0, guessedCount = 0;
-    for (const w of waypoints){
-      const { status, guessed } = pffStatusFromSym(w.sym, fallbackStatus);
-      const result = addPffPendingFromWaypoint(w, status, guessed);
-      if (result === 'added') { added++; if (guessed) guessedCount++; }
-      else if (result === 'dupe') dupes++;
-      else unclassified++;
-    }
+    pffUnknownSymBuffer = {};
+    const { added, dupes, ignored } = classifyPffWaypoints(waypoints);
     renderPffPendingList();
+    renderPffUnknownSymPanel();
     if (added){
       const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
       if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
     }
-    if (!added && unclassified){
-      statusEl.innerHTML = '<span class="err">None of these waypoints use a recognized color, and no fallback Status is selected above — choose one and re-import.</span>';
-      return;
-    }
+    const unknownCount = Object.values(pffUnknownSymBuffer).reduce((a, arr) => a + arr.length, 0);
     statusEl.innerHTML = `<span class="ok">✓ Added ${added} point${added===1?'':'s'} from this file` +
       (dupes ? `, skipped ${dupes} already submitted` : '') +
-      (guessedCount ? `, ${guessedCount} used the fallback Status (unrecognized symbol — check them below)` : '') +
+      (ignored ? `, ignored ${ignored} (not PFF, per saved symbol settings)` : '') +
+      (unknownCount ? `, ${unknownCount} point(s) use ${Object.keys(pffUnknownSymBuffer).length} symbol(s) never seen before — classify them below` : '') +
       ` — review/edit below before submitting.</span>`;
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
   }
+}
+// Shows every symbol collected into pffUnknownSymBuffer during the last scan (from either import path)
+// and lets the user classify each one, once — the choice is saved to the shared pff_symbol_map table
+// (see applyPffUnknownSymMapping) so no one is ever asked about that exact symbol again, on any device.
+function renderPffUnknownSymPanel(){
+  const wrap = document.getElementById('pffUnknownSymPanel');
+  const syms = Object.keys(pffUnknownSymBuffer);
+  if (!syms.length){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = '';
+  wrap.innerHTML = `<div class="muted" style="margin-bottom:6px;">${syms.length} GPS symbol${syms.length===1?'':'s'} never classified before — choose a status once, and every future import (any device, any team member) will apply it automatically:</div>` +
+    syms.map(sym => `
+      <div class="row" style="align-items:center;gap:8px;margin-bottom:4px;">
+        <code style="min-width:170px;">${escapeHtml(sym) || '(no symbol set)'}</code>
+        <span class="muted">${pffUnknownSymBuffer[sym].length} point${pffUnknownSymBuffer[sym].length===1?'':'s'}</span>
+        <select data-sym="${escapeHtml(sym)}">
+          <option value="">— choose —</option>
+          <option value="Positive">Positive</option>
+          <option value="Centre de colonie">Centre de colonie</option>
+          <option value="Negative">Negative</option>
+          <option value="IGNORE">Not PFF — ignore these</option>
+        </select>
+      </div>`).join('') +
+    `<button type="button" style="margin-top:4px;" onclick="applyPffUnknownSymMapping()">Save & add matching points</button>`;
+}
+async function applyPffUnknownSymMapping(){
+  const selects = [...document.querySelectorAll('#pffUnknownSymPanel select')];
+  if (selects.some(s => !s.value)){ alert('Choose a status (or "Not PFF — ignore these") for every symbol listed.'); return; }
+  const statusEl = document.getElementById('pffGpxStatus');
+  statusEl.innerHTML = 'Saving symbol mapping…';
+  let added = 0, ignored = 0;
+  for (const sel of selects){
+    const sym = sel.dataset.sym, status = sel.value;
+    const { error } = await window.sb.from('pff_symbol_map').upsert({
+      sym, status, updated_by: document.getElementById('pffObserver').value || null, updated_at: new Date().toISOString(),
+    });
+    if (error) { statusEl.innerHTML = `<span class="err">Could not save the mapping for "${escapeHtml(sym)}": ${escapeHtml(error.message)}</span>`; return; }
+    pffSymbolMap[sym] = status;
+    const waypoints = pffUnknownSymBuffer[sym] || [];
+    if (status === 'IGNORE') { ignored += waypoints.length; }
+    else { for (const w of waypoints) { if (addPffPendingFromWaypoint(w, status) === 'added') added++; } }
+  }
+  pffUnknownSymBuffer = {};
+  renderPffUnknownSymPanel();
+  renderPffPendingList();
+  if (added){
+    const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
+    if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
+  }
+  statusEl.innerHTML = `<span class="ok">✓ Saved ${selects.length} new symbol mapping${selects.length===1?'':'s'}. Added ${added} point${added===1?'':'s'}` +
+    (ignored ? `, ignored ${ignored} (not PFF)` : '') + `.</span>`;
 }
 
 /* ---------------- Import GPX waypoints straight from a connected GPS's memory card ----------------
@@ -3310,7 +3396,6 @@ async function* walkGpxFiles(dirHandle, depth){
 }
 async function runGpsFolderImport(mode){
   const statusEl = document.getElementById('pffGpxStatus');
-  const fallbackStatus = document.getElementById('pffStatus').value;
   let fromDate, toDate;
   if (mode === 'today') {
     fromDate = toDate = pffLocalDateFromIso(new Date().toISOString());
@@ -3327,26 +3412,26 @@ async function runGpsFolderImport(mode){
   try {
     const handle = await openGpsDirHandle();
     ensurePffPickerMap();
-    let filesScanned = 0, filesWithWaypoints = 0, waypointsSeen = 0, added = 0, dupes = 0, guessedCount = 0, unclassified = 0, outOfRange = 0;
+    pffUnknownSymBuffer = {};
+    let filesScanned = 0, waypointsSeen = 0, outOfRange = 0, added = 0, dupes = 0, ignored = 0;
     for await (const entry of walkGpxFiles(handle, 0)){
       filesScanned++;
       let waypoints;
       try { waypoints = parseGpxWaypoints(await (await entry.getFile()).text()); }
       catch (e) { continue; } // skip an unparseable file rather than aborting the whole import
-      if (waypoints.length) filesWithWaypoints++;
+      const inRange = [];
       for (const w of waypoints){
         waypointsSeen++;
         if (!w.time) continue; // can't date it against the requested range — skip rather than guess
         const localDate = pffLocalDateFromIso(w.time);
         if (localDate < fromDate || localDate > toDate) { outOfRange++; continue; }
-        const { status, guessed } = pffStatusFromSym(w.sym, fallbackStatus);
-        const result = addPffPendingFromWaypoint(w, status, guessed);
-        if (result === 'added') { added++; if (guessed) guessedCount++; }
-        else if (result === 'dupe') dupes++;
-        else unclassified++;
+        inRange.push(w);
       }
+      const result = classifyPffWaypoints(inRange);
+      added += result.added; dupes += result.dupes; ignored += result.ignored;
     }
     renderPffPendingList();
+    renderPffUnknownSymPanel();
     if (added){
       const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
       if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
@@ -3359,11 +3444,12 @@ async function runGpsFolderImport(mode){
       statusEl.innerHTML = `<span class="err">Found ${filesScanned} .gpx file(s) in "${escapeHtml(handle.name)}", but none contain any saved waypoints (&lt;wpt&gt;) — only track logs, or the files are empty.</span>`;
       return;
     }
+    const unknownCount = Object.values(pffUnknownSymBuffer).reduce((a, arr) => a + arr.length, 0);
     statusEl.innerHTML = `<span class="ok">✓ Scanned ${filesScanned} file(s) (${waypointsSeen} waypoint(s) total) for ${fromDate}${toDate!==fromDate?' → '+toDate:''}: added ${added} new point(s)` +
       (dupes ? `, skipped ${dupes} already submitted` : '') +
       (outOfRange ? `, ${outOfRange} outside the chosen date range` : '') +
-      (guessedCount ? `, ${guessedCount} used the fallback Status above (unrecognized symbol — check them below)` : '') +
-      (unclassified ? `, ${unclassified} skipped (unrecognized symbol and no fallback Status selected)` : '') +
+      (ignored ? `, ignored ${ignored} (not PFF, per saved symbol settings)` : '') +
+      (unknownCount ? `, ${unknownCount} point(s) use ${Object.keys(pffUnknownSymBuffer).length} symbol(s) never seen before — classify them below` : '') +
       `.</span>`;
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error reading GPS folder: ${escapeHtml(err.message)}</span>`;
@@ -4818,6 +4904,7 @@ whenSupabaseReady(() => {
   subscribeDeratisation();
   subscribeNewElements();
   subscribePffObservations();
+  subscribePffSymbolMap();
   subscribePepinieres();
   subscribeActivityTypes();
   subscribeActivityEntries();
