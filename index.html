@@ -1429,7 +1429,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('pffGpxInput').click()">📥 Import GPX file…</button>
         <input type="file" id="pffGpxInput" accept=".gpx" onchange="onPffGpxFileSelected(event)" style="display:none;">
         <button type="button" class="secondary" id="pffGpsFolderBtn" style="display:none;padding:4px 9px;font-size:12px;" onclick="startGpsFolderImport()">🔌 Import from connected GPS…</button>
-        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65). "Import GPX file" reads one file you pick by hand. "Import from connected GPS" (Chrome/Edge desktop only) reads straight off the device once you grant access to its GPX folder — each point's on-device color sets its status automatically (Black = Negative, Orange/Amber = Positive; anything else falls back to the Status selected above). Track logs aren't supported, only individually saved waypoints. Already-submitted points (same day, within ~20m) are skipped automatically, so re-importing is safe.</span>
+        <span class="muted" id="pffGpxStatus">From a handheld GPS (e.g. Garmin GPSMAP 65). "Import GPX file" reads one file you pick by hand. "Import from connected GPS" (Chrome/Edge desktop only) reads straight off the device once you grant access to its top-level folder — it searches every subfolder automatically for any .gpx file, so it works whatever folder structure your GPS uses. Each point's on-device color sets its status automatically (Black = Negative, Orange/Amber = Positive; anything else falls back to the Status selected above). Track logs aren't supported, only individually saved waypoints. Already-submitted points (same day, within ~20m) are skipped automatically, so re-importing is safe.</span>
         <div id="pffGpsRangePanel" style="display:none;width:100%;margin-top:6px;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;">
           <div class="muted" style="margin-bottom:6px;">Import waypoints from <b id="pffGpsFolderName">the selected folder</b> for:</div>
           <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;">
@@ -3292,10 +3292,22 @@ async function startGpsFolderImport(){
     if (err.name !== 'AbortError') statusEl.innerHTML = `<span class="err">Could not access the GPS folder: ${escapeHtml(err.message)}</span>`;
   }
 }
-// Non-recursive by design: only scans files directly inside the picked folder (matching
-// Waypoints*.gpx, same as what's normally right under Garmin/GPX). Subfolders like "Archive", "Nav",
-// "Current" or a personal sorting folder are skipped — point the picker directly at one of those if
-// you ever need to import from there instead.
+// Recursively walks every subfolder of a picked directory yielding every *.gpx file found (any
+// filename — different GPS models/brands use very different naming conventions, e.g. Garmin's
+// "Waypoints_DD-MON-YY.gpx" vs others that nest everything under their own folder structure). Track-log
+// files with no <wpt> waypoints just contribute nothing once parsed, so there's no need to filter them
+// out by name — parseGpxWaypoints() only ever reads <wpt> elements anyway. depth is capped at 6 as a
+// sanity guard against an accidentally-huge tree (e.g. picking a whole drive instead of the GPS folder).
+async function* walkGpxFiles(dirHandle, depth){
+  if (depth > 6) return;
+  for await (const [name, entry] of dirHandle.entries()){
+    if (entry.kind === 'file') {
+      if (/\.gpx$/i.test(name)) yield entry;
+    } else if (entry.kind === 'directory') {
+      yield* walkGpxFiles(entry, depth + 1);
+    }
+  }
+}
 async function runGpsFolderImport(mode){
   const statusEl = document.getElementById('pffGpxStatus');
   const fallbackStatus = document.getElementById('pffStatus').value;
@@ -3315,17 +3327,18 @@ async function runGpsFolderImport(mode){
   try {
     const handle = await openGpsDirHandle();
     ensurePffPickerMap();
-    let filesScanned = 0, added = 0, dupes = 0, guessedCount = 0, unclassified = 0;
-    for await (const [name, entry] of handle.entries()){
-      if (entry.kind !== 'file' || !/^waypoints.*\.gpx$/i.test(name)) continue;
+    let filesScanned = 0, filesWithWaypoints = 0, waypointsSeen = 0, added = 0, dupes = 0, guessedCount = 0, unclassified = 0, outOfRange = 0;
+    for await (const entry of walkGpxFiles(handle, 0)){
       filesScanned++;
       let waypoints;
       try { waypoints = parseGpxWaypoints(await (await entry.getFile()).text()); }
       catch (e) { continue; } // skip an unparseable file rather than aborting the whole import
+      if (waypoints.length) filesWithWaypoints++;
       for (const w of waypoints){
+        waypointsSeen++;
         if (!w.time) continue; // can't date it against the requested range — skip rather than guess
         const localDate = pffLocalDateFromIso(w.time);
-        if (localDate < fromDate || localDate > toDate) continue;
+        if (localDate < fromDate || localDate > toDate) { outOfRange++; continue; }
         const { status, guessed } = pffStatusFromSym(w.sym, fallbackStatus);
         const result = addPffPendingFromWaypoint(w, status, guessed);
         if (result === 'added') { added++; if (guessed) guessedCount++; }
@@ -3338,8 +3351,17 @@ async function runGpsFolderImport(mode){
       const bounds = L.latLngBounds(pffPendingPoints.map(p => [p.lat, p.lon]));
       if (bounds.isValid()) pffPickerEntry.map.fitBounds(bounds, { padding: [30,30] });
     }
-    statusEl.innerHTML = `<span class="ok">✓ Scanned ${filesScanned} file(s) for ${fromDate}${toDate!==fromDate?' → '+toDate:''}: added ${added} new point(s)` +
+    if (!filesScanned){
+      statusEl.innerHTML = `<span class="err">No .gpx files found anywhere inside "${escapeHtml(handle.name)}" (searched all subfolders). Make sure you selected the right folder/drive for this GPS.</span>`;
+      return;
+    }
+    if (filesScanned && !waypointsSeen){
+      statusEl.innerHTML = `<span class="err">Found ${filesScanned} .gpx file(s) in "${escapeHtml(handle.name)}", but none contain any saved waypoints (&lt;wpt&gt;) — only track logs, or the files are empty.</span>`;
+      return;
+    }
+    statusEl.innerHTML = `<span class="ok">✓ Scanned ${filesScanned} file(s) (${waypointsSeen} waypoint(s) total) for ${fromDate}${toDate!==fromDate?' → '+toDate:''}: added ${added} new point(s)` +
       (dupes ? `, skipped ${dupes} already submitted` : '') +
+      (outOfRange ? `, ${outOfRange} outside the chosen date range` : '') +
       (guessedCount ? `, ${guessedCount} used the fallback Status above (unrecognized symbol — check them below)` : '') +
       (unclassified ? `, ${unclassified} skipped (unrecognized symbol and no fallback Status selected)` : '') +
       `.</span>`;
