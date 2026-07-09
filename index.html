@@ -1380,10 +1380,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="muted">Zone (your own name for this area, optional — applies to any point below that doesn't already have its own): <input type="text" id="pffZone" list="pffZoneList" placeholder="e.g. Trail A, Camp 3 — leave blank to use each point's own zone" style="width:180px;"></label>
         <datalist id="pffZoneList"></datalist>
       </div>
-      <div class="hint" style="margin-top:-6px;margin-bottom:10px;">All the points added below belong to this one Zone — type a new name the first time, or pick an existing one to add more reports there.</div>
+      <div class="hint" style="margin-top:-6px;margin-bottom:10px;">Zone and Status here are just the default applied to new points — optional, and each point below can be given its own instead (edit it directly in the pending list). Status must be set (globally or per point) before submitting; Zone can be left blank.</div>
       <div class="row" style="margin-bottom:10px;align-items:center;">
         <label class="muted">Status:
-          <select id="pffStatus" onchange="onPffStatusChange()" required>
+          <select id="pffStatus" onchange="onPffStatusChange()">
             <option value="">Choose…</option>
             <option value="Positive">Positive</option>
             <option value="Centre de colonie">Centre de colonie</option>
@@ -3084,14 +3084,15 @@ function ensurePffPickerMap(){
 
   map.on('preclick', (e) => {
     L.DomEvent.stopPropagation(e);
+    // Status is no longer required up front (same relaxation as Zone) — picking one above is still the
+    // fast path (applies to every new point until changed), but a point can be added with it blank and
+    // classified afterward per-point in the pending list. submitPffForm() is what actually enforces it,
+    // since unlike Zone (a free label) Status drives every downstream analysis (map color, colony
+    // clustering, charts) and can never be left null in the database.
     const status = document.getElementById('pffStatus').value;
-    if (!status){
-      document.getElementById('pffPickerReadout').textContent = 'Choose a status above before adding a point.';
-      return;
-    }
     const { lat, lng } = e.latlng;
     const id = ++pffPendingIdCounter;
-    const marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(map);
+    const marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status] || '#ccc', fillOpacity: 0.95 }).addTo(map);
     pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', zone: '', surveyMethod: '', marker });
     renderPffPendingList();
   });
@@ -3109,7 +3110,8 @@ function renderPffPendingList(){
     <div class="row" style="align-items:center;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fafcf9;">
       <span class="swatch" style="background:${PFF_STATUS_COLORS[p.status]||'#ccc'};"></span>
       <span class="muted" style="min-width:120px;">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</span>
-      <select onchange="onPffPendingStatusChange(${p.id}, this.value)">
+      <select onchange="onPffPendingStatusChange(${p.id}, this.value)" style="${p.status ? '' : 'border-color:#c0392b;'}">
+        <option value="" ${!p.status?'selected':''}>— choose status —</option>
         <option value="Positive" ${p.status==='Positive'?'selected':''}>Positive</option>
         <option value="Centre de colonie" ${p.status==='Centre de colonie'?'selected':''}>Centre de colonie</option>
         <option value="Negative" ${p.status==='Negative'?'selected':''}>Negative</option>
@@ -3129,7 +3131,7 @@ function onPffPendingStatusChange(id, status){
   const p = pffPendingPoints.find(p => p.id === id);
   if (!p) return;
   p.status = status;
-  p.marker.setStyle({ fillColor: PFF_STATUS_COLORS[status] });
+  p.marker.setStyle({ fillColor: PFF_STATUS_COLORS[status] || '#ccc' });
   renderPffPendingList();
 }
 // Mutates the in-memory point only (no re-render) so typing doesn't lose focus/cursor position.
@@ -3621,6 +3623,8 @@ async function submitPffForm(evt){
   statusEl.innerHTML = 'Submitting…';
   try {
     if (!pffPendingPoints.length) throw new Error('Please tap the map to add at least one point.');
+    const missingStatus = pffPendingPoints.filter(p => !p.status).length;
+    if (missingStatus) throw new Error(`${missingStatus} point${missingStatus===1?'':'s'} still ${missingStatus===1?'needs':'need'} a Status — pick one for each in the list below (or set the Status above before adding more points).`);
     const date = document.getElementById('pffDate').value;
     const observer = document.getElementById('pffObserver').value;
     const formZone = document.getElementById('pffZone').value; // optional — used only as a fallback for points without their own zone
