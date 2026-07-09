@@ -1377,7 +1377,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Date: <input type="date" id="pffDate" required></label>
         <label class="muted">Observer name: <input type="text" id="pffObserver" placeholder="e.g. Marco Elia (Tahiti)" required></label>
-        <label class="muted">Zone (your own name for this area): <input type="text" id="pffZone" list="pffZoneList" placeholder="e.g. Trail A, Camp 3 — new or existing" required style="width:180px;"></label>
+        <label class="muted">Zone (your own name for this area, optional — applies to any point below that doesn't already have its own): <input type="text" id="pffZone" list="pffZoneList" placeholder="e.g. Trail A, Camp 3 — leave blank to use each point's own zone" style="width:180px;"></label>
         <datalist id="pffZoneList"></datalist>
       </div>
       <div class="hint" style="margin-top:-6px;margin-bottom:10px;">All the points added below belong to this one Zone — type a new name the first time, or pick an existing one to add more reports there.</div>
@@ -3092,7 +3092,7 @@ function ensurePffPickerMap(){
     const { lat, lng } = e.latlng;
     const id = ++pffPendingIdCounter;
     const marker = L.circleMarker([lat, lng], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(map);
-    pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', surveyMethod: '', marker });
+    pffPendingPoints.push({ id, lat, lon: lng, status, value: '', notes: '', zone: '', surveyMethod: '', marker });
     renderPffPendingList();
   });
 }
@@ -3119,6 +3119,7 @@ function renderPffPendingList(){
         <option value="Visual inspection" ${p.surveyMethod==='Visual inspection'?'selected':''}>Visual inspection</option>
         <option value="Bait vial (grid survey)" ${p.surveyMethod==='Bait vial (grid survey)'?'selected':''}>Bait vial (grid survey)</option>
       </select>
+      <input type="text" placeholder="Zone (optional, overrides the one above)" style="width:170px;" value="${escapeHtml(p.zone||'')}" oninput="onPffPendingFieldInput(${p.id},'zone',this.value)">
       <input type="text" placeholder="Value (optional)" style="width:120px;" value="${escapeHtml(p.value||'')}" oninput="onPffPendingFieldInput(${p.id},'value',this.value)">
       <input type="text" placeholder="Notes (optional)" style="width:160px;" value="${escapeHtml(p.notes||'')}" oninput="onPffPendingFieldInput(${p.id},'notes',this.value)">
       <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="removePffPendingPoint(${p.id})">×</button>
@@ -3208,9 +3209,14 @@ function addPffPendingFromWaypoint(w, status){
   if (localDate && isDuplicatePffPoint(w.lat, w.lon, localDate)) return 'dupe';
   const label = [w.name, w.cmt, w.desc].filter(Boolean).join(' — ');
   const notes = 'GPX' + (label ? `: ${label}` : '') + (w.time ? ` (${w.time})` : '');
+  // Defaults each imported point's own Zone to "GPS import <date>" (localDate, or today's date if the
+  // waypoint has no timestamp) so the Zone field above can be left blank on GPS imports — the same
+  // placeholder convention used for the very first bulk historical import, before this UI existed.
+  // Editable per point in the pending list below (renderPffPendingList), same as Value/Notes/Method.
+  const zone = 'GPS import ' + (localDate || pffLocalDateFromIso(new Date().toISOString()));
   const id = ++pffPendingIdCounter;
   const marker = L.circleMarker([w.lat, w.lon], { radius: 8, color: '#fff', weight: 2, fillColor: PFF_STATUS_COLORS[status], fillOpacity: 0.95 }).addTo(pffPickerEntry.map);
-  pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, surveyMethod: '', marker });
+  pffPendingPoints.push({ id, lat: w.lat, lon: w.lon, status, value: '', notes, zone, surveyMethod: '', marker });
   return 'added';
 }
 // Classifies a batch of already-parsed waypoints using the shared symbol map: adds/dedupes/ignores
@@ -3617,10 +3623,10 @@ async function submitPffForm(evt){
     if (!pffPendingPoints.length) throw new Error('Please tap the map to add at least one point.');
     const date = document.getElementById('pffDate').value;
     const observer = document.getElementById('pffObserver').value;
-    const zone = document.getElementById('pffZone').value;
+    const formZone = document.getElementById('pffZone').value; // optional — used only as a fallback for points without their own zone
     const pffValley = document.getElementById('pffMapValley').value;
     const newRows = pffPendingPoints.map(p => ({
-      date, observer, zone,
+      date, observer, zone: p.zone || formZone || null,
       valley: pffValley !== 'all' ? pffValley : null,
       status: p.status, value: p.value, notes: p.notes, lat: p.lat, lon: p.lon,
       survey_method: p.surveyMethod || null,
