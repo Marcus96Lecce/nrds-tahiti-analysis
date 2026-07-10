@@ -2921,30 +2921,21 @@ function renderHrZonePicker(shouldFit){
   if (shouldFit && boundsLatLngs.length) entry.map.fitBounds(boundsLatLngs, { padding: [10, 10] });
 }
 
-// Syncs the Valley dropdown (and its dependent Unit/Station datalist options) to `valley`, only if
-// it isn't already selected — shared by hrZoneClickHandler and hrStationClickHandler so clicking
-// either a zone polygon or a rat station on the map keeps the Valley field consistent with whatever
-// was just clicked, without triggering a map refit (the user just interacted there, no reason to jump
-// the view).
-function hrSyncValleyFromMapClick(valley){
-  const valSel = document.getElementById('hrValley');
-  if (valSel.value === valley) return;
-  // Station codes aren't globally unique across valleys — if the Valley was already set to something
-  // else (a genuine switch, not just the first pick), any station codes typed/clicked in under the old
-  // valley would silently fail to resolve against the new one at enrichment time, so they're cleared
-  // rather than left to quietly corrupt the submission.
-  if (valSel.value) document.getElementById('hrStations').value = '';
-  valSel.value = valley;
-  const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
-  document.getElementById('hrUnit').innerHTML = '<option value="">Choose…</option>'
-    + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
-  document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
-}
 // Called when user clicks a zone polygon on the map — updates the Valley+Zone dropdowns and
 // re-highlights the polygon without refitting the map view (user just interacted there).
 function hrZoneClickHandler(valley, unitName){
-  hrSyncValleyFromMapClick(valley);
+  const valSel = document.getElementById('hrValley');
+  if (valSel.value !== valley){
+    valSel.value = valley;
+    // Replicate the dropdown-population part of onHrValleyChange() without triggering a map
+    // refit — the valley just changed because the user clicked a zone on the map, not because
+    // they want the view to jump somewhere else.
+    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+    document.getElementById('hrUnit').innerHTML = '<option value="">Choose…</option>'
+      + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+    const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
+    document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  }
   document.getElementById('hrUnit').value = unitName;
   hrZoneSelectedUnit = unitName;
   renderHrZonePicker(false); // re-highlight only, no refit
@@ -2979,25 +2970,9 @@ function renderHrStations(){
     const marker = L.circleMarker([lat, lon], { radius:3.5, color:'#444', weight:1, fillColor:'#fff', fillOpacity:0.9 });
     marker.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
     marker.bindPopup(html);
-    marker.on('click', () => hrStationClickHandler(st['Vallee'], st['Station']));
     marker.addTo(entry.stationsLayer);
     L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(entry.stationsLayer);
   }
-}
-// Called when user clicks a rat-station dot on the map (with "Overlay all rat stations" on) — adds
-// that station's code to the "Rat station(s)" field (comma-separated, no duplicates), same
-// click-to-select convenience as clicking a zone polygon already has. Also syncs the Valley dropdown
-// first if the clicked station belongs to a different valley — station codes aren't globally unique
-// (the same code can exist in more than one valley), so the field's contents must stay consistent
-// with whichever valley is selected for the lookup that happens later at enrichment time to resolve
-// correctly.
-function hrStationClickHandler(valley, code){
-  if (!code) return;
-  hrSyncValleyFromMapClick(valley);
-  const input = document.getElementById('hrStations');
-  const existing = input.value.split(',').map(s => s.trim()).filter(Boolean);
-  if (!existing.includes(code)) existing.push(code);
-  input.value = existing.join(',');
 }
 function toggleHrRatLines(checked){
   hrShowRatLines = checked;
