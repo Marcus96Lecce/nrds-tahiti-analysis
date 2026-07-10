@@ -992,7 +992,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
           Layers <span id="mapLayersCount" style="opacity:.7;">(1)</span> ▾
         </button>
         <div id="mapLayersPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_all_obs" checked onchange="toggleMapLayer('all_obs',this.checked)"> All observations</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_species" onchange="toggleMapLayer('species',this.checked)"> Planted species</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
@@ -5064,7 +5063,7 @@ function buildEnriched(){
     speciesByAction.get(r['Identifier']).push(r);
   }
 
-  const mainRows = [], stationRows = [], speciesRows = [], unmatched = [];
+  const mainRows = [], stationRows = [], speciesRows = [];
 
   for (const r of hr){
     const ident = r['Identifier'], valley = r['Valley'], unitName = r['Unit Name'];
@@ -5078,7 +5077,6 @@ function buildEnriched(){
         resolved.push({code, lat, lon});
         stationRows.push({Identifier:ident, Valley:valley, Station:code, Latitude:lat, Longitude:lon});
       } else {
-        unmatched.push({ident, valley, code});
         stationRows.push({Identifier:ident, Valley:valley, Station:code, Latitude:'', Longitude:''});
       }
     }
@@ -5122,7 +5120,7 @@ function buildEnriched(){
     });
   }
 
-  return { mainRows, stationRows, speciesRows, unmatched };
+  return { mainRows, stationRows, speciesRows };
 }
 
 /* ---------------- CSV export ---------------- */
@@ -5329,7 +5327,7 @@ function onDataUpdated(){
   const prevStation = document.getElementById('chartStation').value;
 
   enriched = buildEnriched();
-  const { mainRows, stationRows, speciesRows, unmatched } = enriched;
+  const { mainRows, stationRows, speciesRows } = enriched;
   const counts = { rat_station:0, management_unit:0, none:0 };
   mainRows.forEach(r => counts[r.Location_Precision]++);
   const habitatCount = mainRows.length;
@@ -5371,9 +5369,6 @@ function onDataUpdated(){
     <div class="stat"><div class="num">${cleaningSummary.overall != null ? cleaningSummary.overall.toFixed(0)+'%' : '—'}</div><div class="lbl">area-weighted cleaning %</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${cleaningByValleyText}</div></div>
     <div class="stat"><div class="num" style="font-size:15px;">${cuttingText}</div><div class="lbl">last cleaning action (cutting / entretien): zone, valley & % cleaned</div><div class="muted" style="font-size:10.5px;margin-top:3px;">${plantationText}</div></div>
   </div>`;
-  if (unmatched.length){
-    html += `<p class="warn" style="margin-top:10px;">⚠ Station codes not found in the registry: ${unmatched.map(u=>`${u.code} (action ${u.ident}, ${u.valley})`).join('; ')}</p>`;
-  }
   let topZones = [];
   let priorityHtml = '';
   try {
@@ -6318,7 +6313,7 @@ function speciesSummaryByAction(){
 }
 
 let mapValleyFilter = 'all';
-let mapLayers = new Set(['all_obs']); // which data layers are currently shown — one or more at once
+let mapLayers = new Set(); // which data layers are currently shown — one or more at once
 let mapLayersDropdownOpen = false;
 let nrdsDensityPerHa = 1111;
 let showStationsOverlay = false;
@@ -7135,23 +7130,15 @@ function renderMap(shouldFit){
     }
   }
 
-  if (mapLayers.has('all_obs') || mapLayers.has('species')){
-    const showAll = mapLayers.has('all_obs'), showSpecies = mapLayers.has('species');
+  if (mapLayers.has('species')){
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
-    if (!showAll) rows = rows.filter(r => r.Species_Planted); // species-only: only show planted rows
+    rows = rows.filter(r => r.Species_Planted); // only rows with planted species are relevant to this layer
     rows.forEach(r => {
       const lat = +r.Centroid_Latitude, lon = +r.Centroid_Longitude;
       const approx = r.Location_Precision === 'management_unit';
-      // When both layers active, rows with species data use species coloring; others use valley coloring
-      const useSpecies = showSpecies && !!r.Species_Planted;
-      let color, radius = approx ? 7 : 6;
-      if (useSpecies){
-        const sp = speciesMap.get(r.Identifier);
-        color = sp && sp.hasIntroduced ? (sp.hasNative ? '#9467bd' : TYPE_HEX.Introduced) : TYPE_HEX.Native;
-        radius = Math.max(5, Math.min(16, 5 + Math.sqrt((sp && sp.total) || 1)*2));
-      } else {
-        color = VALLEY_HEX[r.Valley] || '#888';
-      }
+      const sp = speciesMap.get(r.Identifier);
+      const color = sp && sp.hasIntroduced ? (sp.hasNative ? '#9467bd' : TYPE_HEX.Introduced) : TYPE_HEX.Native;
+      const radius = Math.max(5, Math.min(16, 5 + Math.sqrt((sp && sp.total) || 1)*2));
       const html = `<b>${r.Unit_Name || '(no unit)'}</b> — ${r.Date}<br>` +
         `Observer: ${escapeHtml(r.Name || '—')}<br>` +
         `${r.Action}<br>Valley: ${r.Valley}<br>People: ${r.Number_of_Person || '—'}<br>` +
@@ -7247,18 +7234,13 @@ function renderMap(shouldFit){
   }
   // Per-layer legend entries: each active layer adds its own section (multiple can be shown together)
   const sep = () => legend.length ? '<br>' : '';
-  if (mapLayers.has('all_obs')){
-    if (!mapLayers.has('species') || !histZoneMode){
-      legend += sep() + `${Object.keys(VALLEY_HEX).map(v=>`<span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX[v]}"></span>${v}</span>`).join('')}
-        <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
-    }
-  }
   if (mapLayers.has('species')){
     legend += sep() + `
       <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Native}"></span>Native only</span>
       <span class="legend-item"><span class="swatch" style="background:${TYPE_HEX.Introduced}"></span>Introduced only</span>
       <span class="legend-item"><span class="swatch" style="background:#9467bd"></span>Native + introduced</span>
-      <span class="legend-item">point size ∝ number of individuals planted</span>`;
+      <span class="legend-item">point size ∝ number of individuals planted</span>
+      <span class="legend-item">● rat-station precision &nbsp; ○ (dashed) management-unit centroid</span>`;
   }
   if (mapLayers.has('cleaning')){
     if (!histZoneMode){
