@@ -1096,6 +1096,70 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <button type="button" onclick="document.getElementById('iosBanner').style.display='none'" style="float:right;background:none;border:none;font-size:16px;cursor:pointer;line-height:1;">✕</button>
   </div>
 
+  <button type="button" class="nav-tile" onclick="showHrView()">
+    <span class="nav-tile-icon">🌿</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">1. Habitat Restoration</span>
+      <span class="nav-tile-sub">Plantation, cutting, entretien — zone, species, cleaning %</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showDrView()">
+    <span class="nav-tile-icon">🐀</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">2. Dératisation patrol</span>
+      <span class="nav-tile-sub">Bait-consumption readings per rat station</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showPffFormView()">
+    <span class="nav-tile-icon">🐜</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">3. Petite fourmi de feu (PFF)</span>
+      <span class="nav-tile-sub">Log Little Fire Ant survey points, incl. GPS import</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showIbsView()">
+    <span class="nav-tile-icon">🦜</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">4. Invasive Bird Survey</span>
+      <span class="nav-tile-sub">Timed point-count survey with per-species contacts</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showBoView()">
+    <span class="nav-tile-icon">🐦</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">5. Birds Observation</span>
+      <span class="nav-tile-sub">Open-species sighting log with photo/song catalog</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showAtView()">
+    <span class="nav-tile-icon">⚙️</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">6. Activity Types</span>
+      <span class="nav-tile-sub">Define custom activity types for the generic logger</span>
+    </span>
+  </button>
+
+  <button type="button" class="nav-tile" onclick="showAeEntryView()">
+    <span class="nav-tile-icon">📝</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">7. Log an Activity</span>
+      <span class="nav-tile-sub">Generic entry for any defined activity type</span>
+    </span>
+  </button>
+
+
+
+</div>
+
+<div class="wrap" id="hrFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
+
   <div class="card">
     <details id="hrDetails" ontoggle="onHrDetailsToggle(this.open)">
     <summary style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;">
@@ -1219,8 +1283,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+</div>
+
+<div class="wrap" id="drFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
+
   <div class="card">
-    <details>
+    <details open>
     <summary><h2 style="display:inline;margin:0;">2. Add a new Dératisation patrol</h2></summary>
     <div class="hint">Pick the patrol's zone (a line of rat-control stations); every known station in that zone appears below so you can record its bait-consumption reading. Submitting writes directly to the shared database.</div>
     <form id="drForm" onsubmit="submitDeratisationForm(event)">
@@ -1240,6 +1310,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
     </details>
   </div>
+
+</div>
+
+<div class="wrap" id="pffFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
 
   <div class="card">
     <details id="pffDetails" ontoggle="onPffDetailsToggle(this.open)">
@@ -1321,6 +1397,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </form>
     </details>
   </div>
+
+</div>
+
+<div class="wrap" id="ibsFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
 
   <div class="card">
     <details id="ibsDetails" ontoggle="onIbsDetailsToggle(this.open)">
@@ -1485,6 +1567,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+</div>
+
+<div class="wrap" id="boFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
+
   <div class="card">
     <details id="birdObsDetails" ontoggle="onBirdObsDetailsToggle(this.open)">
     <summary><h2 style="display:inline;margin:0;">5. Birds Observation</h2></summary>
@@ -1574,8 +1662,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+</div>
+
+<div class="wrap" id="atFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
+
   <div class="card">
-    <details>
+    <details open>
     <summary><h2 style="display:inline;margin:0;">6. Activity Types</h2></summary>
     <div class="hint">Define a brand-new kind of conservation activity that isn't Habitat Restoration or Dératisation — predator control, biosecurity checks, nest monitoring, translocation, disease surveillance, community outreach, equipment maintenance, anything the wider LIFE STOP EXTINCTION project needs. Pick a quick-start template or build one from scratch; once saved it's immediately available to everyone in "7. Log an Activity" below.</div>
     <div id="atListWrap"></div>
@@ -1606,8 +1700,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
   </div>
 
+</div>
+
+<div class="wrap" id="aeFormView" style="display:none;">
+
+  <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
+
   <div class="card">
-    <details>
+    <details open>
     <summary><h2 style="display:inline;margin:0;">7. Log an Activity</h2></summary>
     <div class="hint">Pick an activity type defined above and record an occurrence of it. Submitting writes directly to the shared database; it appears below (and to everyone) within a few seconds.</div>
     <div id="aeNoTypesHint" class="hint" style="display:none;">No activity types yet — create one in "6. Activity Types" above first.</div>
@@ -1648,8 +1748,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </details>
     </details>
   </div>
-
-
 
 </div>
 
@@ -4911,24 +5009,82 @@ try {
 // comparison) and a dedicated submit page with the two entry forms, reachable via the + button in the
 // header. Uses location.hash (not just a flag) so a direct link to #submit opens straight into the
 // forms — handy for sharing a "go submit field data" link with volunteers without the dashboard noise.
+const SUBMIT_FORM_VIEW_IDS = ['hrFormView','drFormView','pffFormView','ibsFormView','boFormView','atFormView','aeFormView'];
 function showSubmitView(){
   document.getElementById('homeView').style.display = 'none';
+  SUBMIT_FORM_VIEW_IDS.forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('submitView').style.display = '';
   if (location.hash !== '#submit') location.hash = 'submit';
   window.scrollTo(0,0);
-  // The PFF picker map is created/resized from #pffDetails' own ontoggle instead (see
-  // onPffDetailsToggle) — each of the 5 submission sections is now a collapsed-by-default <details>,
-  // so creating a Leaflet map here unconditionally would size it against a still display:none parent.
-  if (document.getElementById('pffDetails').open) onPffDetailsToggle(true);
-  if (document.getElementById('hrDetails').open) onHrDetailsToggle(true);
   renderOfflineBanner();
 }
-// Leaflet needs a visible (non-zero-size) container at creation time, so the PFF picker map is only
-// ever created/resized once its own <details> is actually open, not just whenever the Submit page is.
+// Leaflet needs a visible (non-zero-size) container at creation time. Habitat Restoration / PFF /
+// Invasive Bird Survey / Birds Observation each have their own picker map inside a <details> that's
+// now permanently open (each form is the sole content of its own dedicated view, see
+// showHrView/showPffFormView/showIbsView/showBoView below) — so instead of waiting for a real user
+// click to fire the <details> 'toggle' event (which a static `open` attribute never does), each
+// show*View() function below calls the matching ontoggle handler itself once its own view is visible.
 function onPffDetailsToggle(open){
   if (!open) return;
   ensurePffPickerMap();
   if (pffPickerEntry) pffPickerEntry.map.invalidateSize();
+}
+// Every submission form is its own full view on mobile (same "big button + back" pattern as Map/Chart
+// analysis/Temporal trends below) instead of 7 stacked collapsible cards. Content is unchanged, just
+// relocated, with each form's own <details> now permanently open since it's the page's only content.
+function showHrView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('hrFormView').style.display = '';
+  if (location.hash !== '#form-hr') location.hash = 'form-hr';
+  window.scrollTo(0,0);
+  // hrDetails deliberately starts closed in the HTML (an `open` attribute there would fire its
+  // ontoggle before this script has even loaded, since it's set at parse time — throws "not defined").
+  // Forced open here instead, well after every function exists; calling the handler directly rather
+  // than relying on the native 'toggle' event covers both the first-ever visit and returning later.
+  document.getElementById('hrDetails').open = true;
+  onHrDetailsToggle(true);
+}
+function showDrView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('drFormView').style.display = '';
+  if (location.hash !== '#form-dr') location.hash = 'form-dr';
+  window.scrollTo(0,0);
+}
+function showPffFormView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('pffFormView').style.display = '';
+  if (location.hash !== '#form-pff') location.hash = 'form-pff';
+  window.scrollTo(0,0);
+  document.getElementById('pffDetails').open = true;
+  onPffDetailsToggle(true);
+}
+function showIbsView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('ibsFormView').style.display = '';
+  if (location.hash !== '#form-ibs') location.hash = 'form-ibs';
+  window.scrollTo(0,0);
+  document.getElementById('ibsDetails').open = true;
+  onIbsDetailsToggle(true);
+}
+function showBoView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('boFormView').style.display = '';
+  if (location.hash !== '#form-bo') location.hash = 'form-bo';
+  window.scrollTo(0,0);
+  document.getElementById('birdObsDetails').open = true;
+  onBirdObsDetailsToggle(true);
+}
+function showAtView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('atFormView').style.display = '';
+  if (location.hash !== '#form-at') location.hash = 'form-at';
+  window.scrollTo(0,0);
+}
+function showAeEntryView(){
+  document.getElementById('submitView').style.display = 'none';
+  document.getElementById('aeFormView').style.display = '';
+  if (location.hash !== '#form-ae') location.hash = 'form-ae';
+  window.scrollTo(0,0);
 }
 // Map / Chart analysis / Temporal trends are full separate views on mobile (same "big button + back
 // to dashboard" pattern as Submit) instead of three long cards stacked on the home page. Their content
@@ -4959,6 +5115,7 @@ function showPastDataView(){
 }
 function showHomeView(){
   document.getElementById('submitView').style.display = 'none';
+  SUBMIT_FORM_VIEW_IDS.forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('mapView').style.display = 'none';
   document.getElementById('analysisView').style.display = 'none';
   document.getElementById('pastDataView').style.display = 'none';
@@ -4985,7 +5142,11 @@ function showHomeView(){
 // load (someone opens/bookmarks a #map link directly) and navigating between hashes while the app is
 // already running (e.g. the browser's own Back/Forward buttons on a phone), which only ever fires
 // 'hashchange', not a full reload.
-const HASH_VIEW_FNS = { '#submit': showSubmitView, '#map': showMapView, '#analysis': showAnalysisView, '#trends': showPastDataView };
+const HASH_VIEW_FNS = {
+  '#submit': showSubmitView, '#map': showMapView, '#analysis': showAnalysisView, '#trends': showPastDataView,
+  '#form-hr': showHrView, '#form-dr': showDrView, '#form-pff': showPffFormView, '#form-ibs': showIbsView,
+  '#form-bo': showBoView, '#form-at': showAtView, '#form-ae': showAeEntryView,
+};
 if (HASH_VIEW_FNS[location.hash]) HASH_VIEW_FNS[location.hash]();
 window.addEventListener('hashchange', () => {
   const fn = HASH_VIEW_FNS[location.hash];
