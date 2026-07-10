@@ -125,6 +125,19 @@
   button.secondary:active{transform:translateY(0);}
   button.secondary.active{background:var(--green);color:#fff;}
 
+  /* Big tappable home-page navigation buttons (Map / Chart analysis / Temporal trends) — each opens
+     its section as a full separate view (see showMapView/showAnalysisView/showPastDataView), same
+     "← Back to dashboard" pattern as the Submit page, instead of a long scroll of stacked cards.
+     Sized for comfortable thumb-tapping on a phone. */
+  .nav-tile{
+    display:flex;align-items:center;gap:14px;width:100%;
+    padding:18px 20px;margin-bottom:14px;text-align:left;font-size:16px;
+  }
+  .nav-tile .nav-tile-icon{font-size:26px;line-height:1;flex-shrink:0;}
+  .nav-tile .nav-tile-text{display:flex;flex-direction:column;gap:3px;}
+  .nav-tile .nav-tile-title{font-weight:700;}
+  .nav-tile .nav-tile-sub{font-size:12px;font-weight:400;opacity:.88;letter-spacing:.1px;}
+
   /* ── Form controls ── */
   select{
     font-size:13px;padding:6px 9px;border:1.5px solid var(--border);border-radius:var(--r);
@@ -972,169 +985,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div id="buildSummary"></div>
   </div>
 
-  <div class="card" id="mapCard" style="display:none;">
-    <h2>2. Map</h2>
-    <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
-    <div id="drawBanner" class="hint" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
-    <div id="drawFormBox" class="hint" style="display:none;background:#f7faf6;border:1px solid var(--border);padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
-    <div id="drawQueueBanner" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted">Valley:
-        <select id="mapValley" onchange="setMapValley(this.value)">
-          <option value="all">All valleys</option>
-          <option value="Papehue">Papehue</option>
-          <option value="Maruapo">Maruapo</option>
-          <option value="Hopa">Hopa</option>
-        </select>
-      </label>
-      <div style="position:relative;display:inline-block;">
-        <button class="secondary" id="mapLayersBtn" onclick="toggleMapLayersDropdown()" style="padding:5px 14px;font-size:13px;">
-          Layers <span id="mapLayersCount" style="opacity:.7;">(1)</span> ▾
-        </button>
-        <div id="mapLayersPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_species" onchange="toggleMapLayer('species',this.checked)"> Planted species</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_birds" onchange="toggleMapLayer('birds',this.checked)"> 🐦 Bird observations</label>
-        </div>
-      </div>
-      <label class="muted" style="margin-left:auto;">
-        <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
-        Overlay all rat stations
-      </label>
-    </div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted">
-        <input type="checkbox" id="ratLinesOverlayToggle" onchange="toggleRatLinesOverlay(this.checked)">
-        Overlay all rat lines (Ligne_stat)
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="zoneNamesOverlayToggle" onchange="toggleZoneNamesOverlay(this.checked)">
-        Show zone names
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="userLocationToggle" onchange="toggleUserLocation(this.checked)">
-        Show my location
-      </label>
-      <span id="userLocationStatus" class="muted"></span>
-      <label class="muted">
-        <input type="checkbox" id="pepiniereLayerToggle" onchange="togglePepiniereLayer(this.checked)">
-        Show pépinières
-      </label>
-    </div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted date-label">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
-      <label class="muted date-label">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
-      <button class="secondary date-reset-btn" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
-      <span class="muted">Applies to points and the live cleaning/bait-consumption layers — not to the historical/combined overlays below, which have their own time-weighting.</span>
-    </div>
-    <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "4. Temporal trends"):</span>
-      <label class="muted">
-        <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
-        Historical cleaning %
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="histCombinedToggle" onchange="toggleHistCombined(this.checked)">
-        Combined current estimate (historical + NRDS, recency-weighted)
-      </label>
-    </div>
-    <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
-      <span class="muted">Historical data (from "4. Temporal trends"):</span>
-      <label class="muted">
-        <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
-        Historical plantings
-      </label>
-      <label class="muted">
-        <input type="checkbox" id="histPlantingActivityToggle" onchange="toggleHistPlantingActivity(this.checked)">
-        Compare with NRDS activity (species and individuals planted)
-      </label>
-      <label class="muted" id="nrdsDensityLabel" style="display:none;align-items:center;gap:6px;">
-        Planting density: <input type="number" id="nrdsDensityInput" value="1111" min="100" max="9999" step="1" style="width:68px;padding:2px 5px;" onchange="onNrdsDensityChange(this.value)"> trees/ha
-        <span style="font-size:11px;">(3×3 m = 1111)</span>
-      </label>
-    </div>
-    <span id="mapStatus" class="muted">Generate the enriched datasets first.</span>
-    <div class="map-flex-row">
-      <div id="mapContainer" class="map-container" style="display:none;"></div>
-      <div id="mapCombinedBox" class="hint map-combined-box" style="display:none;margin:0;"></div>
-    </div>
-    <div id="mapLegend" style="margin-top:8px;"></div>
-  </div>
+  <button type="button" class="nav-tile" onclick="showMapView()">
+    <span class="nav-tile-icon">🗺️</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">2. Map</span>
+      <span class="nav-tile-sub">Zones, observations, cleaning status, PFF, birds &amp; more</span>
+    </span>
+  </button>
 
-  <div class="card" id="analysisCard" style="display:none;">
-    <h2>3. Chart analysis</h2>
-    <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
-    <div class="row" style="margin-bottom:12px;">
-      <label class="muted">Valley:
-        <select id="chartValley" onchange="onChartValleyChange()">
-          <option value="all">All valleys</option>
-          <option value="Papehue">Papehue</option>
-          <option value="Maruapo">Maruapo</option>
-          <option value="Hopa">Hopa</option>
-        </select>
-      </label>
-      <label class="muted">Zone (unit):
-        <select id="chartZone" onchange="onChartZoneChange()"><option value="all">All zones</option></select>
-      </label>
-      <label class="muted">Rat station:
-        <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
-      </label>
-      <label class="muted date-label">From: <input type="date" id="chartDateFrom" onchange="onChartDateChange()"></label>
-      <label class="muted date-label">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
-      <button class="secondary date-reset-btn" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
-    </div>
-    <div style="margin-bottom:10px;">
-      <div style="position:relative;display:inline-block;">
-        <button class="secondary" id="chartChartsBtn" onclick="toggleChartDropdown()" style="padding:5px 14px;font-size:13px;">
-          Charts <span id="chartChartsCount" style="opacity:.7;">(0)</span> ▾
-        </button>
-        <div id="chartChartsPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_cleaning" onchange="toggleChart('cleaning',this.checked)"> Cleaning % trend over time</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_species" onchange="toggleChart('species',this.checked)"> Most-planted species</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_workforce" onchange="toggleChart('workforce',this.checked)"> People involved (volunteer vs routine)</label>
-          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_derat" onchange="toggleChart('derat',this.checked)"> Bait consumption (Checks)</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
-        </div>
-      </div>
-    </div>
-    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis above.</span></div>
-    <div id="chartPopup" class="chart-popup" style="display:none;"></div>
-  </div>
+  <button type="button" class="nav-tile" onclick="showAnalysisView()">
+    <span class="nav-tile-icon">📊</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">3. Chart analysis</span>
+      <span class="nav-tile-sub">Cleaning trend, species, workforce, bait consumption, PFF</span>
+    </span>
+  </button>
 
-  <div class="card" id="pastDataCard" style="display:none;">
-    <h2>4. Temporal trends</h2>
-    <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
-    <div id="pastDataContent" style="display:none;">
-      <div id="pastHistSection">
-        <details class="collapsible" open>
-          <summary>🌿 Habitat Restoration: historical comparison<span class="caret">▾</span></summary>
-          <div class="coll-body">
-            <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
-            <div class="row" style="margin-bottom:10px;">
-              <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
-              <label class="muted">
-                <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
-                Add combined estimate (historical + NRDS, recency-weighted)
-              </label>
-            </div>
-            <div id="pastDataCharts"></div>
-            <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
-            <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
-          </div>
-        </details>
-      </div>
-      <details class="collapsible">
-        <summary>🐀 Dératisation: temporal analysis<span class="caret">▾</span></summary>
-        <div class="coll-body">
-          <div class="hint">Monthly trends in rat activity (Conso 0–4), zero-activity rate, patrol frequency by valley, and a ranking of rat lines from most to least active across all recorded patrols.</div>
-          <button class="secondary" onclick="renderDeratTemporalAnalysis()">Generate dératisation analysis</button>
-          <div id="deratTemporalCharts" style="margin-top:14px;"></div>
-        </div>
-      </details>
-    </div>
-  </div>
+  <button type="button" class="nav-tile" onclick="showPastDataView()">
+    <span class="nav-tile-icon">📈</span>
+    <span class="nav-tile-text">
+      <span class="nav-tile-title">4. Temporal trends</span>
+      <span class="nav-tile-sub">Historical comparison &amp; dératisation analysis</span>
+    </span>
+  </button>
 
   <div class="card" id="previewCard" style="display:none;">
     <h2>Enriched dataset preview (Habitat Restoration)</h2>
@@ -1777,6 +1650,188 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
 
+
+</div>
+
+<div class="wrap" id="mapView" style="display:none;">
+
+  <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
+
+  <div class="card" id="mapCard">
+    <h2>2. Map</h2>
+    <div class="hint">Boundaries always show the management units (zones). Choose a layer: points for all observations, points for plantings only, or zone coloring by cleaning status.</div>
+    <div id="drawBanner" class="hint" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+    <div id="drawFormBox" class="hint" style="display:none;background:#f7faf6;border:1px solid var(--border);padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+    <div id="drawQueueBanner" style="display:none;background:#fff7e0;border:1px solid #e0c060;padding:10px 12px;border-radius:8px;margin-bottom:12px;"></div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">Valley:
+        <select id="mapValley" onchange="setMapValley(this.value)">
+          <option value="all">All valleys</option>
+          <option value="Papehue">Papehue</option>
+          <option value="Maruapo">Maruapo</option>
+          <option value="Hopa">Hopa</option>
+        </select>
+      </label>
+      <div style="position:relative;display:inline-block;">
+        <button class="secondary" id="mapLayersBtn" onclick="toggleMapLayersDropdown()" style="padding:5px 14px;font-size:13px;">
+          Layers <span id="mapLayersCount" style="opacity:.7;">(0)</span> ▾
+        </button>
+        <div id="mapLayersPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_species" onchange="toggleMapLayer('species',this.checked)"> Planted species</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_birds" onchange="toggleMapLayer('birds',this.checked)"> 🐦 Bird observations</label>
+        </div>
+      </div>
+      <label class="muted" style="margin-left:auto;">
+        <input type="checkbox" id="stationsOverlayToggle" onchange="toggleStationsOverlay(this.checked)">
+        Overlay all rat stations
+      </label>
+    </div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">
+        <input type="checkbox" id="ratLinesOverlayToggle" onchange="toggleRatLinesOverlay(this.checked)">
+        Overlay all rat lines (Ligne_stat)
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="zoneNamesOverlayToggle" onchange="toggleZoneNamesOverlay(this.checked)">
+        Show zone names
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="userLocationToggle" onchange="toggleUserLocation(this.checked)">
+        Show my location
+      </label>
+      <span id="userLocationStatus" class="muted"></span>
+      <label class="muted">
+        <input type="checkbox" id="pepiniereLayerToggle" onchange="togglePepiniereLayer(this.checked)">
+        Show pépinières
+      </label>
+    </div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted date-label">From: <input type="date" id="mapDateFrom" onchange="onMapDateChange()"></label>
+      <label class="muted date-label">To: <input type="date" id="mapDateTo" onchange="onMapDateChange()"></label>
+      <button class="secondary date-reset-btn" onclick="resetMapDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
+      <span class="muted">Applies to points and the live cleaning/bait-consumption layers — not to the historical/combined overlays below, which have their own time-weighting.</span>
+    </div>
+    <div class="row" id="cleaningHistRow" style="margin-bottom:12px;display:none;">
+      <span class="muted">Historical data (from "4. Temporal trends"):</span>
+      <label class="muted">
+        <input type="checkbox" id="histCleaningToggle" onchange="toggleHistCleaning(this.checked)">
+        Historical cleaning %
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="histCombinedToggle" onchange="toggleHistCombined(this.checked)">
+        Combined current estimate (historical + NRDS, recency-weighted)
+      </label>
+    </div>
+    <div class="row" id="plantingHistRow" style="margin-bottom:12px;display:none;">
+      <span class="muted">Historical data (from "4. Temporal trends"):</span>
+      <label class="muted">
+        <input type="checkbox" id="histPlantingToggle" onchange="toggleHistPlanting(this.checked)">
+        Historical plantings
+      </label>
+      <label class="muted">
+        <input type="checkbox" id="histPlantingActivityToggle" onchange="toggleHistPlantingActivity(this.checked)">
+        Compare with NRDS activity (species and individuals planted)
+      </label>
+      <label class="muted" id="nrdsDensityLabel" style="display:none;align-items:center;gap:6px;">
+        Planting density: <input type="number" id="nrdsDensityInput" value="1111" min="100" max="9999" step="1" style="width:68px;padding:2px 5px;" onchange="onNrdsDensityChange(this.value)"> trees/ha
+        <span style="font-size:11px;">(3×3 m = 1111)</span>
+      </label>
+    </div>
+    <span id="mapStatus" class="muted">Generate the enriched datasets first.</span>
+    <div class="map-flex-row">
+      <div id="mapContainer" class="map-container" style="display:none;"></div>
+      <div id="mapCombinedBox" class="hint map-combined-box" style="display:none;margin:0;"></div>
+    </div>
+    <div id="mapLegend" style="margin-top:8px;"></div>
+  </div>
+
+</div>
+
+<div class="wrap" id="analysisView" style="display:none;">
+
+  <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
+
+  <div class="card" id="analysisCard">
+    <h2>3. Chart analysis</h2>
+    <div class="hint">Filter actions by valley, zone (management unit), and optionally a single rat station.</div>
+    <div class="row" style="margin-bottom:12px;">
+      <label class="muted">Valley:
+        <select id="chartValley" onchange="onChartValleyChange()">
+          <option value="all">All valleys</option>
+          <option value="Papehue">Papehue</option>
+          <option value="Maruapo">Maruapo</option>
+          <option value="Hopa">Hopa</option>
+        </select>
+      </label>
+      <label class="muted">Zone (unit):
+        <select id="chartZone" onchange="onChartZoneChange()"><option value="all">All zones</option></select>
+      </label>
+      <label class="muted">Rat station:
+        <select id="chartStation" onchange="onChartStationChange()"><option value="all">All stations</option></select>
+      </label>
+      <label class="muted date-label">From: <input type="date" id="chartDateFrom" onchange="onChartDateChange()"></label>
+      <label class="muted date-label">To: <input type="date" id="chartDateTo" onchange="onChartDateChange()"></label>
+      <button class="secondary date-reset-btn" onclick="resetChartDateFilter()" style="padding:5px 10px;font-size:12.5px;">Reset dates</button>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="position:relative;display:inline-block;">
+        <button class="secondary" id="chartChartsBtn" onclick="toggleChartDropdown()" style="padding:5px 14px;font-size:13px;">
+          Charts <span id="chartChartsCount" style="opacity:.7;">(0)</span> ▾
+        </button>
+        <div id="chartChartsPanel" style="display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;z-index:2000;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.13);">
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_cleaning" onchange="toggleChart('cleaning',this.checked)"> Cleaning % trend over time</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_species" onchange="toggleChart('species',this.checked)"> Most-planted species</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_workforce" onchange="toggleChart('workforce',this.checked)"> People involved (volunteer vs routine)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_derat" onchange="toggleChart('derat',this.checked)"> Bait consumption (Checks)</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
+        </div>
+      </div>
+    </div>
+    <div id="chartArea" class="chart-box"><span class="muted">Choose an analysis above.</span></div>
+    <div id="chartPopup" class="chart-popup" style="display:none;"></div>
+  </div>
+
+</div>
+
+<div class="wrap" id="pastDataView" style="display:none;">
+
+  <button class="secondary" onclick="showHomeView()" style="margin-bottom:16px;">← Back to dashboard</button>
+
+  <div class="card" id="pastDataCard">
+    <h2>4. Temporal trends</h2>
+    <span id="pastDataStatus" class="muted">Waiting for live data to finish loading…</span>
+    <div id="pastDataContent" style="display:none;">
+      <div id="pastHistSection">
+        <details class="collapsible" open>
+          <summary>🌿 Habitat Restoration: historical comparison<span class="caret">▾</span></summary>
+          <div class="coll-body">
+            <div class="hint">Compares the historical surveys (August 2023, August 2024 and December 2025, automatically integrated into the app) with the current NRDS data, unit by unit. Percentages are area-weighted averages, using the same weights as the "Total" sheet of the original file (aucune=0%, debutee/rares=10%, un tiers=33%, moitie=50%, effectuee=100%).</div>
+            <div class="row" style="margin-bottom:10px;">
+              <button class="secondary" onclick="renderPastDataComparison()">Generate historical comparison</button>
+              <label class="muted">
+                <input type="checkbox" id="pastDataCombinedToggle" onchange="togglePastDataCombined(this.checked)">
+                Add combined estimate (historical + NRDS, recency-weighted)
+              </label>
+            </div>
+            <div id="pastDataCharts"></div>
+            <div id="pastDataCombinedBox" class="hint" style="display:none;margin-top:8px;"></div>
+            <div class="table-scroll" style="margin-top:12px;"><table class="preview" id="pastDataTable"></table></div>
+          </div>
+        </details>
+      </div>
+      <details class="collapsible">
+        <summary>🐀 Dératisation: temporal analysis<span class="caret">▾</span></summary>
+        <div class="coll-body">
+          <div class="hint">Monthly trends in rat activity (Conso 0–4), zero-activity rate, patrol frequency by valley, and a ranking of rat lines from most to least active across all recorded patrols.</div>
+          <button class="secondary" onclick="renderDeratTemporalAnalysis()">Generate dératisation analysis</button>
+          <div id="deratTemporalCharts" style="margin-top:14px;"></div>
+        </div>
+      </details>
+    </div>
+  </div>
 
 </div>
 
@@ -4875,10 +4930,40 @@ function onPffDetailsToggle(open){
   ensurePffPickerMap();
   if (pffPickerEntry) pffPickerEntry.map.invalidateSize();
 }
+// Map / Chart analysis / Temporal trends are full separate views on mobile (same "big button + back
+// to dashboard" pattern as Submit) instead of three long cards stacked on the home page. Their content
+// (#mapCard/#analysisCard/#pastDataCard) is unchanged — only which wrapper shows it moved.
+function showMapView(){
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('mapView').style.display = '';
+  if (location.hash !== '#map') location.hash = 'map';
+  window.scrollTo(0,0);
+  // The main map may already have been created (by the automatic renderMap() call that runs as soon as
+  // data loads, regardless of which view is showing) while this view's container was still
+  // display:none, which leaves Leaflet's internal size cached at zero — invalidateSize() here forces it
+  // to re-measure now that the container is actually visible. Same fix as the PFF picker map's
+  // onPffDetailsToggle, and the other popup-map invalidateSize() calls elsewhere in the app.
+  if (leafletMap) leafletMap.invalidateSize();
+}
+function showAnalysisView(){
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('analysisView').style.display = '';
+  if (location.hash !== '#analysis') location.hash = 'analysis';
+  window.scrollTo(0,0);
+}
+function showPastDataView(){
+  document.getElementById('homeView').style.display = 'none';
+  document.getElementById('pastDataView').style.display = '';
+  if (location.hash !== '#trends') location.hash = 'trends';
+  window.scrollTo(0,0);
+}
 function showHomeView(){
   document.getElementById('submitView').style.display = 'none';
+  document.getElementById('mapView').style.display = 'none';
+  document.getElementById('analysisView').style.display = 'none';
+  document.getElementById('pastDataView').style.display = 'none';
   document.getElementById('homeView').style.display = '';
-  if (location.hash === '#submit') history.replaceState(null, '', location.pathname + location.search);
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   window.scrollTo(0,0);
 }
 // iOS "Add to Home Screen" hint — shown only on iPhone/iPad Safari that hasn't installed the app
@@ -4896,15 +4981,15 @@ function showHomeView(){
   }
 })();
 
-if (location.hash === '#submit') showSubmitView();
-// Covers navigating to/from #submit via a same-document hash change (e.g. typing the URL with
-// #submit while the app is already running) — the check above only ever runs once, at initial
-// script evaluation, so without this a hash-only navigation (no full reload) would silently do
-// nothing, leaving the wrong view shown despite the URL/hash being correct.
+// Maps each URL hash to the view-switching function that shows it — covers both the initial page
+// load (someone opens/bookmarks a #map link directly) and navigating between hashes while the app is
+// already running (e.g. the browser's own Back/Forward buttons on a phone), which only ever fires
+// 'hashchange', not a full reload.
+const HASH_VIEW_FNS = { '#submit': showSubmitView, '#map': showMapView, '#analysis': showAnalysisView, '#trends': showPastDataView };
+if (HASH_VIEW_FNS[location.hash]) HASH_VIEW_FNS[location.hash]();
 window.addEventListener('hashchange', () => {
-  const onSubmit = document.getElementById('submitView').style.display !== 'none';
-  if (location.hash === '#submit' && !onSubmit) showSubmitView();
-  else if (location.hash !== '#submit' && onSubmit) showHomeView();
+  const fn = HASH_VIEW_FNS[location.hash];
+  if (fn) fn(); else showHomeView();
 });
 
 /* ---------------- bootstrap: kick off the automatic live-data load ---------------- */
