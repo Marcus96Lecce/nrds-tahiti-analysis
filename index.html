@@ -1208,6 +1208,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="row" style="margin-bottom:6px;">
           <label class="muted"><input type="checkbox" id="hrZoneNamesToggle" onchange="toggleHrZoneNames(this.checked)"> Show zone names</label>
           <label class="muted"><input type="checkbox" id="hrStationsOverlayToggle" onchange="toggleHrStationsOverlay(this.checked)"> Overlay all rat stations</label>
+          <label class="muted"><input type="checkbox" id="hrRatLinesOverlayToggle" onchange="toggleHrRatLines(this.checked)"> Overlay all rat lines (Ligne_stat)</label>
           <label class="muted"><input type="checkbox" id="hrZoneUserLocToggle" onchange="toggleHrZoneUserLoc(this.checked)"> Show my location</label>
           <span id="hrZoneUserLocStatus" class="muted"></span>
         </div>
@@ -2868,7 +2869,7 @@ async function submitHabitatForm(evt){
 let hrZonePickerEntry = null;
 let hrZoneSelectedUnit = null, hrZoneShowNames = false;
 let hrZoneUserLocWatchId = null, hrZoneUserLocFirstFix = true;
-let hrShowStations = false;
+let hrShowStations = false, hrShowRatLines = false;
 
 function ensureHrZonePickerMap(){
   if (hrZonePickerEntry) return;
@@ -2881,6 +2882,7 @@ function ensureHrZonePickerMap(){
     zonesLayer: L.layerGroup().addTo(map),
     labelsLayer: L.layerGroup().addTo(map),
     stationsLayer: L.layerGroup().addTo(map),
+    linesLayer: L.layerGroup().addTo(map),
     userLocLayer: L.layerGroup().addTo(map),
   };
   renderHrZonePicker(true);
@@ -2970,6 +2972,46 @@ function renderHrStations(){
     marker.bindPopup(html);
     marker.addTo(entry.stationsLayer);
     L.marker([lat, lon], { icon: stationLabelIcon(st['Station']), interactive: false }).addTo(entry.stationsLayer);
+  }
+}
+function toggleHrRatLines(checked){
+  hrShowRatLines = checked;
+  renderHrRatLines();
+}
+// Same NRDS rat-patrol-line drawing as the main map's "Overlay all rat lines" layer (connects each
+// Ligne_stat's own stations in natural code order) — shown for every valley here rather than scoped
+// to one, matching how renderHrStations() above already shows every station regardless of valley (this
+// picker has no separate "overlay valley filter" of its own, only the Valley field used to pick the
+// actual submission's zone).
+function renderHrRatLines(){
+  const entry = hrZonePickerEntry;
+  if (!entry) return;
+  entry.linesLayer.clearLayers();
+  if (!hrShowRatLines) return;
+  const byLine = new Map();
+  for (const s of (tables.deratTahiti||[])){
+    const lat = +s['Latitude'], lon = +s['Longitude'];
+    if (!s['Ligne_stat'] || !isFinite(lat) || !isFinite(lon)) continue;
+    const key = s['Vallee'] + '||' + s['Ligne_stat'];
+    if (!byLine.has(key)) byLine.set(key, []);
+    byLine.get(key).push({ code: s['Station'], lat, lon });
+  }
+  for (const [key, pts] of byLine){
+    if (pts.length < 2) continue;
+    pts.sort((a,b) => naturalStationCompare(a.code, b.code));
+    const latlngs = pts.map(p => [p.lat, p.lon]);
+    const [valley, ligneStat] = key.split('||');
+    const color = categoricalColor(hashStringToInt(key));
+    let lengthKm = 0;
+    for (let j=0;j<pts.length-1;j++) lengthKm += haversineKm(pts[j].lat, pts[j].lon, pts[j+1].lat, pts[j+1].lon);
+    const lengthTxt = lengthKm < 1 ? `${Math.round(lengthKm*1000)} m` : `${lengthKm.toFixed(2)} km`;
+    const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
+    const poly = L.polyline(latlngs, { color, weight:2.5, dashArray:'4,4', opacity:0.9 });
+    poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
+    poly.bindPopup(html);
+    poly.addTo(entry.linesLayer);
+    const midpoint = latlngs[Math.floor(latlngs.length/2)];
+    L.marker(midpoint, { icon: smallLabelIcon(ligneStat, color), interactive:false }).addTo(entry.linesLayer);
   }
 }
 function toggleHrZoneUserLoc(checked){
