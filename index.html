@@ -14,12 +14,14 @@
 <style>
   :root{
     --green:#2e7d32; --green-dark:#1b5e20; --green-light:#43a047; --green-xlight:#e8f5e9;
-    --bg:#eef2ee; --card:#ffffff;
+    --bg:#1b1f1c; --card:#ffffff;
     --border:#d4e4d4; --text:#1a2418; --muted:#637061;
-    --shadow-sm:0 2px 8px rgba(0,40,0,.07); --shadow-md:0 6px 22px rgba(0,40,0,.12);
+    --shadow-sm:0 2px 8px rgba(0,0,0,.35); --shadow-md:0 8px 26px rgba(0,0,0,.5);
     --r:10px;
     --papehue:#1f77b4; --maruapo:#ff7f0e; --hopa:#2ca02c;
     --native:#2ca02c; --introduced:#d62728; --unknown:#7f7f7f;
+    /* Dark metallic button palette (brushed-steel gradient: light sheen -> mid graphite -> near-black) */
+    --metal-hi:#7c828b; --metal-mid:#43464c; --metal-lo:#1c1e21; --metal-edge:#0d0e10;
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
@@ -107,23 +109,28 @@
   details.collapsible[open] > .coll-body{animation:fadeIn .22s ease;}
   @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
 
-  /* ── Buttons ── */
+  /* ── Buttons — dark brushed-metal look, used app-wide ── */
   button{
-    background:linear-gradient(135deg,var(--green-light) 0%,var(--green) 100%);
-    color:#fff;border:none;border-radius:var(--r);
+    background:linear-gradient(150deg,var(--metal-hi) 0%,var(--metal-mid) 45%,var(--metal-lo) 100%);
+    color:#fff;border:1px solid var(--metal-edge);border-radius:var(--r);
     padding:9px 18px;font-size:13.5px;cursor:pointer;font-weight:500;letter-spacing:.2px;
-    box-shadow:0 2px 7px rgba(46,125,50,.22);
+    box-shadow:0 2px 8px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(0,0,0,.35);
     transition:box-shadow .18s,transform .12s,filter .18s;
   }
-  button:hover{filter:brightness(1.1);box-shadow:0 4px 14px rgba(46,125,50,.3);transform:translateY(-1px);}
-  button:active{transform:translateY(0);box-shadow:0 1px 4px rgba(46,125,50,.2);filter:none;}
-  button:disabled{background:#c2d0bf;box-shadow:none;cursor:not-allowed;transform:none;filter:none;}
+  button:hover{filter:brightness(1.2);box-shadow:0 4px 16px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.3);transform:translateY(-1px);}
+  button:active{transform:translateY(0);box-shadow:0 1px 4px rgba(0,0,0,.4);filter:brightness(.92);}
+  button:disabled{background:#5a5d61;box-shadow:none;cursor:not-allowed;transform:none;filter:none;opacity:.6;}
   button.secondary{
-    background:#fff;color:var(--green-dark);border:1.5px solid var(--green);box-shadow:none;
+    background:linear-gradient(150deg,#f6f7f8 0%,#e3e5e7 60%,#cfd2d6 100%);
+    color:var(--metal-lo);border:1px solid #b7bac0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.7);
   }
-  button.secondary:hover{background:var(--green-xlight);box-shadow:0 2px 8px rgba(46,125,50,.13);transform:translateY(-1px);}
+  button.secondary:hover{filter:brightness(1.05);box-shadow:0 3px 10px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.7);transform:translateY(-1px);}
   button.secondary:active{transform:translateY(0);}
-  button.secondary.active{background:var(--green);color:#fff;}
+  button.secondary.active{
+    background:linear-gradient(150deg,var(--metal-hi) 0%,var(--metal-mid) 100%);
+    color:#fff;border-color:var(--metal-edge);
+  }
 
   /* Big tappable home-page navigation buttons (Map / Chart analysis / Temporal trends) — each opens
      its section as a full separate view (see showMapView/showAnalysisView/showPastDataView), same
