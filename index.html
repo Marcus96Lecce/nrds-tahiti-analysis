@@ -7856,7 +7856,7 @@ function renderPriorityZonesDropdown(top){
     var sc = d.score;
     if (!sc){ // fallback for zones where scoring failed
       var color = pctColor(d.res.estimate);
-      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid '+color+';border-radius:0 6px 6px 0;">' +
+      return '<div style="display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:10px;padding:6px 10px;margin-bottom:4px;background:#f7faf6;border-left:5px solid '+color+';border-radius:0 6px 6px 0;max-width:100%;">' +
         '<span class="muted" style="width:18px;">#'+(i+1)+'</span>' +
         '<span style="flex:1;font-size:13px;">'+escapeHtml(d.unit)+' ('+escapeHtml(d.valley)+')</span>' +
         '<span style="font-weight:600;color:'+color+';">'+d.res.estimate.toFixed(0)+'%</span></div>';
@@ -7864,7 +7864,7 @@ function renderPriorityZonesDropdown(top){
     var tm = TIER_META[sc.tier] || TIER_META.monitor;
     var stale = d.lastDays != null && d.lastDays > STALE_DAYS;
     var driver = sc.driver === 'risk' ? '🌱 planting at risk' : '🔧 needs prep';
-    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;background:'+tm.bg+';border-left:5px solid '+tm.border+';border-radius:0 6px 6px 0;">' +
+    return '<div style="display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:8px;padding:7px 10px;margin-bottom:4px;background:'+tm.bg+';border-left:5px solid '+tm.border+';border-radius:0 6px 6px 0;max-width:100%;">' +
       '<span style="width:20px;text-align:center;">'+tm.icon+'</span>' +
       '<span class="muted" style="width:18px;font-size:11px;">#'+(i+1)+'</span>' +
       '<span style="flex:1;font-size:13px;font-weight:600;">'+escapeHtml(d.unit)+'</span>' +
@@ -7894,10 +7894,10 @@ function renderLastPlantingDropdown(mainRows){
           : `<span class="muted">—</span>`;
         const nPlants = r.Total_Individuals > 0 ? `<b>${r.Total_Individuals}</b> plants` : '';
         const nPeople = r.Number_of_Person ? `${escapeHtml(r.Number_of_Person)} ppl` : '';
-        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 10px;margin-bottom:4px;background:#f7faf6;border-left:4px solid #2ca02c;border-radius:0 6px 6px 0;">
+        return `<div style="display:flex;flex-wrap:wrap;row-gap:4px;align-items:flex-start;gap:10px;padding:7px 10px;margin-bottom:4px;background:#f7faf6;border-left:4px solid #2ca02c;border-radius:0 6px 6px 0;max-width:100%;">
           <span style="min-width:82px;font-size:12px;color:#555;">${escapeHtml(r.Date)}</span>
           <span style="min-width:90px;font-weight:600;font-size:13px;">${escapeHtml(r.Unit_Name||'—')} <span class="muted" style="font-weight:400;">(${escapeHtml(r.Valley||'—')})</span></span>
-          <span style="flex:1;font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${speciesHtml}</span>
+          <span style="flex:1;min-width:120px;font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${speciesHtml}</span>
           <span class="muted" style="font-size:11.5px;white-space:nowrap;">${[nPlants,nPeople].filter(Boolean).join(' · ')}</span>
           <span class="muted" style="font-size:11px;white-space:nowrap;">${escapeHtml(r.Name||'')}</span>
         </div>`;
