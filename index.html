@@ -2350,7 +2350,7 @@ async function fetchHabitatRestoration(){
     if (error) throw new Error(error.message);
     _applyHabitatData(data);
     _dbSave('habitat', data);
-    document.getElementById('liveDataStatus').textContent = 'Connected — ' + tables.habitat.length + ' habitat restoration actions loaded from the shared database.';
+    document.getElementById('liveDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
   } catch(e) {
     var cached = _dbLoad('habitat');
     if (cached) {
@@ -2382,7 +2382,7 @@ async function fetchDeratisation(){
     if (error) throw new Error(error.message);
     _applyDeratData(data);
     _dbSave('derat', data);
-    document.getElementById('deratDataStatus').textContent = tables.deratisation.length + ' dératisation patrols loaded from the shared database.';
+    document.getElementById('deratDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
   } catch(e) {
     var cached = _dbLoad('derat');
     if (cached) {
