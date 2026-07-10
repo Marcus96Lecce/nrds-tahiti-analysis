@@ -5559,12 +5559,26 @@ function downloadPepinieres(){
   const fields = ['id','name','lat','lon','number_of_plants','date','observer','zone','notes','created_at'];
   downloadCSV('pepinieres.csv', rows, fields);
 }
-function downloadAllActivityEntries(){
-  const rows = activityEntries.map(r => ({ ...r, field_values: JSON.stringify(r.field_values||[]) }));
-  if (!rows.length){ alert('No activity entry records loaded yet.'); return; }
-  const fields = ['id','activity_type_id','activity_type_name','date','observer','valley','zone',
-    'number_of_person','comment','field_values','created_at'];
-  downloadCSV('activity_entries.csv', rows, fields);
+// The in-memory `activityEntries` (used elsewhere for the "Recent entries" preview table) is
+// deliberately capped to the latest 30 rows (see fetchActivityEntries()) — fine for a preview, but
+// downloading that would silently drop every older entry once more than 30 exist. This does its own
+// unlimited fetch at click time instead, so the export is always the complete, current table.
+async function downloadAllActivityEntries(){
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = '⬇ Loading…'; }
+  try {
+    const { data, error } = await window.sb.from('activity_entries').select('*').order('id');
+    if (error) throw new Error(error.message);
+    const rows = (data||[]).map(r => ({ ...r, field_values: JSON.stringify(r.field_values||[]) }));
+    if (!rows.length){ alert('No activity entry records loaded yet.'); return; }
+    const fields = ['id','activity_type_id','activity_type_name','date','observer','valley','zone',
+      'number_of_person','comment','field_values','created_at'];
+    downloadCSV('activity_entries.csv', rows, fields);
+  } catch(e){
+    alert('Could not download activity entries: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Activity Entries'; }
+  }
 }
 function downloadAllActivityTypes(){
   const rows = activityTypes.map(r => ({ ...r, fields: JSON.stringify(r.fields||[]) }));
