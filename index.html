@@ -6452,7 +6452,7 @@ function renderBirdObsChart(container){
 // Common Myna / Red-vented Bulbul = the two invasive species the protocol targets; Wattled
 // Honeyeater is kept alongside as a native "control" species for ecological contrast (do invasive
 // birds dominate where natives don't?), per Spotswood et al. 2013 / Blanvillain et al. 2020.
-const IBS_SPECIES_HEX = { myna: '#c0392b', bulbul: '#e08214', wattled: '#2e7d32' };
+const IBS_SPECIES_HEX = { myna: '#8e44ad', bulbul: '#e08214', wattled: '#2e7d32' };
 const IBS_TYPOLOGY_ORDER = ['A','A*','B','C','X'];
 
 function renderIbsChart(container){
@@ -7588,29 +7588,38 @@ function renderMap(shouldFit){
 
   if (mapLayers.has('ibs')){
     // Bird Survey has its own Valley field directly (no GPS-inference needed like PFF/Birds Observation
-    // above), and a per-session zone_typology already computed and stored at submit time.
+    // above). One marker per species actually detected that session (seen+heard>0), colored by species —
+    // sessions with zero detections show no dot (the point itself carries no species info to color by).
+    const IBS_MARKER_OFFSET_DEG = 0.00004; // small jitter so co-located species markers stay individually visible
     for (const r of (birdSurveys||[])){
       const lat = +r.lat, lon = +r.lon;
       if (!isFinite(lat) || !isFinite(lon)) continue;
       if (mapValleyFilter !== 'all' && r.valley !== mapValleyFilter) continue;
       if (!inDateRange(r.date, mapDateFrom, mapDateTo)) continue;
       const topo = TYPOLOGY_DEF[r.zone_typology] || TYPOLOGY_DEF['X'];
-      const mynaTotal = (+r.myna_seen||0) + (+r.myna_heard||0);
-      const bulbulTotal = (+r.bulbul_seen||0) + (+r.bulbul_heard||0);
-      const wattledTotal = (+r.wattled_seen||0) + (+r.wattled_heard||0);
-      const html = `<b>🦜 Invasive Bird Survey — ${escapeHtml(r.station_id||'—')}</b><br>` +
-        `Date: ${escapeHtml(r.date||'—')} · Session #${r.session_number||1}<br>` +
-        `Valley / Zone: ${escapeHtml(r.valley||'—')} / ${escapeHtml(r.zone||'—')}<br>` +
-        `Habitat typology: <b style="color:${topo.color};">${escapeHtml(topo.label)}</b><br>` +
-        `Common Myna: ${r.myna_seen||0} seen / ${r.myna_heard||0} heard<br>` +
-        `Red-vented Bulbul: ${r.bulbul_seen||0} seen / ${r.bulbul_heard||0} heard<br>` +
-        `Wattled Honeyeater: ${r.wattled_seen||0} seen / ${r.wattled_heard||0} heard` +
+      const speciesHere = [
+        { label:'Common Myna',        seen:+r.myna_seen||0,    heard:+r.myna_heard||0,    color:IBS_SPECIES_HEX.myna },
+        { label:'Red-vented Bulbul',  seen:+r.bulbul_seen||0,  heard:+r.bulbul_heard||0,  color:IBS_SPECIES_HEX.bulbul },
+        { label:'Wattled Honeyeater', seen:+r.wattled_seen||0, heard:+r.wattled_heard||0, color:IBS_SPECIES_HEX.wattled },
+      ].filter(s => (s.seen+s.heard) > 0);
+      const sessionHtml = `Date: ${escapeHtml(r.date||'—')} · Session #${r.session_number||1}<br>` +
+        `Valley / Zone: ${escapeHtml(r.valley||'—')} / ${escapeHtml(r.zone||'—')} · Station: ${escapeHtml(r.station_id||'—')}<br>` +
+        `Habitat typology: <b style="color:${topo.color};">${escapeHtml(topo.label)}</b>` +
         (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
-      const marker = L.circleMarker([lat, lon], { radius: 6+Math.min(6, Math.round((mynaTotal+bulbulTotal+wattledTotal)/2)), color:'#fff', weight:1.5, fillColor: topo.color, fillOpacity:0.9 });
-      marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
-      marker.bindPopup(html);
-      marker.addTo(pointLayerGroup);
-      boundsLatLngs.push([lat, lon]);
+      speciesHere.forEach((s, i) => {
+        // deterministic offset around the survey point so multiple species detected at the same
+        // session don't fully overlap into a single indistinguishable marker
+        const angle = (i / speciesHere.length) * 2*Math.PI;
+        const off = speciesHere.length > 1 ? IBS_MARKER_OFFSET_DEG : 0;
+        const mlat = lat + off*Math.sin(angle), mlon = lon + off*Math.cos(angle);
+        const total = s.seen + s.heard;
+        const html = `<b style="color:${s.color};">🦜 ${escapeHtml(s.label)}</b><br>${s.seen} seen / ${s.heard} heard<br>` + sessionHtml;
+        const marker = L.circleMarker([mlat, mlon], { radius: 6+Math.min(6, total), color:'#fff', weight:1.5, fillColor: s.color, fillOpacity:0.9 });
+        marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+        marker.bindPopup(html);
+        marker.addTo(pointLayerGroup);
+        boundsLatLngs.push([mlat, mlon]);
+      });
     }
   }
 
@@ -7766,8 +7775,10 @@ function renderMap(shouldFit){
   }
   if (mapLayers.has('ibs')){
     legend += sep() + `
-      ${IBS_TYPOLOGY_ORDER.map(t => `<span class="legend-item"><span class="swatch" style="background:${TYPOLOGY_DEF[t].color}"></span>${escapeHtml(TYPOLOGY_DEF[t].label)}</span>`).join(' ')}
-      <span class="legend-item">🦜 Invasive Bird Survey point counts — dot color = habitat typology of the zone at the time of survey, dot size ∝ total Myna+Bulbul+Wattled contacts that session</span>`;
+      <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.myna}"></span>Common Myna</span>
+      <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.bulbul}"></span>Red-vented Bulbul</span>
+      <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.wattled}"></span>Wattled Honeyeater (native)</span>
+      <span class="legend-item">🦜 Invasive Bird Survey point counts — one dot per species actually detected that session (seen+heard&gt;0), dot size ∝ contacts; sessions with zero detections show no dot; co-located species are offset slightly so each stays visible</span>`;
   }
   if (!mapLayers.size){
     legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
