@@ -1787,7 +1787,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_cleaning" onchange="toggleMapLayer('cleaning',this.checked)"> Cleaning status by zone</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_derat" onchange="toggleMapLayer('derat',this.checked)"> Bait consumption (Checks)</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_pff" onchange="toggleMapLayer('pff',this.checked)"> Little Fire Ant (PFF)</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_birds" onchange="toggleMapLayer('birds',this.checked)"> 🐦 Bird observations</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="ml_birds" onchange="toggleMapLayer('birds',this.checked)"> 🐦 Bird observations</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="ml_ibs" onchange="toggleMapLayer('ibs',this.checked)"> 🦜 Invasive Bird Survey</label>
         </div>
       </div>
       <label class="muted" style="margin-left:auto;">
@@ -1892,7 +1893,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_species" onchange="toggleChart('species',this.checked)"> Most-planted species</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_workforce" onchange="toggleChart('workforce',this.checked)"> People involved (volunteer vs routine)</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_derat" onchange="toggleChart('derat',this.checked)"> Bait consumption (Checks)</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_birds" onchange="toggleChart('birds',this.checked)"> 🐦 Bird observations</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_ibs" onchange="toggleChart('ibs',this.checked)"> 🦜 Invasive Bird Survey</label>
         </div>
       </div>
     </div>
@@ -5786,6 +5789,7 @@ const CHART_DEFS = [
   { key: 'derat',     label: 'Bait consumption (Checks)',             render: c => renderDeratChart(c) },
   { key: 'pff',       label: 'Little Fire Ant (PFF)',                 render: c => renderPffChart(c) },
   { key: 'birds',     label: 'Birds Observation',                     render: c => renderBirdObsChart(c) },
+  { key: 'ibs',       label: 'Invasive Bird Survey (point count)',    render: c => renderIbsChart(c) },
 ];
 
 function renderAllCharts(){
@@ -6443,6 +6447,147 @@ function renderBirdObsChart(container){
   area.innerHTML = hint + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Most-observed species</div>' + specSvg
     + '<hr style="margin:14px 0;border-color:var(--border);">'
     + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Observations over time</div>' + summary + chronoSvg + legend;
+}
+
+// Common Myna / Red-vented Bulbul = the two invasive species the protocol targets; Wattled
+// Honeyeater is kept alongside as a native "control" species for ecological contrast (do invasive
+// birds dominate where natives don't?), per Spotswood et al. 2013 / Blanvillain et al. 2020.
+const IBS_SPECIES_HEX = { myna: '#c0392b', bulbul: '#e08214', wattled: '#2e7d32' };
+const IBS_TYPOLOGY_ORDER = ['A','A*','B','C','X'];
+
+function renderIbsChart(container){
+  hideChartPopup();
+  const area = container || document.getElementById('chartArea');
+  const chartValley = document.getElementById('chartValley').value;
+
+  const rows = (birdSurveys||[])
+    .filter(r => r.date && inDateRange(r.date, chartDateFrom, chartDateTo))
+    .filter(r => chartValley === 'all' || r.valley === chartValley)
+    .map(r => ({
+      ...r,
+      ts: new Date(r.date).getTime(),
+      mynaTotal: (+r.myna_seen||0) + (+r.myna_heard||0),
+      bulbulTotal: (+r.bulbul_seen||0) + (+r.bulbul_heard||0),
+      wattledTotal: (+r.wattled_seen||0) + (+r.wattled_heard||0),
+      typology: r.zone_typology || 'X',
+    }))
+    .sort((a,b) => a.ts - b.ts);
+
+  const valleyLabel = chartValley === 'all' ? 'all valleys' : chartValley;
+  if (!rows.length){ area.innerHTML = `<span class="muted">No Invasive Bird Survey sessions for ${escapeHtml(valleyLabel)} in this date range.</span>`; return; }
+
+  // ── Aggregate by habitat typology (the core comparison this survey is designed for) ──
+  const agg = new Map();
+  for (const r of rows){
+    if (!agg.has(r.typology)) agg.set(r.typology, { sessions:0, myna:0, bulbul:0, wattled:0, stations:new Set() });
+    const e = agg.get(r.typology);
+    e.sessions++; e.myna += r.mynaTotal; e.bulbul += r.bulbulTotal; e.wattled += r.wattledTotal;
+    e.stations.add(r.valley+'||'+r.zone+'||'+r.station_id);
+  }
+  const typoData = IBS_TYPOLOGY_ORDER.filter(t => agg.has(t)).map(t => {
+    const e = agg.get(t);
+    return { type:t, ...TYPOLOGY_DEF[t], sessions:e.sessions, stations:e.stations.size,
+      mynaAvg: e.myna/e.sessions, bulbulAvg: e.bulbul/e.sessions, wattledAvg: e.wattled/e.sessions,
+      mynaTotal: e.myna, bulbulTotal: e.bulbul, wattledTotal: e.wattled };
+  });
+
+  // ── Grouped bar chart: one group per typology, one bar per species, height = avg contacts/session ──
+  const groupW = 130, barW = 28, barGap = 6, mL = 42, mR = 20, mT = 20, mB = 62;
+  const W = Math.max(500, mL+mR + typoData.length*groupW), H = 300;
+  const maxAvg = Math.max(...typoData.flatMap(d => [d.mynaAvg, d.bulbulAvg, d.wattledAvg]), 1);
+  const yScale = v => (v/maxAvg) * (H-mT-mB);
+  const step = niceStep(maxAvg);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=maxAvg+0.001; v+=step){
+    const y = H-mB-yScale(v);
+    svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e2e5df'});
+    svg += svgEl('text',{x:mL-6,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, v < 1 ? v.toFixed(1) : Math.round(v));
+  }
+  typoData.forEach(d => {
+    const gx = mL + (typoData.indexOf(d)+0.5)*groupW;
+    const series = [
+      { label:'Common Myna', avg:d.mynaAvg, total:d.mynaTotal, color:IBS_SPECIES_HEX.myna },
+      { label:'Red-vented Bulbul', avg:d.bulbulAvg, total:d.bulbulTotal, color:IBS_SPECIES_HEX.bulbul },
+      { label:'Wattled Honeyeater (native)', avg:d.wattledAvg, total:d.wattledTotal, color:IBS_SPECIES_HEX.wattled },
+    ];
+    const groupStartX = gx - (series.length*(barW+barGap))/2;
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;color:${d.color};">${escapeHtml(d.label)}</div>
+      <div><b>Sessions:</b> ${d.sessions} · <b>Stations:</b> ${d.stations}</div>
+      <div style="margin-top:4px;"><b>Common Myna:</b> ${d.mynaTotal} total, ${d.mynaAvg.toFixed(2)}/session</div>
+      <div><b>Red-vented Bulbul:</b> ${d.bulbulTotal} total, ${d.bulbulAvg.toFixed(2)}/session</div>
+      <div><b>Wattled Honeyeater:</b> ${d.wattledTotal} total, ${d.wattledAvg.toFixed(2)}/session</div>`) - 1;
+    series.forEach((s,j) => {
+      const x = groupStartX + j*(barW+barGap);
+      const h = yScale(s.avg);
+      svg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${d.type} — ${s.label}: ${s.avg.toFixed(2)} avg/session (${s.total} total over ${d.sessions} sessions)\nClick for full breakdown`)}` +
+        svgEl('rect',{x, y:H-mB-Math.max(h,1), width:barW, height:Math.max(h,1), fill:s.color, rx:2}) + `</g>`;
+    });
+    svg += svgEl('text',{x:gx,y:H-mB+18,'text-anchor':'middle','font-size':12,'font-weight':700,fill:d.color}, d.type);
+    svg += svgEl('text',{x:gx,y:H-mB+32,'text-anchor':'middle','font-size':9,fill:'#6b7569'}, `n=${d.sessions} session${d.sessions===1?'':'s'}`);
+  });
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  svg += `</svg>`;
+
+  // ── Chronological session view: one stacked bar (Myna+Bulbul) per session, dot below = habitat typology ──
+  const W2 = Math.max(700, rows.length*45), H2 = 320, cmL = 50, cmR = 20, cmT = 20, cmB = 90;
+  const slotW = (W2-cmL-cmR)/rows.length;
+  const xCenter = i => cmL + (i+0.5)*slotW;
+  const barW2 = Math.min(30, slotW*0.6);
+  const maxStack = Math.max(...rows.map(r => r.mynaTotal+r.bulbulTotal), 1);
+  const yScale2 = v => (v/maxStack)*(H2-cmT-cmB);
+  let chronoSvg = `<svg viewBox="0 0 ${W2} ${H2}" width="${W2}" height="${H2}" xmlns="http://www.w3.org/2000/svg">`;
+  chronoSvg += svgEl('line',{x1:cmL,x2:cmL,y1:cmT,y2:H2-cmB,stroke:'#9aa69a'});
+  chronoSvg += svgEl('line',{x1:cmL,x2:W2-cmR,y1:H2-cmB,y2:H2-cmB,stroke:'#9aa69a'});
+  const baseline = H2-cmB;
+  rows.forEach((r,i) => {
+    const x = xCenter(i);
+    const mynaH = yScale2(r.mynaTotal), bulbulH = yScale2(r.bulbulTotal);
+    const topo = TYPOLOGY_DEF[r.typology] || TYPOLOGY_DEF['X'];
+    const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r.date)} — ${escapeHtml(r.station_id||'—')}</div>
+      <div><b>Valley / Zone:</b> ${escapeHtml(r.valley||'—')} / ${escapeHtml(r.zone||'—')}</div>
+      <div><b>Habitat typology:</b> <span style="color:${topo.color};font-weight:600;">${escapeHtml(topo.label)}</span></div>
+      <div><b>Observer:</b> ${escapeHtml(r.observer||'—')} · <b>Session #:</b> ${r.session_number||1}</div>
+      <div style="margin-top:4px;"><b>Common Myna:</b> ${r.myna_seen||0} seen / ${r.myna_heard||0} heard</div>
+      <div><b>Red-vented Bulbul:</b> ${r.bulbul_seen||0} seen / ${r.bulbul_heard||0} heard</div>
+      <div><b>Wattled Honeyeater:</b> ${r.wattled_seen||0} seen / ${r.wattled_heard||0} heard</div>
+      <div><b>Sky:</b> ${escapeHtml(r.sky||'—')} · <b>Wind:</b> ${r.wind_beaufort ?? '—'} · <b>Rain:</b> ${escapeHtml(r.rain||'—')}</div>
+      <div><b>Canopy cover:</b> ${escapeHtml(r.canopy_cover||'—')} · <b>Canopy height:</b> ${escapeHtml(r.canopy_height||'—')}</div>
+      <div><b>Spathodea flowering:</b> ${escapeHtml(r.spathodea_flowering||'—')}</div>
+      ${r.notes ? `<div style="margin-top:4px;"><b>Notes:</b> ${escapeHtml(r.notes)}</div>` : ''}`) - 1;
+    chronoSvg += `<g class="wf-bar" onclick="pinPopup(event, ${popupIdx})">`;
+    chronoSvg += svgEl('title',{},`${r.date} — Myna ${r.mynaTotal}, Bulbul ${r.bulbulTotal} (${topo.type})\nClick for full details`);
+    chronoSvg += svgEl('rect',{x:x-barW2/2, y:baseline-mynaH, width:barW2, height:Math.max(mynaH, r.mynaTotal>0?1.5:0), fill:IBS_SPECIES_HEX.myna});
+    chronoSvg += svgEl('rect',{x:x-barW2/2, y:baseline-mynaH-bulbulH, width:barW2, height:Math.max(bulbulH, r.bulbulTotal>0?1.5:0), fill:IBS_SPECIES_HEX.bulbul});
+    chronoSvg += svgEl('circle',{cx:x, cy:baseline+9, r:4, fill:topo.color, stroke:'#fff', 'stroke-width':1});
+    chronoSvg += svgEl('text',{x,y:H2-cmB+28,'text-anchor':'end','font-size':10,fill:'#6b7569',transform:`rotate(-45 ${x} ${H2-cmB+28})`}, r.date);
+    chronoSvg += `</g>`;
+  });
+  chronoSvg += `</svg>`;
+
+  const totalSessions = rows.length;
+  const totalMyna = rows.reduce((s,r)=>s+r.mynaTotal,0);
+  const totalBulbul = rows.reduce((s,r)=>s+r.bulbulTotal,0);
+  const worst = [...typoData].sort((a,b)=>(b.mynaAvg+b.bulbulAvg)-(a.mynaAvg+a.bulbulAvg))[0];
+  const summary = `<div class="grid3" style="margin-bottom:10px;">
+    <div class="stat"><div class="num">${totalSessions}</div><div class="lbl">10-min point counts recorded</div></div>
+    <div class="stat"><div class="num">${totalMyna}</div><div class="lbl">total Common Myna contacts</div></div>
+    <div class="stat"><div class="num">${totalBulbul}</div><div class="lbl">total Red-vented Bulbul contacts</div></div>
+  </div>`;
+
+  const legend = `<div style="margin-top:8px;">
+    <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.myna}"></span>Common Myna</span>
+    <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.bulbul}"></span>Red-vented Bulbul</span>
+    <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.wattled}"></span>Wattled Honeyeater (native, for comparison)</span>
+    <br>${IBS_TYPOLOGY_ORDER.map(t => `<span class="legend-item"><span class="swatch" style="background:${TYPOLOGY_DEF[t].color}"></span>${escapeHtml(TYPOLOGY_DEF[t].label)}</span>`).join(' ')}
+    <br><span class="muted">Top chart: average contacts per 10-min count, grouped by the zone's habitat typology recorded at the time of survey (A = consolidated native forest → C = invasive-dominant frontier). Bottom chart: one session per bar (Myna+Bulbul stacked), colored dot below = that session's typology. Hover for a quick peek, click to pin full details. Valley filter applies directly (Zone/Station filters above don't apply — Bird Survey uses its own free-text Station ID, not the rat-station registry).</span>
+  </div>`;
+
+  const hint = `<div class="hint" style="margin-bottom:6px;">Common Myna / Red-vented Bulbul detections per 10-min point count${chartValley!=='all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ''}, broken down by habitat typology — testing whether invasive birds concentrate in invasive-dominated canopy (Spotswood et al. 2013; Blanvillain et al. 2020)${worst ? `. Highest combined average so far: <b>${escapeHtml(worst.label)}</b> (${(worst.mynaAvg+worst.bulbulAvg).toFixed(1)}/session)` : ''}. Pair with the map's "🦜 Invasive Bird Survey" layer for the spatial view.</div>`;
+
+  area.innerHTML = hint + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Average contacts per 10-min count, by habitat typology</div>' + svg + legend
+    + '<hr style="margin:14px 0;border-color:var(--border);">'
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Sessions over time</div>' + summary + chronoSvg;
 }
 
 function pctColor(pct){
@@ -7441,6 +7586,34 @@ function renderMap(shouldFit){
     }
   }
 
+  if (mapLayers.has('ibs')){
+    // Bird Survey has its own Valley field directly (no GPS-inference needed like PFF/Birds Observation
+    // above), and a per-session zone_typology already computed and stored at submit time.
+    for (const r of (birdSurveys||[])){
+      const lat = +r.lat, lon = +r.lon;
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      if (mapValleyFilter !== 'all' && r.valley !== mapValleyFilter) continue;
+      if (!inDateRange(r.date, mapDateFrom, mapDateTo)) continue;
+      const topo = TYPOLOGY_DEF[r.zone_typology] || TYPOLOGY_DEF['X'];
+      const mynaTotal = (+r.myna_seen||0) + (+r.myna_heard||0);
+      const bulbulTotal = (+r.bulbul_seen||0) + (+r.bulbul_heard||0);
+      const wattledTotal = (+r.wattled_seen||0) + (+r.wattled_heard||0);
+      const html = `<b>🦜 Invasive Bird Survey — ${escapeHtml(r.station_id||'—')}</b><br>` +
+        `Date: ${escapeHtml(r.date||'—')} · Session #${r.session_number||1}<br>` +
+        `Valley / Zone: ${escapeHtml(r.valley||'—')} / ${escapeHtml(r.zone||'—')}<br>` +
+        `Habitat typology: <b style="color:${topo.color};">${escapeHtml(topo.label)}</b><br>` +
+        `Common Myna: ${r.myna_seen||0} seen / ${r.myna_heard||0} heard<br>` +
+        `Red-vented Bulbul: ${r.bulbul_seen||0} seen / ${r.bulbul_heard||0} heard<br>` +
+        `Wattled Honeyeater: ${r.wattled_seen||0} seen / ${r.wattled_heard||0} heard` +
+        (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '');
+      const marker = L.circleMarker([lat, lon], { radius: 6+Math.min(6, Math.round((mynaTotal+bulbulTotal+wattledTotal)/2)), color:'#fff', weight:1.5, fillColor: topo.color, fillOpacity:0.9 });
+      marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
+      marker.bindPopup(html);
+      marker.addTo(pointLayerGroup);
+      boundsLatLngs.push([lat, lon]);
+    }
+  }
+
   if (mapLayers.has('species')){
     let rows = enriched.mainRows.filter(r => r.Centroid_Latitude !== '' && (mapValleyFilter==='all' || r.Valley===mapValleyFilter) && inDateRange(r.Date, mapDateFrom, mapDateTo));
     rows = rows.filter(r => r.Species_Planted); // only rows with planted species are relevant to this layer
@@ -7590,6 +7763,11 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
       <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = the most conservation-significant species present, using its own color as picked when submitted (defaults to the status color above, editable per detection)</span>
       <span class="legend-item">● round dot = sighting &nbsp; ▪ square = nest</span>`;
+  }
+  if (mapLayers.has('ibs')){
+    legend += sep() + `
+      ${IBS_TYPOLOGY_ORDER.map(t => `<span class="legend-item"><span class="swatch" style="background:${TYPOLOGY_DEF[t].color}"></span>${escapeHtml(TYPOLOGY_DEF[t].label)}</span>`).join(' ')}
+      <span class="legend-item">🦜 Invasive Bird Survey point counts — dot color = habitat typology of the zone at the time of survey, dot size ∝ total Myna+Bulbul+Wattled contacts that session</span>`;
   }
   if (!mapLayers.size){
     legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
