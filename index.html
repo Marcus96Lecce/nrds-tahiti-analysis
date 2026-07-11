@@ -1525,22 +1525,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
           <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Common Myna <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Acridotheres tristis</span></div>
           <div class="row" style="gap:10px;">
-            <label class="muted">Seen: <input type="number" id="ibsMynaSeen" min="0" value="0" style="width:54px;" required></label>
-            <label class="muted">Heard: <input type="number" id="ibsMynaHeard" min="0" value="0" style="width:54px;" required></label>
+            <label class="muted">Seen: <input type="number" id="ibsMynaSeen" min="0" value="0" style="width:54px;" required oninput="syncIbsContactsFromCounts()"></label>
+            <label class="muted">Heard: <input type="number" id="ibsMynaHeard" min="0" value="0" style="width:54px;" required oninput="syncIbsContactsFromCounts()"></label>
           </div>
         </div>
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
           <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Red-vented Bulbul <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Pycnonotus cafer</span></div>
           <div class="row" style="gap:10px;">
-            <label class="muted">Seen: <input type="number" id="ibsBulbulSeen" min="0" value="0" style="width:54px;" required></label>
-            <label class="muted">Heard: <input type="number" id="ibsBulbulHeard" min="0" value="0" style="width:54px;" required></label>
+            <label class="muted">Seen: <input type="number" id="ibsBulbulSeen" min="0" value="0" style="width:54px;" required oninput="syncIbsContactsFromCounts()"></label>
+            <label class="muted">Heard: <input type="number" id="ibsBulbulHeard" min="0" value="0" style="width:54px;" required oninput="syncIbsContactsFromCounts()"></label>
           </div>
         </div>
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
           <div style="font-weight:600;margin-bottom:6px;font-size:13px;">Wattled Honeyeater <span style="font-weight:400;font-size:11px;color:var(--muted);font-style:italic">Foulehaio carunculatus</span></div>
           <div class="row" style="gap:10px;">
-            <label class="muted">Seen: <input type="number" id="ibsWattledSeen" min="0" value="0" style="width:54px;"></label>
-            <label class="muted">Heard: <input type="number" id="ibsWattledHeard" min="0" value="0" style="width:54px;"></label>
+            <label class="muted">Seen: <input type="number" id="ibsWattledSeen" min="0" value="0" style="width:54px;" oninput="syncIbsContactsFromCounts()"></label>
+            <label class="muted">Heard: <input type="number" id="ibsWattledHeard" min="0" value="0" style="width:54px;" oninput="syncIbsContactsFromCounts()"></label>
           </div>
         </div>
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:180px;">
@@ -1559,9 +1559,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <details class="collapsible" style="margin-bottom:12px;">
         <summary>Contact log — individual detections <span style="font-weight:400;font-size:11px;color:var(--muted);">(optional but recommended for behaviour analysis)</span> <span class="caret">▼</span></summary>
         <div class="coll-body">
-          <div class="muted" style="margin-bottom:8px;font-size:12px;">For each bird detected within 50 m, add a row. Behaviour <b>F = foraging on Spathodea</b> (flowers/fruit) is the key variable linking canopy type to bird use. S=seen / H=heard / SH=seen+heard.</div>
+          <div class="muted" style="margin-bottom:8px;font-size:12px;">Rows for Myna/Bulbul/Wattled 🔒 are auto-filled to match the Seen/Heard counts entered above — change those counts to add/remove rows. For each auto-filled row, set the distance, behaviour and height stratum for that individual. Behaviour <b>F = foraging on Spathodea</b> (flowers/fruit) is the key variable linking canopy type to bird use. Use "+ Add contact" only for another species observed opportunistically (e.g. Pomarea, or anything else).</div>
           <div id="ibsContactLogRows" style="margin-bottom:8px;"></div>
-          <button type="button" class="secondary" style="padding:5px 12px;font-size:12.5px;" onclick="addIbsContact()">+ Add contact</button>
+          <button type="button" class="secondary" style="padding:5px 12px;font-size:12.5px;" onclick="addIbsContact()">+ Add contact (other species)</button>
         </div>
       </details>
 
@@ -4031,26 +4031,20 @@ function onIbsZoneChange(){
 /* contact log */
 let ibsContactLog = [];
 
+const IBS_CONTACT_SPECIES_LABEL = { myna:'Myna', bulbul:'Bulbul', wattled:'Wattled HE', other:'Other' };
+const IBS_CONTACT_DET_LABEL = { S:'Seen', H:'Heard', SH:'Seen+Heard' };
+
 function renderIbsContactRows(){
   const wrap = document.getElementById('ibsContactLogRows');
   if (!wrap) return;
   if (!ibsContactLog.length){
-    wrap.innerHTML = '<div class="muted" style="font-size:12px;font-style:italic;">No contacts added yet.</div>';
+    wrap.innerHTML = '<div class="muted" style="font-size:12px;font-style:italic;">No contacts yet — set Myna/Bulbul/Wattled Seen/Heard counts above to auto-fill rows, or add an "Other" detection.</div>';
     return;
   }
   wrap.innerHTML = ibsContactLog.map((c, i) => `
     <div class="row" style="gap:6px;margin-bottom:5px;flex-wrap:wrap;align-items:center;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:#fafcfa;">
-      <select onchange="ibsContactLog[${i}].species=this.value" style="font-size:12px;">
-        <option value="myna" ${c.species==='myna'?'selected':''}>Myna</option>
-        <option value="bulbul" ${c.species==='bulbul'?'selected':''}>Bulbul</option>
-        <option value="wattled" ${c.species==='wattled'?'selected':''}>Wattled HE</option>
-        <option value="other" ${c.species==='other'?'selected':''}>Other</option>
-      </select>
-      <select onchange="ibsContactLog[${i}].det=this.value" style="font-size:12px;" title="Detection type: S=seen / H=heard / SH=seen+heard">
-        <option value="SH" ${c.det==='SH'?'selected':''}>S+H</option>
-        <option value="S"  ${c.det==='S'?'selected':''}>S only</option>
-        <option value="H"  ${c.det==='H'?'selected':''}>H only</option>
-      </select>
+      <span style="font-size:12px;font-weight:600;min-width:70px;" title="${c.auto ? 'Auto-filled from the Seen/Heard counts above — change those counts to add or remove rows' : 'Manually added'}">${escapeHtml(IBS_CONTACT_SPECIES_LABEL[c.species]||c.species)}${c.auto ? ' 🔒' : ''}</span>
+      <span class="muted" style="font-size:12px;min-width:52px;">${escapeHtml(IBS_CONTACT_DET_LABEL[c.det]||c.det)}</span>
       <select onchange="ibsContactLog[${i}].dist=this.value" style="font-size:12px;" title="Distance band from station">
         <option value="0-25m"  ${c.dist==='0-25m'?'selected':''}>0–25 m</option>
         <option value="25-50m" ${c.dist==='25-50m'?'selected':''}>25–50 m</option>
@@ -4067,12 +4061,42 @@ function renderIbsContactRows(){
         <option value="M" ${c.height==='M'?'selected':''}>M — mid-storey 2–5 m</option>
         <option value="G" ${c.height==='G'?'selected':''}>G — ground &lt;2 m</option>
       </select>
-      <button type="button" onclick="removeIbsContact(${i})" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;">×</button>
+      ${c.auto ? '' : `<button type="button" onclick="removeIbsContact(${i})" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;">×</button>`}
     </div>`).join('');
 }
 
+// Keeps the Myna/Bulbul/Wattled rows in the Contact log in lockstep with the Seen/Heard counts
+// entered in "Bird Contacts" above — one auto row per individual tally (S or H, never merged into
+// SH since the summary counts are two separate tallies, not per-individual). Existing rows (and
+// whatever distance/behaviour/height the user already set on them) are preserved when the count
+// goes up; only the shortfall gets new default rows. When a count goes down, the most recently
+// added rows for that species+det are dropped first so earlier edited ones survive.
+function syncIbsContactsFromCounts(){
+  const wanted = {
+    myna:    { S: +document.getElementById('ibsMynaSeen').value||0,    H: +document.getElementById('ibsMynaHeard').value||0 },
+    bulbul:  { S: +document.getElementById('ibsBulbulSeen').value||0,  H: +document.getElementById('ibsBulbulHeard').value||0 },
+    wattled: { S: +document.getElementById('ibsWattledSeen').value||0, H: +document.getElementById('ibsWattledHeard').value||0 },
+  };
+  for (const species of Object.keys(wanted)){
+    for (const det of ['S','H']){
+      const want = wanted[species][det];
+      const have = ibsContactLog.filter(c => c.auto && c.species===species && c.det===det).length;
+      if (have < want){
+        for (let k=0; k<want-have; k++) ibsContactLog.push({ auto:true, species, det, dist:'0-25m', beh:'P', height:'C' });
+      } else if (have > want){
+        let toRemove = have - want;
+        for (let i=ibsContactLog.length-1; i>=0 && toRemove>0; i--){
+          const c = ibsContactLog[i];
+          if (c.auto && c.species===species && c.det===det){ ibsContactLog.splice(i,1); toRemove--; }
+        }
+      }
+    }
+  }
+  renderIbsContactRows();
+}
+
 function addIbsContact(){
-  ibsContactLog.push({ species:'myna', det:'SH', dist:'0-25m', beh:'P', height:'C' });
+  ibsContactLog.push({ auto:false, species:'other', det:'SH', dist:'0-25m', beh:'P', height:'C' });
   renderIbsContactRows();
 }
 
