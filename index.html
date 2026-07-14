@@ -6662,8 +6662,12 @@ function plantingProjColor(dom, pct){
   }
   const p = Math.max(0, Math.min(100, pct||0));
   if (dom === 'native'){
-    // pale green (0%) → A* green (50%) → A dark green (100%)
-    return lerp([[0,[200,230,201]],[50,[76,175,80]],[100,[26,122,26]]], p);
+    // pale green (0%) → A* green (peak just before the A*/A boundary) → A dark green from 50% (the
+    // actual A*→A threshold used by zoneTypology/typologyFromDomAndPct) through 100% — mirrors the
+    // invasive gradient below, where the C→B threshold color is used starting exactly at 33%.
+    // Previously the A-dark-green stop sat at 100%, so any zone already typed "A" (≥50%) still
+    // rendered a color barely past A*-green until nearly 100% (bug: label said A, fill looked like A*).
+    return lerp([[0,[200,230,201]],[49,[76,175,80]],[50,[26,122,26]],[100,[26,122,26]]], p);
   }
   if (dom === 'invasive'){
     // C red (0%) → B orange (33%) → amber (66%) → restorated yellow-green (100%)
@@ -7750,7 +7754,7 @@ function renderMap(shouldFit){
     legend += `<span class="legend-item"><b>Projected planting % — continuous gradient</b> (Butaud historical % + NRDS individuals @ ${nrdsDensityPerHa} trees/ha; popup shows A/A*/B/C threshold labels):</span>
       <span class="legend-item">
         <span class="muted" style="margin-right:4px;">Native zones</span>
-        <span style="display:inline-block;width:120px;height:12px;border-radius:3px;margin-right:4px;background:linear-gradient(to right,rgb(200,230,201),rgb(76,175,80),rgb(26,122,26));vertical-align:middle;"></span>
+        <span style="display:inline-block;width:120px;height:12px;border-radius:3px;margin-right:4px;background:linear-gradient(to right,rgb(200,230,201) 0%,rgb(76,175,80) 49%,rgb(26,122,26) 50%,rgb(26,122,26) 100%);vertical-align:middle;"></span>
         <span class="muted">0% ──── 50% (A*→A) ──── 100%</span>
       </span>
       <span class="legend-item">
