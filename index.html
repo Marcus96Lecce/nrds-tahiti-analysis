@@ -8178,12 +8178,27 @@ function renderPriorityZonesDropdown(top){
     rows + '</div></details>';
 }
 
+let lastPlantingValleyFilter = 'all';
+let lastCleaningValleyFilter = 'all';
+function setLastPlantingValley(v){ lastPlantingValleyFilter = v; onDataUpdated(); }
+function setLastCleaningValley(v){ lastCleaningValleyFilter = v; onDataUpdated(); }
+
+function valleyFilterSelect(selected, onchangeFn){
+  const valleyOpts = ['all'].concat(getAllValleys()).map(v => {
+    const sel = selected===v ? 'selected' : '';
+    const label = v==='all' ? 'All valleys' : v;
+    return `<option value="${escapeHtml(v)}" ${sel}>${escapeHtml(label)}</option>`;
+  }).join('');
+  return `<label class="muted" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">Valley: <select onchange="${onchangeFn}(this.value)" style="padding:2px 6px;font-size:12px;">${valleyOpts}</select></label>`;
+}
+
 function renderLastPlantingDropdown(mainRows){
   const rows = mainRows
-    .filter(r => r.Action === 'Plantation' && r.Date)
+    .filter(r => r.Action === 'Plantation' && r.Date && (lastPlantingValleyFilter==='all' || r.Valley===lastPlantingValleyFilter))
     .sort((a,b) => new Date(b.Date) - new Date(a.Date))
     .slice(0, 15);
   const countLabel = rows.length ? `${rows.length} most recent` : 'no records yet';
+  const valleySelect = valleyFilterSelect(lastPlantingValleyFilter, 'setLastPlantingValley');
   const inner = rows.length
     ? rows.map(r => {
         const species = (r.Species_Planted||'').split(';').filter(Boolean);
@@ -8203,17 +8218,18 @@ function renderLastPlantingDropdown(mainRows){
     : `<div class="muted" style="padding:8px 10px;">No plantation actions recorded yet.</div>`;
   return `<details style="margin-top:8px;">
     <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🌱 Last planting actions (${countLabel})</summary>
-    <div style="margin-top:8px;">${inner}</div>
+    <div style="margin-top:8px;">${valleySelect}${inner}</div>
   </details>`;
 }
 
 function renderLastCleaningDropdown(mainRows){
   const cleaningActions = ['Coupe du sous-bois (cutting undergrowth)', 'Entretien des plantations (cleaning around plantation)'];
   const rows = mainRows
-    .filter(r => cleaningActions.includes(r.Action) && r.Date)
+    .filter(r => cleaningActions.includes(r.Action) && r.Date && (lastCleaningValleyFilter==='all' || r.Valley===lastCleaningValleyFilter))
     .sort((a,b) => new Date(b.Date) - new Date(a.Date))
     .slice(0, 15);
   const countLabel = rows.length ? `${rows.length} most recent` : 'no records yet';
+  const valleySelect = valleyFilterSelect(lastCleaningValleyFilter, 'setLastCleaningValley');
   const inner = rows.length
     ? rows.map(r => {
         const pct = (r.Pct_cleaned_arrival || r.Pct_cleaned_end_of_day)
@@ -8232,7 +8248,7 @@ function renderLastCleaningDropdown(mainRows){
     : `<div class="muted" style="padding:8px 10px;">No cleaning actions recorded yet.</div>`;
   return `<details style="margin-top:8px;">
     <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🧹 Last cleaning actions (${countLabel})</summary>
-    <div style="margin-top:8px;">${inner}</div>
+    <div style="margin-top:8px;">${valleySelect}${inner}</div>
   </details>`;
 }
 
