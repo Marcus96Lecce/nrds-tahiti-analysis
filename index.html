@@ -7451,7 +7451,14 @@ function renderMap(shouldFit){
       const dom = topo.vd ? topo.vd.dominance : null;
       const projTopo = (dom && dom !== 'anthropic') ? typologyFromDomAndPct(dom, projPct) : { type:'X', ...TYPOLOGY_DEF['X'] };
       const upgraded = projTopo.type !== topo.type;
-      fillColor = (topo.type === 'X' && !hv && recent) ? '#e8b050' : plantingProjColor(dom, projPct);
+      // Zones with no NRDS planting activity have nothing to project — show the same flat typology
+      // color as the plain "Planted species" layer (topo.color) instead of the continuous gradient,
+      // which is keyed to the exact pct and doesn't line up with the flat swatch colors. Previously
+      // every zone got the gradient regardless, so a zone with zero NRDS contribution still changed
+      // color the moment this toggle was checked — misleading, since nothing about it changed.
+      fillColor = !recent ? topo.color
+        : (topo.type === 'X' && !hv) ? '#e8b050'
+        : plantingProjColor(dom, projPct);
       fillOpacity = 0.75;
       borderColor = upgraded ? '#f5a623' : '#2e5e2c';
       borderWeight = upgraded ? 3 : 1.5;
