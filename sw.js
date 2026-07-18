@@ -1,9 +1,9 @@
-/* NRDS Tahiti — Service Worker v2
+/* NRDS Tahiti — Service Worker v3
  * Intercepts only: same-origin app shell + map tiles.
  * Does NOT touch esm.sh, supabase.co, or any other cross-origin request
  * (intercepting esm.sh ES-module imports breaks Supabase on mobile). */
 
-var CACHE = 'nrds-v2';
+var CACHE = 'nrds-v3';
 var TILE_CACHE = 'nrds-tiles-v1';
 var BASE = new URL(self.location.href).pathname.replace('sw.js', '');
 
@@ -74,7 +74,30 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  /* ── Same-origin: app shell + static JSON — cache-first ──
+  /* ── App shell (the page itself): network-first ──
+   * This is the file that actually changes on every deploy — cache-first here meant a
+   * fix could sit deployed on GitHub Pages for days while every phone kept serving the
+   * cached-before-the-fix version (each reload silently re-cached the newer copy in the
+   * background, but only *displayed* it one reload later — always one version behind).
+   * Try the network first so an online reload always gets the latest app code; only fall
+   * back to the last-known-good cached copy when there's truly no connection (in the
+   * valleys). */
+  var isAppShell = req.mode === 'navigate' || url.pathname === BASE || url.pathname === BASE + 'index.html';
+  if (url.origin === self.location.origin && isAppShell) {
+    e.respondWith(
+      fetch(req).then(function(resp) {
+        if (resp && resp.ok) caches.open(CACHE).then(function(c) { c.put(req, resp.clone()); });
+        return resp;
+      }).catch(function() {
+        return caches.match(req).then(function(hit) { return hit || new Response('App offline', { status: 503 }); });
+      })
+    );
+    return;
+  }
+
+  /* ── Everything else same-origin: static JSON reference data, manifest, icons — cache-first ──
+   * These only change when Marco reruns the migration script, not on every code deploy, so
+   * cache-first (instant, works offline) is still the right tradeoff for them.
    * On miss: fetch from network and add to cache.
    * On network error with cache hit: return stale cache. */
   if (url.origin === self.location.origin) {
