@@ -5263,7 +5263,17 @@ const HASH_VIEW_FNS = {
   '#form-hr': showHrView, '#form-dr': showDrView, '#form-pff': showPffFormView, '#form-ibs': showIbsView,
   '#form-bo': showBoView, '#form-at': showAtView, '#form-ae': showAeEntryView,
 };
-if (HASH_VIEW_FNS[location.hash]) HASH_VIEW_FNS[location.hash]();
+// Deferred via setTimeout, not called synchronously here: some view functions (e.g. showMapView,
+// which reads `leafletMap`) reference `let`-declared variables that appear further down this same
+// script block and are still in their temporal dead zone at this point in top-to-bottom execution.
+// Calling this synchronously threw a ReferenceError for anyone loading/reopening the app directly on
+// a URL that already carries a view hash (a very normal thing for a PWA to do — it can restore the
+// exact last-open URL) — and because this is a classic (non-module) script, that uncaught error
+// aborted the rest of the script block, including the whenSupabaseReady(...) bootstrap further below
+// that kicks off every live-data fetch/subscription. So a device reopening straight into e.g. #map
+// would silently load NO data at all, not just stale data. setTimeout(...,0) pushes this call to
+// after the whole script has finished its synchronous top-to-bottom run.
+if (HASH_VIEW_FNS[location.hash]) setTimeout(() => HASH_VIEW_FNS[location.hash](), 0);
 window.addEventListener('hashchange', () => {
   const fn = HASH_VIEW_FNS[location.hash];
   if (fn) fn(); else showHomeView();
