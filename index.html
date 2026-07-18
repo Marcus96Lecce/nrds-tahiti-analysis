@@ -3842,6 +3842,7 @@ async function submitPffForm(evt){
       survey_method: p.surveyMethod || null,
     }));
     const result = await insertOrQueue('pff_observations', newRows);
+    if (!result.queued) await fetchPffObservations(); // don't wait on the Realtime echo for the submitter's own update
     statusEl.innerHTML = result.queued
       ? `<span class="ok">✓ Saved offline (${newRows.length} point${newRows.length===1?'':'s'}) — will upload automatically once you're back online.</span>`
       : `<span class="ok">✓ Submitted ${newRows.length} point${newRows.length===1?'':'s'}.</span>`;
