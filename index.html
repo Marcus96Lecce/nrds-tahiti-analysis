@@ -2348,10 +2348,27 @@ function _applyHabitatData(data) {
   dataLoaded.habitat = true;
   maybeBuildEnriched();
 }
+// A plain .select('*') silently caps at PostgREST's default 1000-row limit — any table that grows
+// past that quietly loses every row after the first 1000 (highest ids, i.e. the newest submissions)
+// from every fetch, with no error. Pages through in batches of 1000 via .range() until a short page
+// confirms the end of the table. Used by every "load a whole live-data table" fetch below; deliberately
+// NOT used by fetchActivityEntries (a capped 30-row preview list by design) or the small reference/config
+// tables (pff_symbol_map, activity_types) that aren't user-submission logs.
+async function fetchAllRows(table, orderCol){
+  const PAGE = 1000;
+  let all = [], from = 0;
+  while (true) {
+    const { data, error } = await window.sb.from(table).select('*').order(orderCol || 'id').range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    all = all.concat(data || []);
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
 async function fetchHabitatRestoration(){
   try {
-    const { data, error } = await window.sb.from('habitat_restoration').select('*').order('id');
-    if (error) throw new Error(error.message);
+    const data = await fetchAllRows('habitat_restoration');
     _applyHabitatData(data);
     _dbSave('habitat', data);
     document.getElementById('liveDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
@@ -2382,8 +2399,7 @@ function _applyDeratData(data) {
 }
 async function fetchDeratisation(){
   try {
-    const { data, error } = await window.sb.from('deratisation').select('*').order('id');
-    if (error) throw new Error(error.message);
+    const data = await fetchAllRows('deratisation');
     _applyDeratData(data);
     _dbSave('derat', data);
     document.getElementById('deratDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
@@ -2495,8 +2511,7 @@ function applyNewElementLocally(rows){
 }
 async function fetchNewElements(){
   try {
-    const { data, error } = await window.sb.from('new_elements').select('*').order('id');
-    if (error) throw new Error(error.message);
+    const data = await fetchAllRows('new_elements');
     _dbSave('new_elements', data);
     _applyNewElementsData(data);
   } catch(e) {
@@ -2663,19 +2678,7 @@ function _applyPffData(data) {
 }
 async function fetchPffObservations(){
   try {
-    // Paginated: a plain .select('*') silently caps at PostgREST's default 1000-row limit, which
-    // pff_observations passed a while ago — every fetch was quietly dropping the newest rows (the
-    // ones with the highest ids), so recent submissions looked "missing" even though they were safely
-    // in the database. .range() pages through in batches of 1000 until a page comes back short.
-    const PAGE = 1000;
-    let all = [], from = 0;
-    while (true) {
-      const { data, error } = await window.sb.from('pff_observations').select('*').order('id').range(from, from + PAGE - 1);
-      if (error) throw new Error(error.message);
-      all = all.concat(data || []);
-      if (!data || data.length < PAGE) break;
-      from += PAGE;
-    }
+    const all = await fetchAllRows('pff_observations');
     _applyPffData(all);
     _dbSave('pff', all);
   } catch(e) {
@@ -3202,8 +3205,7 @@ function _applyPepData(data) {
 }
 async function fetchPepinieres(){
   try {
-    const { data, error } = await window.sb.from('pepinieres').select('*').order('id');
-    if (error) throw new Error(error.message);
+    const data = await fetchAllRows('pepinieres');
     _applyPepData(data);
     _dbSave('pep', data);
   } catch(e) {
@@ -3927,8 +3929,7 @@ function _applyBirdData(data) {
 }
 async function fetchBirdSurveys(){
   try {
-    const { data, error } = await window.sb.from('bird_surveys').select('*').order('id');
-    if (error) return; // table may not exist yet
+    const data = await fetchAllRows('bird_surveys');
     _applyBirdData(data);
     _dbSave('birds', data);
   } catch(e) {
@@ -4294,8 +4295,7 @@ function _applyBirdObsData(data){
 }
 async function fetchBirdObservations(){
   try {
-    const { data, error } = await window.sb.from('bird_observations').select('*').order('id');
-    if (error) return; // table may not exist yet
+    const data = await fetchAllRows('bird_observations');
     _applyBirdObsData(data);
     _dbSave('birdObs', data);
   } catch(e) {
@@ -5644,8 +5644,7 @@ async function downloadAllActivityEntries(){
   const btn = event && event.target;
   if (btn) { btn.disabled = true; btn.textContent = '⬇ Loading…'; }
   try {
-    const { data, error } = await window.sb.from('activity_entries').select('*').order('id');
-    if (error) throw new Error(error.message);
+    const data = await fetchAllRows('activity_entries');
     const rows = (data||[]).map(r => ({ ...r, field_values: JSON.stringify(r.field_values||[]) }));
     if (!rows.length){ alert('No activity entry records loaded yet.'); return; }
     const fields = ['id','activity_type_id','activity_type_name','date','observer','valley','zone',
