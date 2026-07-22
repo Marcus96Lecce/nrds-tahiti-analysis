@@ -8205,7 +8205,7 @@ function renderPriorityZonesDropdown(ranked){
     return priorityBarRow(d, i, 'toPlantScore', maxPlant, '#2ca02c', Math.round(d.score.projPct*100)+'% pl · type '+d.score.topoType+' · '+d.score.nrdsCount+' ind.');
   }).join('') || '<div class="muted" style="font-size:12px;padding:4px 6px;">No zone with data.</div>';
   var cleanRows = clean.map(function(d,i){
-    return priorityBarRow(d, i, 'toCleanScore', maxClean, '#4a90d9', Math.round(d.score.projPct*100)+'% pl · '+d.res.estimate.toFixed(0)+'% cl');
+    return priorityBarRow(d, i, 'toCleanScore', maxClean, '#4a90d9', Math.round(d.score.projPct*100)+'% pl · '+d.res.estimate.toFixed(0)+'% cl · type '+d.score.topoType);
   }).join('') || '<div class="muted" style="font-size:12px;padding:4px 6px;">No zone with data.</div>';
   var columns = '<div class="map-flex-row" style="gap:18px;">' +
     '<div style="flex:1;min-width:0;">' +
