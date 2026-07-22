@@ -8148,7 +8148,12 @@ function topPriorityZones(n, includeStale){
   return data.slice(0, n);
 }
 
-let includeStaleInPriority = false;
+// default true: a zone whose only data is an aging historical survey (no recent NRDS visit) is
+// itself a useful signal ("nobody has checked this in months") — hiding it by default silently
+// shrinks the ranking as the underlying Butaud survey ages past STALE_DAYS, defeating the point
+// of a priority list. Shown with a ⚠ flag instead; the checkbox lets the team hide them if they
+// only want zones backed by fresh data.
+let includeStaleInPriority = true;
 let priorityDetailsOpen = false;
 let priorityValleyFilter = 'all';
 let priorityAlpha = 0.65;
@@ -8165,7 +8170,7 @@ function renderPriorityZonesDropdown(top){
   }).join('');
   var alphaVal = Math.round(priorityAlpha * 100);
   var staleToggle = '<label class="muted" style="display:flex;align-items:center;gap:5px;">' +
-    '<input type="checkbox" id="priorityStaleToggle" '+(includeStaleInPriority?'checked':'')+' onchange="togglePriorityStale(this.checked)"> stale</label>';
+    '<input type="checkbox" id="priorityStaleToggle" '+(includeStaleInPriority?'checked':'')+' onchange="togglePriorityStale(this.checked)"> include ⚠ stale zones</label>';
   var controls = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;align-items:center;">' +
     '<label class="muted" style="display:flex;align-items:center;gap:6px;">Valley: <select onchange="setPriorityValley(this.value)" style="padding:2px 6px;font-size:12px;">'+valleyOpts+'</select></label>' +
     '<label class="muted" style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">🌱 Prep <input type="range" min="0" max="100" value="'+alphaVal+'" oninput="onPriorityAlphaChange(this.value/100)" style="flex:1;"> 🛡 Protect ('+alphaVal+'%)</label>' +
