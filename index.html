@@ -8083,6 +8083,7 @@ function haversineKm(lat1, lon1, lat2, lon2){
 // score) — TO PLANT (zones most needing new plantings) and TO CLEAN (zones most needing
 // undergrowth cutting). computeZoneScores() computes both per zone; priorityZonesRanked()
 // sorts and slices each list separately.
+const PLANT_ACTIVITY_HALFLIFE = 30; // individuals planted since baseline at which TO PLANT priority halves
 function computeZoneScores(d, pastLookup, unitGeomMap){
   try {
     var hu = pastLookup.get(d.valley+'||'+d.unit);
@@ -8101,15 +8102,25 @@ function computeZoneScores(d, pastLookup, unitGeomMap){
     var cleanFrac = d.res.estimate / 100;
     var domWeightMap = { A:0.2, 'A*':0.4, B:0.8, C:1.0, X:0.0 };
     var domWeight = domWeightMap[topo.type] !== undefined ? domWeightMap[topo.type] : 0;
+    var nrdsCount = recent ? recent.totalIndividuals : 0;
+    // Raw individuals-planted count, on top of the area-normalized proj_planting% above: a big
+    // zone can absorb dozens of individuals and barely move its %, making an already-active zone
+    // look just as untouched as one with zero recorded effort. activityDiscount halves TO PLANT
+    // priority every PLANT_ACTIVITY_HALFLIFE individuals planted since the historical baseline,
+    // independent of zone area — a reasoned, adjustable assumption (not empirically calibrated),
+    // same style as RECENCY_TAU_DAYS/nrdsDensityPerHa elsewhere in this file.
+    var activityDiscount = Math.pow(0.5, nrdsCount / PLANT_ACTIVITY_HALFLIFE);
     // TO PLANT: high when a zone is still unplanted AND invasive-dominated — nothing planted
     // there yet to protect, still needs active restoration work. A native-dominant zone with
-    // low planting% (natural regen, domWeight low) ranks low even with a big planting deficit.
-    var toPlantScore = (1 - projPct) * domWeight;
+    // low planting% (natural regen, domWeight low) ranks low even with a big planting deficit;
+    // a zone where NRDS has already planted a lot recently also ranks lower, even if the % gain
+    // from that effort was diluted by a large zone area.
+    var toPlantScore = (1 - projPct) * domWeight * activityDiscount;
     // TO CLEAN: high when a zone already has plantings AND is dirty — existing plantings at
     // risk of being smothered by regrowth. Same formula as the old "habitat_risk" term.
     var toCleanScore = projPct * (1 - cleanFrac);
     return { projPct:projPct, histPct:histPct, nrdsPctAdd:nrdsPctAdd,
-             nrdsCount: recent ? recent.totalIndividuals : 0,
+             nrdsCount:nrdsCount, activityDiscount:activityDiscount,
              topoType:topo.type, domWeight:domWeight,
              toPlantScore:toPlantScore, toCleanScore:toCleanScore };
   } catch(e){ return null; }
@@ -8191,7 +8202,7 @@ function renderPriorityZonesDropdown(ranked){
   var maxPlant = plant.length ? plant[0].score.toPlantScore : 0;
   var maxClean = clean.length ? clean[0].score.toCleanScore : 0;
   var plantRows = plant.map(function(d,i){
-    return priorityBarRow(d, i, 'toPlantScore', maxPlant, '#2ca02c', Math.round(d.score.projPct*100)+'% pl · type '+d.score.topoType);
+    return priorityBarRow(d, i, 'toPlantScore', maxPlant, '#2ca02c', Math.round(d.score.projPct*100)+'% pl · type '+d.score.topoType+' · '+d.score.nrdsCount+' ind.');
   }).join('') || '<div class="muted" style="font-size:12px;padding:4px 6px;">No zone with data.</div>';
   var cleanRows = clean.map(function(d,i){
     return priorityBarRow(d, i, 'toCleanScore', maxClean, '#4a90d9', Math.round(d.score.projPct*100)+'% pl · '+d.res.estimate.toFixed(0)+'% cl');
@@ -8290,24 +8301,35 @@ function renderLastCleaningDropdown(mainRows){
 function renderPriorityCalcBox(ranked){
   var plant = ranked.plant || [], clean = ranked.clean || [];
   var html = '<b>Priority zones — two independent rankings</b><br><br>' +
-    '<b>🌱 TO PLANT score</b> = (1 − proj_planting%) × typology_weight — high when a zone is still unplanted <i>and</i> invasive-dominated (nothing planted there yet to protect, still needs active restoration).<br>' +
+    '<b>🌱 TO PLANT score</b> = (1 − proj_planting%) × typology_weight × activity_discount — high when a zone is still unplanted <i>and</i> invasive-dominated <i>and</i> hasn\'t seen much recent NRDS planting effort.<br>' +
     '<b>🧹 TO CLEAN score</b> = proj_planting% × (1 − cleaning%) — high when a zone already has plantings <i>and</i> is dirty (existing plantings at risk of being smothered by regrowth).<br><br>' +
     '<b>Typology weights</b> (TO PLANT only): C=1.0 · B=0.8 · A*=0.4 · A=0.2 · X=0 — an unplanted zone that\'s already native-dominant (natural regen under way) ranks low; unplanted + invasive-dominant ranks highest.<br>' +
+    '<b>Activity discount</b> (TO PLANT only): <code>0.5 ^ (individuals_planted / '+PLANT_ACTIVITY_HALFLIFE+')</code> — halves the score every '+PLANT_ACTIVITY_HALFLIFE+' individuals NRDS has planted in that zone since the historical baseline. Corrects for proj_planting% understating effort in large zones, where a real planting session barely moves the area-normalized %.<br>' +
     '<b>Inputs:</b> proj_planting% from Butaud historical survey + NRDS individuals @ '+nrdsDensityPerHa+' trees/ha; cleaning% from the combined historical+NRDS estimate (same number shown on the map).<br>' +
     'The two scores are <b>never blended</b> — a zone can rank high on one, both, or neither.<br><br>';
-  function table(title, rows, scoreKey){
-    if (!rows.length) return '<b>'+title+'</b><div class="muted" style="margin:4px 0 10px;">No zone with data.</div>';
-    var t = '<b>'+title+'</b><div class="table-scroll" style="margin-top:4px;margin-bottom:10px;"><table class="preview"><thead><tr>' +
+  if (!plant.length){
+    html += '<b>🌱 TO PLANT ranking</b><div class="muted" style="margin:4px 0 10px;">No zone with data.</div>';
+  } else {
+    html += '<b>🌱 TO PLANT ranking</b><div class="table-scroll" style="margin-top:4px;margin-bottom:10px;"><table class="preview"><thead><tr>' +
+      '<th>#</th><th>Unit</th><th>Score</th><th>Proj%</th><th>Type</th><th>Ind. planted</th><th>Discount</th></tr></thead><tbody>';
+    plant.forEach(function(d,i){
+      html += '<tr><td>'+(i+1)+'</td><td>'+escapeHtml(d.unit)+'</td><td><b>'+d.score.toPlantScore.toFixed(3)+'</b></td>' +
+        '<td>'+Math.round(d.score.projPct*100)+'%</td><td>'+escapeHtml(d.score.topoType)+'</td>' +
+        '<td>'+d.score.nrdsCount+'</td><td>×'+d.score.activityDiscount.toFixed(2)+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  if (!clean.length){
+    html += '<b>🧹 TO CLEAN ranking</b><div class="muted" style="margin:4px 0 10px;">No zone with data.</div>';
+  } else {
+    html += '<b>🧹 TO CLEAN ranking</b><div class="table-scroll" style="margin-top:4px;margin-bottom:10px;"><table class="preview"><thead><tr>' +
       '<th>#</th><th>Unit</th><th>Score</th><th>Proj%</th><th>Clean%</th><th>Type</th></tr></thead><tbody>';
-    rows.forEach(function(d,i){
-      t += '<tr><td>'+(i+1)+'</td><td>'+escapeHtml(d.unit)+'</td><td><b>'+d.score[scoreKey].toFixed(3)+'</b></td>' +
+    clean.forEach(function(d,i){
+      html += '<tr><td>'+(i+1)+'</td><td>'+escapeHtml(d.unit)+'</td><td><b>'+d.score.toCleanScore.toFixed(3)+'</b></td>' +
         '<td>'+Math.round(d.score.projPct*100)+'%</td><td>'+d.res.estimate.toFixed(0)+'%</td><td>'+escapeHtml(d.score.topoType)+'</td></tr>';
     });
-    t += '</tbody></table></div>';
-    return t;
+    html += '</tbody></table></div>';
   }
-  html += table('🌱 TO PLANT ranking', plant, 'toPlantScore');
-  html += table('🧹 TO CLEAN ranking', clean, 'toCleanScore');
   return html;
 }
 
