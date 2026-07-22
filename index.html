@@ -5757,7 +5757,7 @@ function onDataUpdated(){
   let priorityRanked = { plant: [], clean: [] };
   let priorityHtml = '';
   try {
-    priorityRanked = priorityZonesRanked(10, includeStaleInPriority);
+    priorityRanked = priorityZonesRanked(20, includeStaleInPriority);
     priorityHtml = `<div class="map-flex-row" style="margin-top:10px;">
       <div style="flex:1;min-width:0;">${renderPriorityZonesDropdown(priorityRanked)}</div>
       <div class="map-combined-box" id="priorityCalcBox" style="display:${priorityDetailsOpen?'':'none'};">${renderPriorityCalcBox(priorityRanked)}</div>
