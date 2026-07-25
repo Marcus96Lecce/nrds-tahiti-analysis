@@ -7425,7 +7425,7 @@ function renderMap(shouldFit){
   // plain live-cleaning layer respects the map's own date-range filter; the "combined" historical+NRDS
   // estimate keeps using the unfiltered latest reading — its own recency-weighting already handles time
   const statusMap = (mapLayers.has('cleaning') && !histZoneMode) ? latestUnitStatus(mapDateFrom, mapDateTo) : null;
-  const statusMapForCombined = histZoneMode === 'combined' ? latestUnitStatus() : null;
+  const statusMapForCombined = (histZoneMode === 'combined' || histZoneMode === 'plantingActivity') ? latestUnitStatus() : null;
   const speciesMap = mapLayers.has('species') ? speciesSummaryByAction() : null;
   const pastUnitLookup = pastUnitLookupMap();
   const boundsLatLngs = [...lineBoundsLatLngs];
@@ -7459,6 +7459,8 @@ function renderMap(shouldFit){
       const hu = pastUnitLookup.get(u['Vallee']+'||'+u['Nom']);
       const topo = zoneTypology(hu);
       const hv = topo.hv;
+      const cleanSt = statusMapForCombined.get(u['Nom']);
+      const cleanRes = combinedCleaningEstimate(hu, u['Nom'], cleanSt);
       const recent = nrdsPlantingActivitySince(u['Nom'], null); // all NRDS records, no cutoff
       const zoneAreaHa = zoneAreaHectares(u['Geometry']);
       // Project: historical Butaud % + NRDS contribution at configured density
@@ -7488,6 +7490,7 @@ function renderMap(shouldFit){
       html += `<br><b>Projected type: ${projTopo.label}</b>${upgraded ? ` <i style="color:#d4870a;">(&#8593; from ${topo.type})</i>` : ''}`;
       html += `<br>Vegetation: ${vegTxt}`;
       html += `<br>Historical plantings: ${plantTxt}`;
+      html += `<br>Combined current estimate (cleaning): <b>${cleanRes.estimate != null ? cleanRes.estimate.toFixed(0)+'%' : 'no data'}</b>`;
       if (recent && zoneAreaHa){
         const areaEquivHa = (recent.totalIndividuals / nrdsDensityPerHa).toFixed(2);
         html += `<br>NRDS total: <b>${recent.totalIndividuals} ind.</b> → +${nrdsPctAdd.toFixed(1)}% (${areaEquivHa} ha @ ${nrdsDensityPerHa} trees/ha)`;
