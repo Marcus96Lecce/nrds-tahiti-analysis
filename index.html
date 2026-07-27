@@ -6811,10 +6811,12 @@ function unitStationsLookup(){
 // NRDS-side reading for one zone, used by combinedCleaningEstimate(): instead of the single most-recent
 // Habitat Restoration action recorded under the zone's name (which silently ignores every other rat
 // station in the zone that has its own reading), this averages the latest reading of EVERY station
-// spatially inside the zone, weighted by recency — same exp decay as the historical/NRDS blend — and
+// spatially inside the zone, weighted by recency — same exp decay as the historical/NRDS blend, using
+// whichever τ the caller resolved for this zone's dominant invasive genus (see zoneTauDays()) — and
 // reports coverage (stations with data / stations known in the zone) so a reading built from 1 of 20
 // stations can be told apart from one built from 18 of 20.
-function zoneNrdsAggregate(unitName){
+function zoneNrdsAggregate(unitName, tauDays){
+  const tau = tauDays != null ? tauDays : RECENCY_TAU_DEFAULT_DAYS;
   const stations = unitStationsLookup().get(unitName) || [];
   const stationStatus = latestStationStatus();
   const today = new Date();
@@ -6824,7 +6826,7 @@ function zoneNrdsAggregate(unitName){
     if (!st) continue;
     withData++;
     const days = daysBetween(today, new Date(st.date));
-    const w = Math.exp(-days / RECENCY_TAU_DAYS);
+    const w = Math.exp(-days / tau);
     wSum += w; wPctSum += w * st.pct; wDaysSum += w * days;
   }
   const totalStations = stations.length;
@@ -7348,6 +7350,17 @@ function toggleHistPlantingActivity(checked){
 function onNrdsDensityChange(val){
   const n = parseInt(val, 10);
   if (isFinite(n) && n > 0){ nrdsDensityPerHa = n; renderMap(false); }
+}
+// τ inputs live in renderCombinedCalcBox() but affect the Combined Cleaning Estimate everywhere it's
+// used (map, home-dashboard TO PLANT/TO CLEAN priority rankings, Temporal Trends zone priority) — a
+// full onDataUpdated() re-render, not just renderMap(), so every one of those views picks up the change.
+function onTauChange(species, val){
+  const n = parseFloat(val);
+  if (!isFinite(n) || n <= 0) return;
+  if (species === 'miconia') RECENCY_TAU_MICONIA_DAYS = n;
+  else if (species === 'spathodea') RECENCY_TAU_SPATHODEA_DAYS = n;
+  else RECENCY_TAU_DEFAULT_DAYS = n;
+  onDataUpdated();
 }
 
 function renderMap(shouldFit){
@@ -7970,6 +7983,21 @@ function latestVegDominance(hu){
   }
   return null;
 }
+// Which specific invasive genus is named first in a zone's vegetation-dominance string — used to pick
+// a species-specific regrowth-relevance τ (see zoneTauDays() below). Independent of vegNativeDominance()'s
+// binary native-vs-invasive verdict, since here we need the genus itself, not just "invasive".
+function dominantInvasiveGenusFromVeg(vegStr){
+  if (!vegStr) return null;
+  const s = vegStr.toLowerCase();
+  const words = s.split(/\s+/);
+  let best = null, bestIdx = Infinity;
+  words.forEach((w,i) => {
+    for (const g of INVASIVE_GENERA){
+      if (w.startsWith(g) && i < bestIdx){ bestIdx = i; best = g; }
+    }
+  });
+  return best; // 'spathodea' | 'mangifera' | 'miconia' | null
+}
 function zoneTypology(hu){
   const vd = latestVegDominance(hu);
   const hv = latestHistValue(hu, PLANT_WEIGHTS, 'Plant');
@@ -8005,16 +8033,43 @@ function latestHistValue(hu, weights, fieldPrefix){
 // outcome of a single visit — between visits, tropical regrowth means an old NRDS reading overstates
 // the current state. Weighting each source by recency (exponential decay, half-life-like parameter
 // tau) avoids needing to model regrowth explicitly, which the current data volume can't support yet.
-const RECENCY_TAU_DAYS = 120; // ecological assumption (tropical-understory regrowth rate between visits), adjustable
+// τ used to be one global constant (120 days, "a few months", not empirically fit). Marco supplied
+// species-specific regrowth literature (2026-07-26, see Literature/Invasive rate growth/) — τ is now
+// picked per zone from its dominant invasive genus (same Végétation-column field already used for
+// A/A*/B/C typology, via dominantInvasiveGenusFromVeg() above), and each value is live-editable from
+// the app (see the "Combined current estimate" calc box on the map — renderCombinedCalcBox()):
+//  - Miconia: Meyer & Malet 1997 (Raiatea/Tahaa, French Polynesia — same archipelago as this project,
+//    freely available field study) documents "massive recruitment of seedlings occurs for at least
+//    6 months after the control" — used directly as τ (180 days).
+//  - Spathodea: no field-measured resprout-rate curve found yet, despite two papers reviewed (Shah 2026,
+//    Brown & Daigneault 2014) — both only confirm qualitatively that it "coppices vigorously"/"regrowth
+//    is especially vigorous" after cutting. Brown & Daigneault's cut-stump protocol recommends
+//    re-checking treated stumps every 2 weeks for early regrowth, which is the only quantitative timing
+//    signal available. 90 days is a provisional placeholder (shorter than Miconia's, reflecting Spathodea's
+//    more aggressively documented coppicing) — Marco intends to revise this once a better source turns up.
+//  - Default: the original global assumption, used as a fallback for zones with no identifiable dominant
+//    invasive genus (native-dominant, Mangifera-dominant, or no historical vegetation record at all).
+let RECENCY_TAU_MICONIA_DAYS = 180;
+let RECENCY_TAU_SPATHODEA_DAYS = 90;
+let RECENCY_TAU_DEFAULT_DAYS = 120;
+function zoneTauDays(hu){
+  const vd = latestVegDominance(hu);
+  const genus = vd ? dominantInvasiveGenusFromVeg(vd.raw) : null;
+  if (genus === 'miconia') return { days: RECENCY_TAU_MICONIA_DAYS, label: 'Miconia' };
+  if (genus === 'spathodea') return { days: RECENCY_TAU_SPATHODEA_DAYS, label: 'Spathodea' };
+  return { days: RECENCY_TAU_DEFAULT_DAYS, label: 'default' };
+}
 const HIST_PERIOD_DATE = { '2023': new Date('2023-08-15T00:00:00'), '2024': new Date('2024-08-15T00:00:00'), '2025': new Date('2025-12-15T00:00:00') };
 function daysBetween(a, b){ return Math.max(0, (a - b) / 86400000); }
 
 function combinedCleaningEstimate(hu, unitName, fallbackSt){
   const today = new Date();
+  const tauInfo = zoneTauDays(hu);
+  const tau = tauInfo.days;
   const hv = latestHistValue(hu, SB_WEIGHTS, 'SB');
   const daysHist = hv ? daysBetween(today, HIST_PERIOD_DATE[hv.period]) : null;
 
-  const agg = zoneNrdsAggregate(unitName);
+  const agg = zoneNrdsAggregate(unitName, tau);
   let nrdsPct = agg.pct, daysNrds = agg.days, coverage = agg.coverage, usedFallback = false;
   if (nrdsPct == null && fallbackSt){
     // no rat station inside this zone could be geographically resolved at all — fall back to the
@@ -8022,8 +8077,8 @@ function combinedCleaningEstimate(hu, unitName, fallbackSt){
     nrdsPct = fallbackSt.pct; daysNrds = daysBetween(today, new Date(fallbackSt.date)); usedFallback = true;
   }
 
-  const wHistRaw = hv ? Math.exp(-daysHist / RECENCY_TAU_DAYS) : 0;
-  let wNrdsRaw = nrdsPct != null ? Math.exp(-daysNrds / RECENCY_TAU_DAYS) : 0;
+  const wHistRaw = hv ? Math.exp(-daysHist / tau) : 0;
+  let wNrdsRaw = nrdsPct != null ? Math.exp(-daysNrds / tau) : 0;
   if (!usedFallback && coverage != null) wNrdsRaw *= coverage; // sparse station coverage = less confidence
   const wSum = wHistRaw + wNrdsRaw;
   let estimate = null, wHistPct = null, wNrdsPct = null;
@@ -8037,7 +8092,8 @@ function combinedCleaningEstimate(hu, unitName, fallbackSt){
   }
   const st = nrdsPct != null ? { pct: nrdsPct } : null;
   return { estimate, hv, st, daysHist, daysNrds, wHistPct, wNrdsPct,
-    stationsTotal: agg.totalStations, stationsWithData: agg.withData, coverage, usedFallback };
+    stationsTotal: agg.totalStations, stationsWithData: agg.withData, coverage, usedFallback,
+    tau, tauLabel: tauInfo.label };
 }
 function pastUnitLookupMap(){
   return pastData ? new Map(pastData.map(u => [u.Valley+'||'+u.Nom, u])) : new Map();
@@ -8045,8 +8101,9 @@ function pastUnitLookupMap(){
 
 // If the freshest contributing data point (historical or NRDS) behind a combined estimate is older
 // than this, the % shown can no longer be trusted to reflect today's state — flagged in the zone
-// priority view below. ~1.5x RECENCY_TAU_DAYS: by then a source's blend weight has already decayed
-// to a third of a same-day reading, so it's barely shaping the number it's still attached to.
+// priority view below. Kept as one fixed absolute threshold, not tied to any single species' τ now
+// that τ varies per dominant invasive genus (zoneTauDays()) — 180 days is comfortably past the point
+// where even the slower-decaying default/Miconia τ has left a source barely shaping its own estimate.
 const STALE_DAYS = 180;
 
 // Per-zone inputs for the "Cleaning % trend over time" priority view: reuses the exact same combined
@@ -8111,7 +8168,7 @@ function computeZoneScores(d, pastLookup, unitGeomMap){
     // look just as untouched as one with zero recorded effort. activityDiscount halves TO PLANT
     // priority every PLANT_ACTIVITY_HALFLIFE individuals planted since the historical baseline,
     // independent of zone area — a reasoned, adjustable assumption (not empirically calibrated),
-    // same style as RECENCY_TAU_DAYS/nrdsDensityPerHa elsewhere in this file.
+    // same style as RECENCY_TAU_MICONIA_DAYS/RECENCY_TAU_SPATHODEA_DAYS/nrdsDensityPerHa elsewhere in this file.
     var activityDiscount = Math.pow(0.5, nrdsCount / PLANT_ACTIVITY_HALFLIFE);
     // TO PLANT: high when a zone is still unplanted AND invasive-dominated — nothing planted
     // there yet to protect, still needs active restoration work. A native-dominant zone with
@@ -8308,7 +8365,7 @@ function renderPriorityCalcBox(ranked){
     '<b>🧹 TO CLEAN score</b> = proj_planting% × (1 − cleaning%) — high when a zone already has plantings <i>and</i> is dirty (existing plantings at risk of being smothered by regrowth).<br><br>' +
     '<b>Typology weights</b> (TO PLANT only): C=1.0 · B=0.8 · A*=0.4 · A=0.2 · X=0 — an unplanted zone that\'s already native-dominant (natural regen under way) ranks low; unplanted + invasive-dominant ranks highest.<br>' +
     '<b>Activity discount</b> (TO PLANT only): <code>0.5 ^ (individuals_planted / '+PLANT_ACTIVITY_HALFLIFE+')</code> — halves the score every '+PLANT_ACTIVITY_HALFLIFE+' individuals NRDS has planted in that zone since the historical baseline. Corrects for proj_planting% understating effort in large zones, where a real planting session barely moves the area-normalized %.<br>' +
-    '<b>Inputs:</b> proj_planting% from Butaud historical survey + NRDS individuals @ '+nrdsDensityPerHa+' trees/ha; cleaning% from the combined historical+NRDS estimate (same number shown on the map).<br>' +
+    '<b>Inputs:</b> proj_planting% from Butaud historical survey + NRDS individuals @ '+nrdsDensityPerHa+' trees/ha; cleaning% from the combined historical+NRDS estimate, per-species τ editable in that estimate\'s own calc box on the map (same number shown on the map).<br>' +
     'The two scores are <b>never blended</b> — a zone can rank high on one, both, or neither.<br><br>';
   if (!plant.length){
     html += '<b>🌱 TO PLANT ranking</b><div class="muted" style="margin:4px 0 10px;">No zone with data.</div>';
@@ -8488,9 +8545,23 @@ function nrdsPlantingActivitySince(unitName, cutoffDate){
 // Shared calculation-box renderer for both the map overlay and the past-data table toggle —
 // shows the formula plus a per-unit breakdown so the blending isn't a black box.
 function renderCombinedCalcBox(breakdown){
-  let html = `<b>How the "Combined current estimate" (cleaning / understory) is calculated:</b>
+  let html = `<div style="background:#f7faf6;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:10px;">
+    <b>τ — editable, per dominant invasive genus:</b> picked per zone from the first invasive genus named in its
+    Végétation column (same field used for A/A*/B/C typology); falls back to "default" when no historical
+    vegetation record exists, or the dominant genus isn't Spathodea/Miconia (e.g. Mangifera, or native-dominant).
+    Sourcing: Miconia = Meyer &amp; Malet 1997 (Raiatea/Tahaa, French Polynesia — 6-month post-control seedling
+    recruitment milestone, used directly). Spathodea = <b>provisional</b> — no field-measured resprout curve found
+    yet (see Literature/Invasive rate growth/); revise once a better source is available.<br>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;">
+      <label class="muted">Miconia: <input type="number" id="tauMiconiaInput" value="${RECENCY_TAU_MICONIA_DAYS}" min="1" max="3650" step="1" style="width:60px;padding:2px 5px;" onchange="onTauChange('miconia', this.value)"> days</label>
+      <label class="muted">Spathodea: <input type="number" id="tauSpathodeaInput" value="${RECENCY_TAU_SPATHODEA_DAYS}" min="1" max="3650" step="1" style="width:60px;padding:2px 5px;" onchange="onTauChange('spathodea', this.value)"> days</label>
+      <label class="muted">Default (other/unknown): <input type="number" id="tauDefaultInput" value="${RECENCY_TAU_DEFAULT_DAYS}" min="1" max="3650" step="1" style="width:60px;padding:2px 5px;" onchange="onTauChange('default', this.value)"> days</label>
+    </div>
+  </div>
+  <b>How the "Combined current estimate" (cleaning / understory) is calculated:</b>
     <code>estimate = (w_hist × hist_value + w_nrds × nrds_value) / (w_hist + w_nrds)</code>, where each source's
-    raw weight decays exponentially with its own age: <code>w = e<sup>−days_elapsed / τ</sup></code>, τ = ${RECENCY_TAU_DAYS} days.
+    raw weight decays exponentially with its own age: <code>w = e<sup>−days_elapsed / τ</sup></code>, using
+    whichever τ above applies to that zone (shown per row in the table below).
     The older a source is, the less it counts; if one of the two sources is entirely missing, the estimate falls
     back to the other one alone (weight 100%/0%).<br>
     <b>Historical side:</b> the most recent sous-bois (understory) snapshot for the unit (Dec 2025 → Aug 2024 → Aug 2023,
@@ -8511,20 +8582,20 @@ function renderCombinedCalcBox(breakdown){
     inferring the whole zone. If <i>zero</i> stations in the zone can be geographically resolved at all, the
     estimate falls back to the single most recent zone-level action instead (flagged "single action, no station
     resolved" below) so the calculation never silently discards the only NRDS data available, but that fallback
-    reading is <i>not</i> coverage-scaled, since there is no per-station sample to assess. τ = ${RECENCY_TAU_DAYS} days
-    is a working assumption for how fast relevance decays between visits, tied to tropical-understory regrowth speed —
-    revisit it if more data accumulates. ${breakdown.length} unit(s) with at least one data source are listed below.`;
+    reading is <i>not</i> coverage-scaled, since there is no per-station sample to assess.
+    ${breakdown.length} unit(s) with at least one data source are listed below.`;
   if (breakdown.length){
     html += `<div class="table-scroll" style="margin-top:8px;"><table class="preview"><thead><tr>
-      <th>Unit</th><th>Valley</th><th>Historical</th><th>Historical weight</th><th>NRDS (stations)</th><th>NRDS weight</th><th>Combined estimate</th>
+      <th>Unit</th><th>Valley</th><th>τ used</th><th>Historical</th><th>Historical weight</th><th>NRDS (stations)</th><th>NRDS weight</th><th>Combined estimate</th>
       </tr></thead><tbody>`;
     for (const b of breakdown){
       const r = b.res;
+      const tauTxt = r.tau != null ? `${r.tau}d (${r.tauLabel})` : '—';
       const histTxt = r.hv ? `${r.hv.raw} (${r.hv.pct}%, ${HIST_PERIOD_LABEL[r.hv.period]}, ${r.daysHist.toFixed(0)}d ago)` : '—';
       const nrdsTxt = !r.st ? '—'
         : r.usedFallback ? `${r.st.pct}% (single action, no station resolved, ${r.daysNrds.toFixed(0)}d ago)`
         : `${r.st.pct.toFixed(0)}% (${r.stationsWithData}/${r.stationsTotal} stations, ${(r.coverage*100).toFixed(0)}% coverage, avg ${r.daysNrds.toFixed(0)}d ago)`;
-      html += `<tr><td>${b.unit}</td><td>${b.valley}</td><td>${histTxt}</td><td>${r.wHistPct.toFixed(0)}%</td>` +
+      html += `<tr><td>${b.unit}</td><td>${b.valley}</td><td>${tauTxt}</td><td>${histTxt}</td><td>${r.wHistPct.toFixed(0)}%</td>` +
         `<td>${nrdsTxt}</td><td>${r.wNrdsPct.toFixed(0)}%</td><td><b>${r.estimate.toFixed(0)}%</b></td></tr>`;
     }
     html += '</tbody></table></div>';
