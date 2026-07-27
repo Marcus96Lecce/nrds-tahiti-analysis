@@ -1895,7 +1895,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_derat" onchange="toggleChart('derat',this.checked)"> Bait consumption (Checks)</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_pff" onchange="toggleChart('pff',this.checked)"> Little Fire Ant (PFF)</label>
           <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_birds" onchange="toggleChart('birds',this.checked)"> 🐦 Bird observations</label>
-          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_ibs" onchange="toggleChart('ibs',this.checked)"> 🦜 Invasive Bird Survey</label>
+          <label class="muted" style="display:block;margin-bottom:7px;"><input type="checkbox" id="cc_ibs" onchange="toggleChart('ibs',this.checked)"> 🦜 Invasive Bird Survey</label>
+          <label class="muted" style="display:block;margin-bottom:0;"><input type="checkbox" id="cc_pepinieres" onchange="toggleChart('pepinieres',this.checked)"> 🌱 Nurseries (Pépinières)</label>
         </div>
       </div>
     </div>
@@ -5874,6 +5875,7 @@ const CHART_DEFS = [
   { key: 'pff',       label: 'Little Fire Ant (PFF)',                 render: c => renderPffChart(c) },
   { key: 'birds',     label: 'Birds Observation',                     render: c => renderBirdObsChart(c) },
   { key: 'ibs',       label: 'Invasive Bird Survey (point count)',    render: c => renderIbsChart(c) },
+  { key: 'pepinieres', label: 'Nurseries (Pépinières)',                render: c => renderPepinieresChart(c) },
 ];
 
 function renderAllCharts(){
@@ -6674,6 +6676,147 @@ function renderIbsChart(container){
     + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Sessions over time</div>' + summary + chronoSvg;
 }
 
+// Nursery (Pépinière) monitoring: each submission is one snapshot (name/date/plant count) for a
+// named nursery — the same nursery re-registered later (a follow-up count) is what lets us plot
+// growth over real time, not just an ordinal per-row axis like the other charts. `pepinieres` has
+// no valley column of its own, so valley is resolved the same way as PFF/Bird Observation: GPS
+// point-in-polygon against management-unit zones via the (misleadingly-named but generic) inferPffValley().
+function renderPepinieresChart(container){
+  hideChartPopup();
+  const area = container || document.getElementById('chartArea');
+  const chartValley = document.getElementById('chartValley').value;
+
+  const rows = (pepinieres||[])
+    .filter(p => p.date && inDateRange(p.date, chartDateFrom, chartDateTo))
+    .map(p => ({ ...p, ts: new Date(p.date).getTime(), plants: +p.number_of_plants || 0,
+      valley: inferPffValley(+p.lat, +p.lon) }))
+    .filter(p => chartValley === 'all' || p.valley === chartValley)
+    .sort((a,b) => a.ts - b.ts);
+
+  const valleyLabel = chartValley === 'all' ? 'all valleys' : chartValley;
+  if (!rows.length){ area.innerHTML = `<span class="muted">No pépinière (nursery) records for ${escapeHtml(valleyLabel)} in this date range.</span>`; return; }
+
+  // ── Group by nursery name: one series per nursery, sorted chronologically within each ──
+  const byName = new Map();
+  for (const r of rows){
+    if (!byName.has(r.name)) byName.set(r.name, []);
+    byName.get(r.name).push(r);
+  }
+  const names = [...byName.keys()].sort((a,b)=>String(a).localeCompare(String(b)));
+  // "current state" = latest reading per nursery, used for the aggregate/table views so a nursery
+  // visited 3 times isn't triple-counted into the totals
+  const latestRows = names.map(n => { const s = byName.get(n); return s[s.length-1]; });
+
+  // ── Chart 1: growth over time, one line per nursery, real calendar time-axis ──
+  const minTs = Math.min(...rows.map(r=>r.ts)), maxTs = Math.max(...rows.map(r=>r.ts));
+  const rawSpan = maxTs - minTs;
+  const maxPlants = Math.max(...rows.map(r=>r.plants), 1);
+  const mL=48, mR=20, mT=20, mB=54;
+  const W = 760, H = 300;
+  const xScale = ts => mL + (rawSpan ? (ts-minTs)/rawSpan : 0.5) * (W-mL-mR);
+  const yScale = v => (H-mT-mB) - (v/maxPlants)*(H-mT-mB);
+  const step = niceStep(maxPlants);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for (let v=0; v<=maxPlants+0.001; v+=step){
+    const y = mT+yScale(v);
+    svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e2e5df'});
+    svg += svgEl('text',{x:mL-6,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, Math.round(v));
+  }
+  const dateTicks = Math.min(5, rows.length);
+  for (let i=0; i<=dateTicks; i++){
+    const ts = minTs + rawSpan*(i/dateTicks);
+    const x = xScale(ts);
+    svg += svgEl('text',{x,y:H-mB+16,'text-anchor':'end','font-size':9,fill:'#6b7569',transform:`rotate(-40 ${x} ${H-mB+16})`}, new Date(ts).toISOString().slice(0,10));
+  }
+  names.forEach(name => {
+    const pts = byName.get(name);
+    const color = categoricalColor(hashStringToInt(name));
+    if (pts.length > 1){
+      const d = pts.map((p,j) => `${j===0?'M':'L'}${xScale(p.ts).toFixed(1)},${(mT+yScale(p.plants)).toFixed(1)}`).join(' ');
+      svg += svgEl('path',{d, fill:'none', stroke:color, 'stroke-width':2, opacity:0.8});
+    }
+    pts.forEach(p => {
+      const x = xScale(p.ts), y = mT+yScale(p.plants);
+      const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;color:${color};">🌱 ${escapeHtml(name)}</div>
+        <div><b>Date:</b> ${escapeHtml(p.date)}</div>
+        <div><b>Plants:</b> ${p.plants}</div>
+        <div><b>Valley:</b> ${escapeHtml(p.valley || 'not resolved')} · <b>Zone:</b> ${escapeHtml(p.zone||'—')}</div>
+        <div><b>Observer:</b> ${escapeHtml(p.observer||'—')}</div>
+        ${p.notes ? `<div><b>Notes:</b> ${escapeHtml(p.notes)}</div>` : ''}`) - 1;
+      svg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${name} — ${p.date}: ${p.plants} plants\nClick for full details`)}` +
+        svgEl('circle',{cx:x,cy:y,r:5,fill:color,stroke:'#fff','stroke-width':1.3}) + `</g>`;
+    });
+  });
+  svg += svgEl('line',{x1:mL,x2:mL,y1:mT,y2:H-mB,stroke:'#9aa69a'});
+  svg += svgEl('line',{x1:mL,x2:W-mR,y1:H-mB,y2:H-mB,stroke:'#9aa69a'});
+  svg += `</svg>`;
+
+  const shownNames = names.slice(0, 24);
+  const nameLegend = shownNames.map(n => `<span class="legend-item"><span class="swatch" style="background:${categoricalColor(hashStringToInt(n))}"></span>${escapeHtml(n)}</span>`).join(' ')
+    + (names.length > shownNames.length ? ` <span class="muted">+ ${names.length - shownNames.length} more (see table below)</span>` : '');
+
+  // ── Chart 2: total plants by valley (latest count per nursery, not summed across re-visits) ──
+  const aggValley = new Map();
+  for (const r of latestRows){
+    const v = r.valley || 'Unresolved';
+    if (!aggValley.has(v)) aggValley.set(v, { plants:0, count:0 });
+    const e = aggValley.get(v);
+    e.plants += r.plants; e.count++;
+  }
+  const valleyOrder = ['Papehue','Maruapo','Hopa','Unresolved'];
+  const valleyData = valleyOrder.filter(v => aggValley.has(v)).map(v => ({ valley:v, ...aggValley.get(v) }));
+
+  const bW=90, bGap=40, bmL=50, bmR=20, bmT=28, bmB=54;
+  const W2 = Math.max(320, bmL+bmR + valleyData.length*(bW+bGap));
+  const H2 = 260;
+  const maxV = Math.max(...valleyData.map(d=>d.plants), 1);
+  const byScale = v => (v/maxV) * (H2-bmT-bmB);
+  let barsSvg = `<svg viewBox="0 0 ${W2} ${H2}" width="${W2}" height="${H2}" xmlns="http://www.w3.org/2000/svg">`;
+  barsSvg += svgEl('line',{x1:bmL,x2:bmL,y1:bmT,y2:H2-bmB,stroke:'#9aa69a'});
+  barsSvg += svgEl('line',{x1:bmL,x2:W2-bmR,y1:H2-bmB,y2:H2-bmB,stroke:'#9aa69a'});
+  valleyData.forEach((d,i) => {
+    const x = bmL + i*(bW+bGap) + bGap/2;
+    const h = byScale(d.plants);
+    const color = VALLEY_HEX[d.valley] || '#7f7f7f';
+    barsSvg += svgEl('rect',{x,y:H2-bmB-Math.max(h,1),width:bW,height:Math.max(h,1),fill:color,rx:3});
+    barsSvg += svgEl('text',{x:x+bW/2,y:H2-bmB-h-8,'text-anchor':'middle','font-size':12,'font-weight':700,fill:color}, d.plants);
+    barsSvg += svgEl('text',{x:x+bW/2,y:H2-bmB+18,'text-anchor':'middle','font-size':12,fill:'#23291f'}, d.valley);
+    barsSvg += svgEl('text',{x:x+bW/2,y:H2-bmB+32,'text-anchor':'middle','font-size':10,fill:'#6b7569'}, `${d.count} nurser${d.count===1?'y':'ies'}`);
+  });
+  barsSvg += `</svg>`;
+
+  // ── Summary table: current state (latest reading) per nursery ──
+  const tableRows = [...latestRows].sort((a,b) => b.plants - a.plants);
+  const tableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
+      <th>Name</th><th>Valley</th><th>Zone</th><th>Latest date</th><th>Plants</th><th>Visits</th><th>Observer</th><th>Notes</th>
+    </tr></thead><tbody>` +
+    tableRows.map(r => `<tr>
+      <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.valley||'—')}</td><td>${escapeHtml(r.zone||'—')}</td>
+      <td>${escapeHtml(r.date)}</td><td>${r.plants}</td><td>${byName.get(r.name).length}</td>
+      <td>${escapeHtml(r.observer||'—')}</td><td>${escapeHtml(r.notes||'—')}</td>
+    </tr>`).join('') + '</tbody></table></div>';
+
+  const totalPlantsNow = latestRows.reduce((s,r)=>s+r.plants,0);
+  const totalNurseries = names.length;
+  const revisited = names.filter(n => byName.get(n).length > 1).length;
+  const summary = `<div class="grid3" style="margin-bottom:10px;">
+    <div class="stat"><div class="num">${totalNurseries}</div><div class="lbl">nurser${totalNurseries===1?'y':'ies'} recorded</div></div>
+    <div class="stat"><div class="num">${totalPlantsNow}</div><div class="lbl">total plants (latest count per nursery)</div></div>
+    <div class="stat"><div class="num">${revisited}</div><div class="lbl">nurser${revisited===1?'y':'ies'} with more than one visit (growth trackable)</div></div>
+  </div>`;
+
+  const hint = `<div class="hint" style="margin-bottom:6px;">Nursery (pépinière) plant counts over time${chartValley!=='all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ''} — one colored line per nursery, connecting its re-visits chronologically (a single dot = only one count so far, nothing to trend yet). Valley is resolved from each point's GPS location, same method as the PFF/Bird Observation charts. Pair with the map's "Show pépinières" layer for the spatial view.</div>`;
+
+  area.innerHTML = hint + summary
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Plant count over time, per nursery</div>' + svg
+    + `<div style="margin-top:8px;">${nameLegend}</div>`
+    + '<hr style="margin:14px 0;border-color:var(--border);">'
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Total plants by valley (latest count per nursery)</div>' + barsSvg
+    + '<hr style="margin:14px 0;border-color:var(--border);">'
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Nursery registry — current state</div>' + tableHtml;
+}
+
 function pctColor(pct){
   const stops = [[0,[214,39,40]],[50,[255,221,87]],[100,[44,160,44]]];
   let lo = stops[0], hi = stops[stops.length-1];
@@ -6681,6 +6824,20 @@ function pctColor(pct){
   const t = (pct-lo[0])/((hi[0]-lo[0])||1);
   const rgb = lo[1].map((c,i)=>Math.round(c+(hi[1][i]-c)*t));
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+// Pépinière (nursery) map marker styling: fill darkens with plant count (0 = grey, "no count yet"),
+// radius grows with count too but on a sqrt scale so marker *area* stays roughly proportional to
+// count rather than radius — otherwise a 10x count looks like a 10x-bigger dot, which overstates it.
+function pepiniereColor(n, maxN){
+  if (!n || n <= 0) return '#bdbdbd';
+  const t = Math.min(1, n/(maxN||1));
+  const lo = [200,230,180], hi = [22,90,26];
+  const rgb = lo.map((c,i)=>Math.round(c+(hi[i]-c)*t));
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+function pepiniereRadius(n, maxN){
+  const t = Math.min(1, Math.max(0, n||0)/(maxN||1));
+  return 6 + 9*Math.sqrt(t);
 }
 // Continuous colour gradient for the projected planting layer — stays within the vegetation-
 // dominance family (green = native, red→amber = invasive) so the fill encodes BOTH dominance
@@ -7783,17 +7940,20 @@ function renderMap(shouldFit){
     const filtered = mapValleyFilter === 'all'
       ? pepinieres
       : pepinieres.filter(p => !p.zone || p.zone.toLowerCase().includes(mapValleyFilter.toLowerCase()));
+    const maxPepPlants = Math.max(1, ...filtered.map(p => +p.number_of_plants || 0));
     for (const p of filtered){
       const lat = +p.lat, lon = +p.lon;
       if (!isFinite(lat) || !isFinite(lon)) continue;
+      const n = +p.number_of_plants || 0;
       const html = `<b>🌱 Pépinière: ${escapeHtml(p.name)}</b><br>` +
         `Plants: ${p.number_of_plants ?? '—'}<br>Date: ${escapeHtml(p.date || '—')}<br>` +
         `Observer: ${escapeHtml(p.observer || '—')}<br>Zone: ${escapeHtml(p.zone || '—')}` +
         (p.notes ? `<br>Notes: ${escapeHtml(p.notes)}` : '');
-      L.circleMarker([lat, lon], { radius: 9, color: '#1a5c1a', weight: 2, fillColor: '#2ca02c', fillOpacity: 0.9 })
+      L.circleMarker([lat, lon], { radius: pepiniereRadius(n, maxPepPlants), color: '#1a5c1a', weight: 2, fillColor: pepiniereColor(n, maxPepPlants), fillOpacity: 0.9 })
         .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
         .bindPopup(html)
         .addTo(pepiniereMapGroup);
+      boundsLatLngs.push([lat, lon]);
     }
   }
 
@@ -7890,6 +8050,13 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.bulbul}"></span>Red-vented Bulbul</span>
       <span class="legend-item"><span class="swatch" style="background:${IBS_SPECIES_HEX.wattled}"></span>Wattled Honeyeater (native)</span>
       <span class="legend-item">🦜 Invasive Bird Survey point counts — one dot per species actually detected that session (seen+heard&gt;0), dot size ∝ contacts; sessions with zero detections show no dot; co-located species are offset slightly so each stays visible</span>`;
+  }
+  if (showPepiniereLayer){
+    legend += sep() + `
+      <span class="legend-item"><span class="swatch" style="background:${pepiniereColor(0,1)}"></span>0 / no count</span>
+      <span class="legend-item"><span class="swatch" style="background:${pepiniereColor(0.4,1)}"></span>low</span>
+      <span class="legend-item"><span class="swatch" style="background:${pepiniereColor(1,1)}"></span>highest count currently shown</span>
+      <span class="legend-item">🌱 Pépinières — fill darkens and dot grows with number of plants (scaled to the highest count among nurseries currently shown)</span>`;
   }
   if (!mapLayers.size){
     legend += `<span class="muted">No layers selected — check the Layers menu above to show data on the map.</span>`;
