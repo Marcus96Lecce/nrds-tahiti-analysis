@@ -9145,11 +9145,31 @@ function repeatVisitPairs(){
   return pairs;
 }
 
+// Pooled τ estimate for a set of same-genus pairs, via weighted least-squares regression through the
+// origin on ln(v2/v1) = -(1/τ)·days — used instead of a plain average of each pair's own implied τ.
+// A plain average is fragile: a short interval (e.g. 4 days) makes the implied τ extremely sensitive
+// to small differences/noise in the two % readings (a 1-2 point difference in a subjective visual
+// estimate swings τ a lot over 4 days, barely at all over 200), so one short/noisy pair could dominate
+// or distort a simple mean. This regression instead weights each pair roughly by days² in the fit, so
+// longer, steadier intervals — which carry more real decay signal relative to reading noise — end up
+// dominating the pooled estimate, and short/noisy ones contribute proportionally less without being
+// thrown out outright. With a single pair it reduces to that pair's own implied τ (nothing changes
+// until a second, ideally longer, pair for the same genus comes in).
+function pooledTauEstimate(pairs){
+  let sumDaysY = 0, sumDays2 = 0;
+  for (const p of pairs){
+    const y = Math.log(p.v2 / p.v1); // always negative here (v2 < v1 enforced upstream)
+    sumDaysY += p.days * y;
+    sumDays2 += p.days * p.days;
+  }
+  return sumDaysY !== 0 ? -sumDays2 / sumDaysY : null;
+}
+
 function renderRepeatPairsAnalysis(){
   const pairs = repeatVisitPairs();
   const area = document.getElementById('repeatPairsContent');
   if (!pairs.length){
-    area.innerHTML = '<p class="muted">No usable repeat-visit pairs yet — need the same zone visited twice, both with a logged cleaning %, and the second reading lower than the first. Not enough data to check τ empirically today; this will improve as more repeat visits accumulate.</p>';
+    area.innerHTML = '<p class="muted">No usable repeat-visit pairs yet — need the same zone visited twice, both with a logged cleaning %, and the second reading lower than the first. Not enough data to check τ empirically today; this will improve as more repeat visits accumulate — every consecutive pair of qualifying visits to the same zone is used (not just the two most recent), so a zone with 3+ visits already contributes multiple pairs.</p>';
     return;
   }
   const genusLabel = { miconia: 'Miconia', spathodea: 'Spathodea', 'other/unknown': 'Other / unknown' };
@@ -9160,16 +9180,22 @@ function renderRepeatPairsAnalysis(){
   let html = `<div class="grid3" style="margin-bottom:12px;">` +
     Object.keys(genusLabel).map(g => {
       const arr = byGenus[g];
-      const avgTau = arr.length ? mean(arr.map(p=>p.impliedTauDays)).toFixed(0) : '—';
-      return `<div class="stat"><div class="num">${arr.length}</div><div class="lbl">${genusLabel[g]} pair(s)${arr.length ? ` — avg implied τ ${avgTau}d` : ''}</div></div>`;
+      if (!arr.length) return `<div class="stat"><div class="num">0</div><div class="lbl">${genusLabel[g]} pair(s)</div></div>`;
+      const pooled = pooledTauEstimate(arr);
+      const avgTau = mean(arr.map(p=>p.impliedTauDays));
+      return `<div class="stat"><div class="num">${pooled != null ? pooled.toFixed(0)+'d' : '—'}</div>` +
+        `<div class="lbl">${genusLabel[g]} — pooled τ estimate (${arr.length} pair${arr.length===1?'':'s'}; plain avg ${avgTau.toFixed(0)}d)</div></div>`;
     }).join('') + `</div>`;
 
-  html += `<p class="muted" style="margin-bottom:8px;">Formula used to invert each pair: <code>τ = −days / ln(v2/v1)</code>,
-    where v1 = end-of-day % of the earlier visit and v2 = arrival % of the later visit, days = calendar days between
-    the two visit dates. Diagnostic only — does not change the app's τ automatically.</p>`;
+  html += `<p class="muted" style="margin-bottom:8px;"><b>Pooled τ</b> (the headline number in each box above) comes from
+    a weighted least-squares fit through the origin on <code>ln(v2/v1) = −days/τ</code> across all of that genus's pairs —
+    more reliable than a plain average as data accumulates, since longer/steadier intervals count for more and one
+    short, noisy pair can't dominate it. Each pair's own <code>τ = −days / ln(v2/v1)</code> ("plain avg" component,
+    and per-row below) stays visible for transparency. v1 = end-of-day % of the earlier visit, v2 = arrival % of the
+    later visit. Diagnostic only — does not change the app's τ automatically.</p>`;
 
   html += `<div class="table-scroll"><table class="preview"><thead><tr>
-    <th>Unit</th><th>Valley</th><th>Genus</th><th>Visit 1 (end %)</th><th>Visit 2 (arrival %)</th><th>Days between</th><th>Implied τ</th>
+    <th>Unit</th><th>Valley</th><th>Genus</th><th>Visit 1 (end %)</th><th>Visit 2 (arrival %)</th><th>Days between</th><th>Implied τ (this pair)</th>
     </tr></thead><tbody>`;
   const sorted = [...pairs].sort((a,b) => a.genus.localeCompare(b.genus) || a.unit.localeCompare(b.unit) || new Date(a.date1) - new Date(b.date1));
   for (const p of sorted){
