@@ -1942,6 +1942,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
   </div>
 
+  <div class="card" id="repeatPairsCard">
+    <h2>Repeat-visit pairs — empirical τ check</h2>
+    <div class="hint">Diagnostic for the recency-decay τ used in the Combined Cleaning Estimate (τ_Miconia / τ_Spathodea,
+      editable in the "Combined current estimate" calc box on the map). When the same zone has two cleaning sessions
+      logged back to back, the drop from the first visit's "end of day" % to the second visit's "arrival" % — over the
+      number of days between them — is a real, field-observed regrowth rate, not a literature guess. Pairs are grouped
+      by the zone's dominant invasive genus (same field used everywhere else). This only counts and reports what the
+      data currently supports — it does not automatically change τ.</div>
+    <button class="secondary" onclick="renderRepeatPairsAnalysis()">Generate repeat-pair analysis</button>
+    <div id="repeatPairsContent" style="margin-top:12px;"></div>
+  </div>
+
 </div>
 
 <script>
@@ -9084,6 +9096,88 @@ function renderDeratTemporalAnalysis(){
     <div class="muted" style="font-size:12px;margin-bottom:6px;">Red = high rat activity, green = low. Hover a bar for a quick summary — click to pin a full popup. Sorted from most to least active.</div>
     <div class="chart-box">${drawRatLineRankingChart(lineSorted)}</div>
   `;
+}
+
+// Empirical check for the recency-decay τ used in the Combined Cleaning Estimate (zoneTauDays() /
+// RECENCY_TAU_MICONIA_DAYS / RECENCY_TAU_SPATHODEA_DAYS above): when the same zone has two qualifying
+// cleaning sessions back to back, the drop from the first session's "end of day" % to the second
+// session's "arrival" % — over the number of days between them — is a real, field-observed regrowth
+// rate, inverting the same exponential-decay formula used everywhere else in the app:
+//   v2 = v1 · e^(−days/τ)  →  τ = −days / ln(v2/v1)
+// This is diagnostic only — it reports what the current data implies per genus, it does not write
+// back into RECENCY_TAU_MICONIA_DAYS/RECENCY_TAU_SPATHODEA_DAYS automatically (that's still a decision
+// for Marco to make once enough pairs accumulate, same reasoning as the "only ~44 actions so far, not
+// enough to estimate directly" caveat already on the map's calc box).
+function repeatVisitPairs(){
+  const rows = (enriched ? enriched.mainRows : [])
+    .filter(r => r.Pct_cleaned_arrival !== '' && r.Pct_cleaned_end_of_day !== '' && r.Unit_Name && r.Date)
+    .map(r => ({...r, arrival:+r.Pct_cleaned_arrival, end:+r.Pct_cleaned_end_of_day, ts:new Date(r.Date).getTime()}));
+  const byZone = new Map();
+  for (const r of rows){
+    const key = r.Valley + '||' + r.Unit_Name;
+    if (!byZone.has(key)) byZone.set(key, []);
+    byZone.get(key).push(r);
+  }
+  const pastLookup = pastUnitLookupMap();
+  const pairs = [];
+  for (const [key, zoneRows] of byZone){
+    zoneRows.sort((a,b) => a.ts - b.ts);
+    const hu = pastLookup.get(key);
+    const vd = hu ? latestVegDominance(hu) : null;
+    const rawGenus = vd ? dominantInvasiveGenusFromVeg(vd.raw) : null;
+    // only Miconia/Spathodea get a dedicated τ (see zoneTauDays()) — everything else (Mangifera,
+    // native-dominant, no historical record) falls back to the same default τ, so bucket them together
+    // here too rather than inventing a 4th category this diagnostic can't act on.
+    const genus = (rawGenus === 'miconia' || rawGenus === 'spathodea') ? rawGenus : 'other/unknown';
+    for (let i = 0; i < zoneRows.length - 1; i++){
+      const r1 = zoneRows[i], r2 = zoneRows[i+1];
+      const days = (r2.ts - r1.ts) / 86400000;
+      if (days <= 0) continue;
+      const v1 = r1.end, v2 = r2.arrival;
+      // only usable as a decay observation if the state visibly worsened between visits (v2 < v1) and
+      // both values are strictly positive (needed for the log below) — a pair that stayed the same or
+      // improved isn't something exponential decay can explain (off-record maintenance, or noise)
+      if (!(v1 > 0 && v2 > 0 && v2 < v1)) continue;
+      const impliedTauDays = -days / Math.log(v2 / v1);
+      pairs.push({ unit: r1.Unit_Name, valley: r1.Valley, genus, date1: r1.Date, date2: r2.Date, v1, v2, days, impliedTauDays });
+    }
+  }
+  return pairs;
+}
+
+function renderRepeatPairsAnalysis(){
+  const pairs = repeatVisitPairs();
+  const area = document.getElementById('repeatPairsContent');
+  if (!pairs.length){
+    area.innerHTML = '<p class="muted">No usable repeat-visit pairs yet — need the same zone visited twice, both with a logged cleaning %, and the second reading lower than the first. Not enough data to check τ empirically today; this will improve as more repeat visits accumulate.</p>';
+    return;
+  }
+  const genusLabel = { miconia: 'Miconia', spathodea: 'Spathodea', 'other/unknown': 'Other / unknown' };
+  const byGenus = { miconia: [], spathodea: [], 'other/unknown': [] };
+  for (const p of pairs) byGenus[p.genus].push(p);
+  const mean = arr => arr.reduce((s,x)=>s+x,0) / arr.length;
+
+  let html = `<div class="grid3" style="margin-bottom:12px;">` +
+    Object.keys(genusLabel).map(g => {
+      const arr = byGenus[g];
+      const avgTau = arr.length ? mean(arr.map(p=>p.impliedTauDays)).toFixed(0) : '—';
+      return `<div class="stat"><div class="num">${arr.length}</div><div class="lbl">${genusLabel[g]} pair(s)${arr.length ? ` — avg implied τ ${avgTau}d` : ''}</div></div>`;
+    }).join('') + `</div>`;
+
+  html += `<p class="muted" style="margin-bottom:8px;">Formula used to invert each pair: <code>τ = −days / ln(v2/v1)</code>,
+    where v1 = end-of-day % of the earlier visit and v2 = arrival % of the later visit, days = calendar days between
+    the two visit dates. Diagnostic only — does not change the app's τ automatically.</p>`;
+
+  html += `<div class="table-scroll"><table class="preview"><thead><tr>
+    <th>Unit</th><th>Valley</th><th>Genus</th><th>Visit 1 (end %)</th><th>Visit 2 (arrival %)</th><th>Days between</th><th>Implied τ</th>
+    </tr></thead><tbody>`;
+  const sorted = [...pairs].sort((a,b) => a.genus.localeCompare(b.genus) || a.unit.localeCompare(b.unit) || new Date(a.date1) - new Date(b.date1));
+  for (const p of sorted){
+    html += `<tr><td>${p.unit}</td><td>${p.valley}</td><td>${genusLabel[p.genus]}</td>` +
+      `<td>${p.v1}% (${p.date1})</td><td>${p.v2}% (${p.date2})</td><td>${p.days.toFixed(0)}</td><td><b>${p.impliedTauDays.toFixed(0)}d</b></td></tr>`;
+  }
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
 }
 
 function renderPastDataComparison(){
