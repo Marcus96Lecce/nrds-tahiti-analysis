@@ -1249,7 +1249,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <textarea id="hrComment" rows="2" style="width:100%;font-size:13px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;"></textarea>
       </div>
       <div id="hrSpeciesSection" style="margin-bottom:10px;display:none;">
-        <div class="muted" style="margin-bottom:4px;">Species planted:</div>
+        <div class="muted" style="margin-bottom:4px;" id="hrSpeciesLabel">Species planted:</div>
         <div id="hrSpeciesRows"></div>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
       </div>
@@ -2776,7 +2776,10 @@ function onHrActionChange(){
 
   document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
   document.getElementById('hrEvalRow').style.display = isPlantation ? '' : 'none';
-  document.getElementById('hrSpeciesSection').style.display = isPlantation ? '' : 'none';
+  // Species picker is shared between Plantation (species planted in the ground) and Pépinière
+  // (species currently growing in the nursery) — same {name, common, type, number} shape either way.
+  document.getElementById('hrSpeciesSection').style.display = (isPlantation || isPep) ? '' : 'none';
+  document.getElementById('hrSpeciesLabel').textContent = isPep ? 'Species in this nursery (optional):' : 'Species planted:';
   document.getElementById('hrPepFields').style.display = isPep ? '' : 'none';
   document.getElementById('hrTypeLbl').style.display = isPep ? 'none' : '';
   document.getElementById('hrPeopleLbl').style.display = isPep ? 'none' : '';
@@ -2787,7 +2790,8 @@ function onHrActionChange(){
   document.getElementById('hrPeople').required = !isPep;
 
   if (!isCleaningType){ document.getElementById('hrPctArrival').value = ''; document.getElementById('hrPctEnd').value = ''; }
-  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; document.getElementById('hrSpeciesRows').innerHTML = ''; }
+  if (!isPlantation){ document.getElementById('hrPctEval').value = ''; }
+  if (!isPlantation && !isPep){ document.getElementById('hrSpeciesRows').innerHTML = ''; }
   if (!isPep){ clearPepPoint(); ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; }); }
 
   if (isPep && document.getElementById('hrDetails').open){
@@ -2829,6 +2833,10 @@ async function submitHabitatForm(evt){
     const action = document.getElementById('hrAction').value;
 
     // ── Pépinière: standalone action → submits to pepinieres table only ──
+    // NOTE: the live `pepinieres` Supabase table needs a `species` jsonb column before this will work
+    // (confirmed missing via a read-only PostgREST check on 2026-07-27 — same "schema cache" failure
+    // mode as the bird_surveys/canopy_cover incident). Run this once in the Supabase SQL editor:
+    //   ALTER TABLE pepinieres ADD COLUMN IF NOT EXISTS species jsonb DEFAULT '[]'::jsonb;
     if (action === 'Pépinière'){
       const pepName = document.getElementById('pepName').value.trim();
       if (!pepName) throw new Error('Enter a Name/ID for the Pépinière.');
@@ -2843,6 +2851,7 @@ async function submitHabitatForm(evt){
         observer: document.getElementById('hrName').value,
         zone: document.getElementById('pepZone').value,
         notes: document.getElementById('pepNotes').value,
+        species,
       };
       const result = await insertOrQueue('pepinieres', [pepRow]);
       statusEl.innerHTML = result.queued
@@ -2850,6 +2859,7 @@ async function submitHabitatForm(evt){
         : '<span class="ok">✓ Pépinière registered — map updating…</span>';
       if (!result.queued) await fetchPepinieres();
       document.getElementById('hrForm').reset();
+      document.getElementById('hrSpeciesRows').innerHTML = '';
       document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
       clearPepPoint();
       ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
@@ -5646,8 +5656,9 @@ function downloadPffObservations(){
 function downloadPepinieres(){
   const rows = pepinieres;
   if (!rows.length){ alert('No pépinière records loaded yet.'); return; }
-  const fields = ['id','name','lat','lon','number_of_plants','date','observer','zone','notes','created_at'];
-  downloadCSV('pepinieres.csv', rows, fields);
+  const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]) }));
+  const fields = ['id','name','lat','lon','number_of_plants','species','date','observer','zone','notes','created_at'];
+  downloadCSV('pepinieres.csv', flat, fields);
 }
 // The in-memory `activityEntries` (used elsewhere for the "Recent entries" preview table) is
 // deliberately capped to the latest 30 rows (see fetchActivityEntries()) — fine for a preview, but
@@ -6742,6 +6753,7 @@ function renderPepinieresChart(container){
         <div><b>Date:</b> ${escapeHtml(p.date)}</div>
         <div><b>Plants:</b> ${p.plants}</div>
         <div><b>Valley:</b> ${escapeHtml(p.valley || 'not resolved')} · <b>Zone:</b> ${escapeHtml(p.zone||'—')}</div>
+        <div><b>Species:</b> ${formatPepSpecies(p.species)}</div>
         <div><b>Observer:</b> ${escapeHtml(p.observer||'—')}</div>
         ${p.notes ? `<div><b>Notes:</b> ${escapeHtml(p.notes)}</div>` : ''}`) - 1;
       svg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${name} — ${p.date}: ${p.plants} plants\nClick for full details`)}` +
@@ -6789,11 +6801,11 @@ function renderPepinieresChart(container){
   // ── Summary table: current state (latest reading) per nursery ──
   const tableRows = [...latestRows].sort((a,b) => b.plants - a.plants);
   const tableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
-      <th>Name</th><th>Valley</th><th>Zone</th><th>Latest date</th><th>Plants</th><th>Visits</th><th>Observer</th><th>Notes</th>
+      <th>Name</th><th>Valley</th><th>Zone</th><th>Latest date</th><th>Plants</th><th>Species</th><th>Visits</th><th>Observer</th><th>Notes</th>
     </tr></thead><tbody>` +
     tableRows.map(r => `<tr>
       <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.valley||'—')}</td><td>${escapeHtml(r.zone||'—')}</td>
-      <td>${escapeHtml(r.date)}</td><td>${r.plants}</td><td>${byName.get(r.name).length}</td>
+      <td>${escapeHtml(r.date)}</td><td>${r.plants}</td><td>${formatPepSpecies(r.species)}</td><td>${byName.get(r.name).length}</td>
       <td>${escapeHtml(r.observer||'—')}</td><td>${escapeHtml(r.notes||'—')}</td>
     </tr>`).join('') + '</tbody></table></div>';
 
@@ -6838,6 +6850,12 @@ function pepiniereColor(n, maxN){
 function pepiniereRadius(n, maxN){
   const t = Math.min(1, Math.max(0, n||0)/(maxN||1));
   return 6 + 9*Math.sqrt(t);
+}
+// Shared by the map popup/tooltip and the chart-analysis popups/table — `species` is the same
+// {name, common, type, number} shape the Plantation species picker already produces (jsonb column).
+function formatPepSpecies(species){
+  if (!species || !species.length) return '<span class="muted">not specified</span>';
+  return species.map(s => `${escapeHtml(s.name)}${s.number ? ` (${s.number})` : ''}`).join(', ');
 }
 // Continuous colour gradient for the projected planting layer — stays within the vegetation-
 // dominance family (green = native, red→amber = invasive) so the fill encodes BOTH dominance
@@ -7948,6 +7966,7 @@ function renderMap(shouldFit){
       const html = `<b>🌱 Pépinière: ${escapeHtml(p.name)}</b><br>` +
         `Plants: ${p.number_of_plants ?? '—'}<br>Date: ${escapeHtml(p.date || '—')}<br>` +
         `Observer: ${escapeHtml(p.observer || '—')}<br>Zone: ${escapeHtml(p.zone || '—')}` +
+        `<br>Species: ${formatPepSpecies(p.species)}` +
         (p.notes ? `<br>Notes: ${escapeHtml(p.notes)}` : '');
       L.circleMarker([lat, lon], { radius: pepiniereRadius(n, maxPepPlants), color: '#1a5c1a', weight: 2, fillColor: pepiniereColor(n, maxPepPlants), fillOpacity: 0.9 })
         .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
