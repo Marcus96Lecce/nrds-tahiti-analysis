@@ -1269,7 +1269,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted"><input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)"> Show my location</label>
           <span id="pepUserLocationStatus" class="muted"></span>
         </div>
-        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery GPS location:</div>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery's exact GPS location — the Zone field below auto-fills from that exact point, but you can still edit it or pick/type a nearby rat station instead:</div>
         <div id="pepPickerMap" class="geo-picker-map"></div>
         <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
           <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
@@ -1278,7 +1278,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="row" style="margin-bottom:6px;">
           <label class="muted">Name / ID: <input type="text" id="pepName" placeholder="e.g. PEP-01" style="width:200px;"></label>
           <label class="muted">Number of plants: <input type="number" id="pepPlants" min="0" step="1" placeholder="0" style="width:90px;"></label>
-          <label class="muted">Zone / Area: <input type="text" id="pepZone" list="pepZoneList" placeholder="e.g. Papehue-PEP01" style="width:160px;"></label>
+          <label class="muted">Zone / Area: <input type="text" id="pepZone" list="pepZoneList" placeholder="auto-fills on click, or type a zone / nearby rat station" style="width:280px;"></label>
           <datalist id="pepZoneList"></datalist>
         </div>
         <div style="margin-bottom:6px;">
@@ -2750,6 +2750,7 @@ function populateFormReferenceOptions(){
   if (hrZonePickerEntry) renderHrZonePicker(true);
   if (pffPickerEntry) renderPffPickerContext(true);
   if (pepPickerEntry) renderPepPickerContext(true);
+  refreshPepZoneList();
   if (ibsPickerEntry) renderIbsZones(true);
   if (birdObsPickerEntry) renderBirdObsZones(true);
 }
@@ -3110,11 +3111,20 @@ function ensurePepPickerMap(){
   map.on('preclick', (e) => {
     L.DomEvent.stopPropagation(e);
     const { lat, lng } = e.latlng;
+    // Exact tapped/clicked coordinates are always what gets saved to the nursery's lat/lon —
+    // the auto-detected zone below is a convenience fill for the Zone field, never a substitute
+    // for the precise point (same "point wins, zone is derived from it" approach as the map's
+    // Papehue-filter fix, which looks up a record's valley from its GPS point via inferPffValley()).
     pepPickedLat = lat; pepPickedLon = lng;
     if (pepPickedMarker) map.removeLayer(pepPickedMarker);
     pepPickedMarker = L.circleMarker([lat, lng], { radius: 9, color: '#fff', weight: 2.5, fillColor: '#2ca02c', fillOpacity: 0.95 })
       .bindTooltip('Nursery location', { direction: 'top' }).addTo(map);
-    document.getElementById('pepPickerReadout').textContent = `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const unitName = inferManagementUnitName(lat, lng);
+    const zoneEl = document.getElementById('pepZone');
+    if (unitName && zoneEl) zoneEl.value = unitName;
+    document.getElementById('pepPickerReadout').textContent = unitName
+      ? `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · Zone auto-filled: ${unitName} (edit the Zone field if this is wrong)`
+      : `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · No management unit found at this point — enter Zone manually`;
   });
 }
 function renderPepPickerContext(shouldFit){
@@ -3213,16 +3223,25 @@ function onHrDetailsToggle(open){
 
 /* ---------------- Pépinière live data (nursery registry) ---------------- */
 let pepinieres = [];
+// Zone field's datalist offers three kinds of suggestions, merged: zones already used on other
+// pépinière rows, management-unit codes (e.g. "PGA" — same codes inferManagementUnitName() can
+// auto-fill from a click), and rat-station names (e.g. "A5") — this last one is the "or alternatively
+// type/select the nearby rat station" option, same free-text-plus-datalist pattern the Habitat
+// Restoration form already uses for its own "Rat station(s)" field (#hrStations / #hrStationList).
+function refreshPepZoneList(){
+  var seen = {};
+  var options = [];
+  function add(v){ if (v && !seen[v]) { seen[v] = 1; options.push(v); } }
+  pepinieres.forEach(function(p){ add(p.zone); });
+  (tables.managementUnit || []).forEach(function(u){ add(u['Nom']); });
+  (tables.deratTahiti || []).forEach(function(s){ add(s['Station']); });
+  options.sort();
+  var el = document.getElementById('pepZoneList');
+  if (el) el.innerHTML = options.map(function(z) { return '<option value="' + escapeHtml(z) + '">'; }).join('');
+}
 function _applyPepData(data) {
   pepinieres = data || [];
-  var zones = [];
-  var seenZ = {};
-  for (var _i = 0; _i < pepinieres.length; _i++) {
-    var z = pepinieres[_i].zone;
-    if (z && !seenZ[z]) { zones.push(z); seenZ[z] = 1; }
-  }
-  zones.sort();
-  document.getElementById('pepZoneList').innerHTML = zones.map(function(z) { return '<option value="' + escapeHtml(z) + '">'; }).join('');
+  refreshPepZoneList();
   if (pepPickerEntry) renderPepPickerOthers();
   if (enriched) onDataUpdated();
 }
@@ -6950,6 +6969,18 @@ function inferPffValley(lat, lon){
   }
   _pffValleyCache.set(key, found);
   return found;
+}
+
+// Same point-in-polygon idea as inferPffValley() above, but returns the specific management-unit
+// code (e.g. "PGA") the point falls inside, not just its parent valley. Used to auto-fill the
+// Pépinière form's Zone field from the exact GPS point the user taps on the picker map.
+function inferManagementUnitName(lat, lon){
+  for (const u of (tables.managementUnit || [])){
+    if (!u['Geometry']) continue;
+    const parts = geometryToPolygonParts(u['Geometry']);
+    if (pointInPolygonParts(lon, lat, parts)) return u['Nom'];
+  }
+  return null;
 }
 
 function pointInRing(x, y, ring){
