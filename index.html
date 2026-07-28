@@ -7955,9 +7955,12 @@ function renderMap(shouldFit){
   }
 
   if (showPepiniereLayer){
+    // Was a substring match against the free-text `zone` field — broke as soon as zone held an actual
+    // management-unit code (e.g. "PGA") instead of a valley name. Resolved via GPS point-in-polygon
+    // instead, same as every other layer/chart that needs a valley for a table with no valley column.
     const filtered = mapValleyFilter === 'all'
       ? pepinieres
-      : pepinieres.filter(p => !p.zone || p.zone.toLowerCase().includes(mapValleyFilter.toLowerCase()));
+      : pepinieres.filter(p => inferPffValley(+p.lat, +p.lon) === mapValleyFilter);
     const maxPepPlants = Math.max(1, ...filtered.map(p => +p.number_of_plants || 0));
     for (const p of filtered){
       const lat = +p.lat, lon = +p.lon;
