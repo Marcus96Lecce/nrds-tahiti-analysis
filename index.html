@@ -1211,6 +1211,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
           <label class="muted"><input type="checkbox" id="hrRatLinesOverlayToggle" onchange="toggleHrRatLines(this.checked)"> Overlay all rat lines (Ligne_stat)</label>
           <label class="muted"><input type="checkbox" id="hrZoneUserLocToggle" onchange="toggleHrZoneUserLoc(this.checked)"> Show my location</label>
           <span id="hrZoneUserLocStatus" class="muted"></span>
+          <label class="muted" id="hrPepOthersLbl" style="display:none;"><input type="checkbox" id="hrPepOthersToggle" onchange="toggleHrPepOthers(this.checked)"> Show other pépinières</label>
         </div>
         <div id="hrZonePickerMap" class="geo-picker-map"></div>
       </div>
@@ -1255,24 +1256,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div id="hrPepFields" style="margin-bottom:10px;display:none;">
         <div class="muted" style="margin-bottom:6px;font-weight:600;">🌱 Pépinière details</div>
-        <div class="row" style="margin-bottom:8px;">
-          <label class="muted">Valley:
-            <select id="pepMapValley" onchange="onPepMapValleyChange()">
-              <option value="all">All valleys</option>
-              <option value="Papehue">Papehue</option>
-              <option value="Maruapo">Maruapo</option>
-              <option value="Hopa">Hopa</option>
-            </select>
-          </label>
-          <label class="muted"><input type="checkbox" id="pepShowOthersToggle" onchange="togglePepOthers(this.checked)"> Show other pépinières</label>
-          <label class="muted"><input type="checkbox" id="pepZoneNamesToggle" onchange="togglePepZoneNames(this.checked)"> Show zone names</label>
-          <label class="muted"><input type="checkbox" id="pepUserLocationToggle" onchange="togglePepUserLocation(this.checked)"> Show my location</label>
-          <span id="pepUserLocationStatus" class="muted"></span>
-        </div>
-        <div class="muted" style="margin-bottom:4px;">Tap/click the map to set the nursery's exact GPS location — the Zone field below auto-fills from that exact point, but you can still edit it or pick/type a nearby rat station instead:</div>
-        <div id="pepPickerMap" class="geo-picker-map"></div>
+        <div class="muted" style="margin-bottom:4px;">Tap/click the map above to set the nursery's exact GPS location — the Zone field below auto-fills from that exact point, but you can still edit it or pick/type a nearby rat station instead. Use the "Show other pépinières" checkbox above the map to see existing nurseries while picking a new one's spot.</div>
         <div class="row" style="margin-top:6px;margin-bottom:8px;align-items:center;">
-          <span class="muted" id="pepPickerReadout">Tap/click the map to record the nursery location.</span>
+          <span class="muted" id="pepPickerReadout">Tap/click the map above to record the nursery location.</span>
           <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="clearPepPoint()">Clear point</button>
         </div>
         <div class="row" style="margin-bottom:6px;">
@@ -2291,7 +2277,6 @@ function populateValleyDropdowns(){
     { id: 'mapValley', leading: '<option value="all">All valleys</option>' },
     { id: 'chartValley', leading: '<option value="all">All valleys</option>' },
     { id: 'pffMapValley', leading: '<option value="all">All valleys</option>' },
-    { id: 'pepMapValley', leading: '<option value="all">All valleys</option>' },
     { id: 'hrValley', leading: '<option value="">Choose…</option>' },
     { id: 'aeValley', leading: '<option value="">Choose…</option>' },
   ];
@@ -2749,7 +2734,6 @@ function populateFormReferenceOptions(){
   // forever since ensurePffPickerMap() only ever runs once. Also picks up new "Add Elements" zones.
   if (hrZonePickerEntry) renderHrZonePicker(true);
   if (pffPickerEntry) renderPffPickerContext(true);
-  if (pepPickerEntry) renderPepPickerContext(true);
   refreshPepZoneList();
   if (ibsPickerEntry) renderIbsZones(true);
   if (birdObsPickerEntry) renderBirdObsZones(true);
@@ -2782,6 +2766,7 @@ function onHrActionChange(){
   document.getElementById('hrSpeciesSection').style.display = (isPlantation || isPep) ? '' : 'none';
   document.getElementById('hrSpeciesLabel').textContent = isPep ? 'Species in this nursery (optional):' : 'Species planted:';
   document.getElementById('hrPepFields').style.display = isPep ? '' : 'none';
+  document.getElementById('hrPepOthersLbl').style.display = isPep ? '' : 'none';
   document.getElementById('hrTypeLbl').style.display = isPep ? 'none' : '';
   document.getElementById('hrPeopleLbl').style.display = isPep ? 'none' : '';
   document.getElementById('hrStationsRow').style.display = isPep ? 'none' : '';
@@ -2793,11 +2778,11 @@ function onHrActionChange(){
   if (!isCleaningType){ document.getElementById('hrPctArrival').value = ''; document.getElementById('hrPctEnd').value = ''; }
   if (!isPlantation){ document.getElementById('hrPctEval').value = ''; }
   if (!isPlantation && !isPep){ document.getElementById('hrSpeciesRows').innerHTML = ''; }
-  if (!isPep){ clearPepPoint(); ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; }); }
-
-  if (isPep && document.getElementById('hrDetails').open){
-    ensurePepPickerMap();
-    if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
+  if (!isPep){
+    clearPepPoint();
+    ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+    const othersToggle = document.getElementById('hrPepOthersToggle');
+    if (othersToggle && othersToggle.checked){ othersToggle.checked = false; pepShowOthers = false; renderPepPickerOthers(); }
   }
 }
 
@@ -2927,8 +2912,29 @@ function ensureHrZonePickerMap(){
     stationsLayer: L.layerGroup().addTo(map),
     linesLayer: L.layerGroup().addTo(map),
     userLocLayer: L.layerGroup().addTo(map),
+    pepOthersLayer: L.layerGroup().addTo(map),
+    pepPointLayer: L.layerGroup().addTo(map),
   };
   renderHrZonePicker(true);
+  // Pépinière exact-point picking reuses this same map (no separate map anymore — see "Pépinière
+  // picker" section below). Only intercepts the click (and only stops it from also reaching a zone
+  // polygon's own click handler underneath) when action=Pépinière; for every other action this is a
+  // no-op and the click falls through to hrZoneClickHandler() as before.
+  map.on('preclick', (e) => {
+    if (document.getElementById('hrAction').value !== 'Pépinière') return;
+    L.DomEvent.stopPropagation(e);
+    const { lat, lng } = e.latlng;
+    pepPickedLat = lat; pepPickedLon = lng;
+    hrZonePickerEntry.pepPointLayer.clearLayers();
+    pepPickedMarker = L.circleMarker([lat, lng], { radius: 9, color: '#fff', weight: 2.5, fillColor: '#2ca02c', fillOpacity: 0.95 })
+      .bindTooltip('Nursery location', { direction: 'top' }).addTo(hrZonePickerEntry.pepPointLayer);
+    const unitName = inferManagementUnitName(lat, lng);
+    const zoneEl = document.getElementById('pepZone');
+    if (unitName && zoneEl) zoneEl.value = unitName;
+    document.getElementById('pepPickerReadout').textContent = unitName
+      ? `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · Zone auto-filled: ${unitName} (edit the Zone field if this is wrong)`
+      : `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · No management unit found at this point — enter Zone manually`;
+  });
 }
 
 function renderHrZonePicker(shouldFit){
@@ -3086,74 +3092,20 @@ function toggleHrZoneUserLoc(checked){
 }
 
 /* ---------------- Pépinière picker (HR form — Pépinière action) ----------------
-   A small Leaflet picker map embedded in the HR form when Action = "Pépinière".
-   Pépinière is now a standalone action type; GPS + Name/ID + plant count are required. */
-let pepPickerEntry = null;
-let pepMapValleyFilter = 'all', pepShowOthers = false, pepShowZoneNames = false;
-let pepUserLocWatchId = null, pepUserLocFirstFix = true;
+   No map of its own anymore — reuses hrZonePickerEntry (the same map every other HR action already
+   uses to pick a Valley/Zone), so only one map ever appears in the form regardless of action. Its
+   "Show my location" / "Show zone names" toggles above the map already cover those needs; the only
+   Pépinière-specific extra is the "Show other pépinières" overlay below, plus the exact-point click
+   handling wired into ensureHrZonePickerMap() above. */
+let pepShowOthers = false;
 let pepPickedLat = null, pepPickedLon = null, pepPickedMarker = null;
 
-function ensurePepPickerMap(){
-  if (pepPickerEntry) return;
-  const map = L.map('pepPickerMap', { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19, attribution: 'Tiles &copy; Esri'
-  }).addTo(map);
-  pepPickerEntry = {
-    map,
-    ctxLayer: L.featureGroup().addTo(map),
-    zoneNamesLayer: L.layerGroup().addTo(map),
-    othersLayer: L.layerGroup().addTo(map),
-    userLocLayer: L.layerGroup().addTo(map),
-  };
-  renderPepPickerContext(true);
-  renderPepPickerOthers();
-  map.on('preclick', (e) => {
-    L.DomEvent.stopPropagation(e);
-    const { lat, lng } = e.latlng;
-    // Exact tapped/clicked coordinates are always what gets saved to the nursery's lat/lon —
-    // the auto-detected zone below is a convenience fill for the Zone field, never a substitute
-    // for the precise point (same "point wins, zone is derived from it" approach as the map's
-    // Papehue-filter fix, which looks up a record's valley from its GPS point via inferPffValley()).
-    pepPickedLat = lat; pepPickedLon = lng;
-    if (pepPickedMarker) map.removeLayer(pepPickedMarker);
-    pepPickedMarker = L.circleMarker([lat, lng], { radius: 9, color: '#fff', weight: 2.5, fillColor: '#2ca02c', fillOpacity: 0.95 })
-      .bindTooltip('Nursery location', { direction: 'top' }).addTo(map);
-    const unitName = inferManagementUnitName(lat, lng);
-    const zoneEl = document.getElementById('pepZone');
-    if (unitName && zoneEl) zoneEl.value = unitName;
-    document.getElementById('pepPickerReadout').textContent = unitName
-      ? `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · Zone auto-filled: ${unitName} (edit the Zone field if this is wrong)`
-      : `Location set: ${lat.toFixed(5)}, ${lng.toFixed(5)} · No management unit found at this point — enter Zone manually`;
-  });
-}
-function renderPepPickerContext(shouldFit){
-  const entry = pepPickerEntry;
-  if (!entry) return;
-  entry.ctxLayer.clearLayers();
-  entry.zoneNamesLayer.clearLayers();
-  const units = (tables.managementUnit||[]).filter(u => pepMapValleyFilter === 'all' || u['Vallee'] === pepMapValleyFilter);
-  units.forEach(u => {
-    polygonPartsToLatLngRings(u.Geometry).forEach(rings => {
-      L.polygon(rings, { color: '#2e7d32', weight: 1, fillOpacity: 0.05, opacity: 0.4, interactive: false }).addTo(entry.ctxLayer);
-    });
-    if (pepShowZoneNames){
-      const c = geometryCentroid(u.Geometry);
-      if (c) L.marker([c.lat, c.lon], { icon: smallLabelIcon(u['Nom']), interactive: false }).addTo(entry.zoneNamesLayer);
-    }
-  });
-  renderPepPickerOthers();
-  if (shouldFit){
-    const bounds = entry.ctxLayer.getBounds();
-    if (bounds.isValid()) entry.map.fitBounds(bounds); else entry.map.setView([-17.62, -149.45], 11);
-  }
-}
 // Shows existing pépinières from the live `pepinieres` table as green markers — so the user can see
 // other registered nurseries nearby while picking a new one's location.
 function renderPepPickerOthers(){
-  const entry = pepPickerEntry;
+  const entry = hrZonePickerEntry;
   if (!entry) return;
-  entry.othersLayer.clearLayers();
+  entry.pepOthersLayer.clearLayers();
   if (!pepShowOthers) return;
   for (const p of pepinieres){
     const lat = +p.lat, lon = +p.lon;
@@ -3165,60 +3117,24 @@ function renderPepPickerOthers(){
     L.circleMarker([lat, lon], { radius: 8, color: '#1a7a1a', weight: 2, fillColor: '#2ca02c', fillOpacity: 0.85 })
       .bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 })
       .bindPopup(html)
-      .addTo(entry.othersLayer);
+      .addTo(entry.pepOthersLayer);
   }
 }
 function clearPepPoint(){
-  if (pepPickedMarker && pepPickerEntry) pepPickerEntry.map.removeLayer(pepPickedMarker);
+  if (hrZonePickerEntry) hrZonePickerEntry.pepPointLayer.clearLayers();
   pepPickedMarker = null; pepPickedLat = null; pepPickedLon = null;
   const el = document.getElementById('pepPickerReadout');
-  if (el) el.textContent = 'Tap/click the map to record the nursery location.';
+  if (el) el.textContent = 'Tap/click the map above to record the nursery location.';
 }
-function onPepMapValleyChange(){
-  pepMapValleyFilter = document.getElementById('pepMapValley').value;
-  renderPepPickerContext(true);
-}
-function togglePepOthers(checked){ pepShowOthers = checked; renderPepPickerOthers(); }
-function togglePepZoneNames(checked){ pepShowZoneNames = checked; renderPepPickerContext(false); }
-function togglePepUserLocation(checked){
-  const statusEl = document.getElementById('pepUserLocationStatus');
-  statusEl.textContent = '';
-  if (checked){
-    if (!navigator.geolocation){
-      statusEl.textContent = 'Geolocation not supported.';
-      document.getElementById('pepUserLocationToggle').checked = false; return;
-    }
-    pepUserLocFirstFix = true;
-    pepUserLocWatchId = navigator.geolocation.watchPosition(pos => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      const e = pepPickerEntry; if (!e) return;
-      e.userLocLayer.clearLayers();
-      L.circle([latitude, longitude], { radius: accuracy, color: '#4285f4', weight: 1, fillColor: '#4285f4', fillOpacity: 0.12 }).addTo(e.userLocLayer);
-      L.circleMarker([latitude, longitude], { radius: 7, color: '#fff', weight: 2, fillColor: '#4285f4', fillOpacity: 1 })
-        .bindTooltip('You are here', { direction: 'top' }).addTo(e.userLocLayer);
-      statusEl.textContent = `Accuracy: ±${Math.round(accuracy)} m`;
-      if (pepUserLocFirstFix){ e.map.setView([latitude, longitude], 16); pepUserLocFirstFix = false; }
-    }, err => {
-      statusEl.textContent = err.code === err.PERMISSION_DENIED ? 'Location permission denied.' : 'Could not get location.';
-      document.getElementById('pepUserLocationToggle').checked = false;
-    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
-  } else {
-    if (pepUserLocWatchId != null){ navigator.geolocation.clearWatch(pepUserLocWatchId); pepUserLocWatchId = null; }
-    if (pepPickerEntry) pepPickerEntry.userLocLayer.clearLayers();
-  }
-}
+function toggleHrPepOthers(checked){ pepShowOthers = checked; renderPepPickerOthers(); }
 // Same lazy-creation pattern as onPffDetailsToggle: the Leaflet map needs a visible (non-zero-size)
-// container. Created when the HR <details> opens (if action=Plantation) OR when the action changes
-// to Plantation (if HR <details> is already open). See onHrActionChange() for the second trigger.
+// container, so it's created when the HR <details> opens rather than at page load. This one map
+// (hrZonePickerEntry) is shared by every HR action, including Pépinière — see the "Pépinière picker"
+// section below for how it also handles the exact-point click when action=Pépinière.
 function onHrDetailsToggle(open){
   if (!open) return;
   ensureHrZonePickerMap();
   if (hrZonePickerEntry) hrZonePickerEntry.map.invalidateSize();
-  const act = document.getElementById('hrAction').value;
-  if (act === 'Plantation' || act === 'Pépinière'){
-    ensurePepPickerMap();
-    if (pepPickerEntry) pepPickerEntry.map.invalidateSize();
-  }
 }
 
 /* ---------------- Pépinière live data (nursery registry) ---------------- */
@@ -3242,7 +3158,7 @@ function refreshPepZoneList(){
 function _applyPepData(data) {
   pepinieres = data || [];
   refreshPepZoneList();
-  if (pepPickerEntry) renderPepPickerOthers();
+  if (hrZonePickerEntry) renderPepPickerOthers();
   if (enriched) onDataUpdated();
 }
 async function fetchPepinieres(){
