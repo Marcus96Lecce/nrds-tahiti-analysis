@@ -64,6 +64,17 @@
      (a solid-colored <div> in the icon's html) is the only visible shape, not a double border. */
   .bird-nest-icon{background:none !important;border:none !important;}
 
+  /* Leaflet's collapsed layer-switcher toggle icon needs images/layers.png / images/layers-2x.png,
+     which this single-file app never bundles — the icon box rendered blank on every map, invisible
+     with nothing to tap on mobile (no :hover fallback the way desktop has). Replaced with a plain
+     emoji that needs no external file, on every Leaflet map in the app (home map + every picker). */
+  .leaflet-control-layers-toggle{
+    background-image:none !important;
+    display:flex !important;align-items:center;justify-content:center;
+    font-size:18px;
+  }
+  .leaflet-control-layers-toggle::before{ content:"🗺️"; }
+
   /* ── Layout ── */
   .wrap{max-width:1020px;margin:0 auto;padding:22px 20px;}
 
@@ -3003,12 +3014,26 @@ let hrZoneSelectedUnit = null, hrZoneShowNames = false;
 let hrZoneUserLocWatchId = null, hrZoneUserLocFirstFix = true;
 let hrShowStations = false, hrShowRatLines = false;
 
+// Adds a compact Satellite/Streets switcher to a picker map — every picker map used to hard-code a
+// single Esri satellite layer with no way to switch to OSM streets at all (unlike the home map, which
+// already had a full multi-layer switcher). Deliberately kept to just these two choices rather than
+// the home map's full 7-layer set, since these are small utility maps, not the main map. Shares the
+// icon-visibility CSS fix (.leaflet-control-layers-toggle override, see the app's own <style> block)
+// with every Leaflet map in the app — that fix is what actually makes this control usable on mobile.
+function addBasemapSwitcher(map, satelliteLayer){
+  const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  });
+  L.control.layers({ 'Satellite (Esri)': satelliteLayer, 'Street map (OSM)': streets }, {}, { collapsed: true, position: 'topright' }).addTo(map);
+}
+
 function ensureHrZonePickerMap(){
   if (hrZonePickerEntry) return;
   const map = L.map('hrZonePickerMap', { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
+  addBasemapSwitcher(map, satellite);
   hrZonePickerEntry = {
     map,
     zonesLayer: L.layerGroup().addTo(map),
@@ -3421,9 +3446,10 @@ let pffPendingIdCounter = 0;
 function ensurePffPickerMap(){
   if (pffPickerEntry) return;
   const map = L.map('pffPickerMap', { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
+  addBasemapSwitcher(map, satellite);
   pffPickerEntry = {
     map,
     ctxLayer: L.featureGroup().addTo(map),
@@ -4087,9 +4113,10 @@ function subscribeBirdSurveys(){
 function ensureIbsPickerMap(){
   if (ibsPickerEntry) return;
   const map = L.map('ibsPickerMap', { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
+  addBasemapSwitcher(map, satellite);
   ibsPickerEntry = {
     map,
     zonesLayer:    L.layerGroup().addTo(map),
@@ -4493,9 +4520,10 @@ function subscribeBirdObservations(){
 function ensureBirdObsPickerMap(){
   if (birdObsPickerEntry) return;
   const map = L.map('boPickerMap', { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
+  addBasemapSwitcher(map, satellite);
   birdObsPickerEntry = {
     map,
     zonesLayer: L.layerGroup().addTo(map),
@@ -5159,9 +5187,10 @@ function clearGeoPickerMaps(){
 }
 function initGeoPickerMap(mapId, hiddenId){
   const map = L.map(mapId, { scrollWheelZoom: true });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19, attribution: 'Tiles &copy; Esri'
   }).addTo(map);
+  addBasemapSwitcher(map, satellite);
   // Light context layer (existing management-unit zones) just for orientation — not interactive.
   // featureGroup (not layerGroup) is needed here specifically because it adds getBounds(), used below.
   const ctxLayer = L.featureGroup().addTo(map);
@@ -6659,10 +6688,100 @@ function renderBirdObsChart(container){
     <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
     <br><span class="muted">Top chart: total individuals/groups observed per species, click a bar for recent dates. Bottom chart: one bar per observation in chronological order, colored by the most conservation-significant species present (its own picked color) — click for the full record. Valley filter is applied via GPS point-in-polygon lookup${chartValley !== 'all' ? ` — showing <b>${escapeHtml(valleyLabel)}</b> only` : ''}. Zone and Station filters do not apply to this data.</span>
   </div>`;
+  // ── Individual sighting history: one row per Individual ID/nickname, real calendar time-axis ──
+  // Answers "where has each tracked individual been seen, over time" — dot position = date, dot
+  // color = valley (resolved per sighting via GPS point-in-polygon, same method as the rest of this
+  // chart). Sightings with no Individual ID set can't be grouped into a bird's history, so they're
+  // simply excluded here (still fully present in the two charts above).
+  const byBird = new Map();
+  for (const r of rows){
+    if (!r.bird_id) continue;
+    if (!byBird.has(r.bird_id)) byBird.set(r.bird_id, []);
+    byBird.get(r.bird_id).push(r);
+  }
+  const birdIds = [...byBird.keys()].sort((a,b) => String(a).localeCompare(String(b)));
+  let individualSection = `<span class="muted">No observations have an Individual ID set yet — add one in the submission form to start tracking sightings of the same bird over time.</span>`;
+  if (birdIds.length){
+    const idTs = rows.filter(r => r.bird_id).map(r => r.ts);
+    const idMinTs = Math.min(...idTs), idMaxTs = Math.max(...idTs);
+    const idRawSpan = idMaxTs - idMinTs;
+    const rowH = 30, iML = 130, iMR = 30, iMT = 20, iMB = 46;
+    const iW = 760, iH = iMT+iMB + birdIds.length*rowH;
+    const ixScale = ts => iML + (idRawSpan ? (ts-idMinTs)/idRawSpan : 0.5) * (iW-iML-iMR);
+    let individualSvg = `<svg viewBox="0 0 ${iW} ${iH}" width="${iW}" height="${iH}" xmlns="http://www.w3.org/2000/svg">`;
+    const idDateTicks = Math.min(6, idTs.length);
+    for (let i=0; i<=idDateTicks; i++){
+      const ts = idMinTs + idRawSpan*(i/idDateTicks);
+      const x = ixScale(ts);
+      individualSvg += svgEl('line',{x1:x,x2:x,y1:iMT,y2:iH-iMB,stroke:'#eef1ec'});
+      individualSvg += svgEl('text',{x,y:iH-iMB+16,'text-anchor':'end','font-size':9,fill:'#6b7569',transform:`rotate(-40 ${x} ${iH-iMB+16})`}, new Date(ts).toISOString().slice(0,10));
+    }
+    birdIds.forEach((id,rowIdx) => {
+      const y = iMT + rowIdx*rowH + rowH/2;
+      const sightings = [...byBird.get(id)].sort((a,b) => a.ts-b.ts);
+      individualSvg += svgEl('text',{x:iML-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#23291f'}, id);
+      individualSvg += svgEl('line',{x1:iML,x2:iW-iMR,y1:y,y2:y,stroke:'#eef1ec'});
+      if (sightings.length > 1){
+        const d = sightings.map((s,j)=>`${j===0?'M':'L'}${ixScale(s.ts).toFixed(1)},${y.toFixed(1)}`).join(' ');
+        individualSvg += svgEl('path',{d, fill:'none', stroke:'#9aa69a', 'stroke-width':1.5, opacity:0.6});
+      }
+      sightings.forEach(s => {
+        const x = ixScale(s.ts);
+        const valley = inferPffValley(+s.lat, +s.lon);
+        const dotColor = VALLEY_HEX[valley] || '#7f7f7f';
+        const speciesTxt = (s.species||[]).map(sp => sp.name).join(', ') || '—';
+        const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(id)} — ${escapeHtml(s.date)}</div>
+          <div><b>Valley:</b> ${escapeHtml(valley || 'not resolved')}</div>
+          <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
+          <div><b>Coordinates:</b> ${(+s.lat).toFixed(5)}, ${(+s.lon).toFixed(5)}</div>
+          ${s.notes ? `<div><b>Notes:</b> ${escapeHtml(s.notes)}</div>` : ''}`) - 1;
+        individualSvg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${id} — ${s.date} (${valley || 'valley not resolved'})\nClick for details`)}` +
+          svgEl('circle',{cx:x,cy:y,r:5,fill:dotColor,stroke:'#fff','stroke-width':1.3}) + `</g>`;
+      });
+    });
+    individualSvg += `</svg>`;
+    const individualLegend = `<div style="margin-top:8px;">
+      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Papehue}"></span>Papehue</span>
+      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Maruapo}"></span>Maruapo</span>
+      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Hopa}"></span>Hopa</span>
+      <span class="legend-item"><span class="swatch" style="background:#7f7f7f"></span>Valley not resolved</span>
+      <br><span class="muted">One row per Individual ID, dots on their real sighting dates, connecting line shows the gaps between sightings. Click a dot for the full record.</span>
+    </div>`;
+
+    const summaryRows = birdIds.map(id => {
+      const s = [...byBird.get(id)].sort((a,b) => a.ts-b.ts);
+      const valleys = [...new Set(s.map(x => inferPffValley(+x.lat,+x.lon) || 'not resolved'))];
+      const lastSpecies = (s[s.length-1].species||[]).map(sp => sp.name).join(', ') || '—';
+      return { id, count: s.length, first: s[0].date, last: s[s.length-1].date, valleys: valleys.join(', '), lastSpecies };
+    }).sort((a,b) => b.count - a.count);
+    const summaryTableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
+        <th>Individual ID</th><th>Sightings</th><th>First seen</th><th>Last seen</th><th>Valleys visited</th><th>Species (latest)</th>
+      </tr></thead><tbody>` +
+      summaryRows.map(r => `<tr><td>${escapeHtml(r.id)}</td><td>${r.count}</td><td>${escapeHtml(r.first)}</td><td>${escapeHtml(r.last)}</td><td>${escapeHtml(r.valleys)}</td><td>${escapeHtml(r.lastSpecies)}</td></tr>`).join('')
+      + '</tbody></table></div>';
+
+    // birdId assigned AFTER the spread — r's own numeric `id` (the DB row id) must not silently
+    // overwrite the nickname we're grouping by, which a plain `{ id, ...r }` would do.
+    const logRows = birdIds.flatMap(id => byBird.get(id).map(r => ({ ...r, birdId: id }))).sort((a,b) => a.ts - b.ts);
+    const logTableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
+        <th>Date</th><th>Individual ID</th><th>Valley</th><th>Species</th><th>Notes</th>
+      </tr></thead><tbody>` +
+      logRows.map(r => `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.birdId)}</td><td>${escapeHtml(inferPffValley(+r.lat,+r.lon) || '—')}</td><td>${escapeHtml((r.species||[]).map(sp=>sp.name).join(', ')||'—')}</td><td>${escapeHtml(r.notes||'—')}</td></tr>`).join('')
+      + '</tbody></table></div>';
+
+    individualSection = individualSvg + individualLegend
+      + '<hr style="margin:14px 0;border-color:var(--border);">'
+      + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Per-individual summary</div>' + summaryTableHtml
+      + '<hr style="margin:14px 0;border-color:var(--border);">'
+      + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Full sighting log</div>' + logTableHtml;
+  }
+
   const hint = `<div class="hint" style="margin-bottom:6px;">Bird sightings over time${chartValley !== 'all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ' across the LIFE STOP EXTINCTION work area'} — pair with the map's "🐦 Bird observations" layer for the spatial view.</div>`;
   area.innerHTML = hint + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Most-observed species</div>' + specSvg
     + '<hr style="margin:14px 0;border-color:var(--border);">'
-    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Observations over time</div>' + summary + chronoSvg + legend;
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Observations over time</div>' + summary + chronoSvg + legend
+    + '<hr style="margin:14px 0;border-color:var(--border);">'
+    + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Individual sighting history</div>' + individualSection;
 }
 
 // Common Myna / Red-vented Bulbul = the two invasive species the protocol targets; Wattled
@@ -7241,12 +7360,25 @@ function stationLabelIcon(text){
 // Square marker for a "Nest" observation_type row in Birds Observation — visually distinct from the
 // round circleMarker dot used for a plain sighting, at a glance on the map, same idea as PFF's
 // hull-vs-circle status distinction elsewhere in this app.
-function birdNestIcon(color){
+function birdNestIcon(color, opacity){
   return L.divIcon({
     className: 'bird-nest-icon',
-    html: `<div style="width:14px;height:14px;background:${color};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);"></div>`,
+    html: `<div style="width:14px;height:14px;background:${color};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);opacity:${opacity ?? 1};"></div>`,
     iconSize: [14,14], iconAnchor: [7,7],
   });
+}
+// With the same individual now often re-sighted over time (see Individual ID), the map needs a way
+// to tell recent sightings from old ones at a glance — full color = most recent, fading toward
+// transparent = older, scaled across whichever bird observations are currently on screen (not a fixed
+// day cutoff, so the contrast stays meaningful whether the visible date range is a week or a year).
+// Never fades all the way to invisible (MIN_OP floor) — an old sighting should still be easy to spot
+// and click, just visually read as "old".
+function birdObsRecencyOpacity(dateStr, minTs, maxTs){
+  const MIN_OP = 0.15, MAX_OP = 0.95;
+  const ts = new Date(dateStr).getTime();
+  if (!isFinite(ts) || minTs == null || maxTs == null || minTs === maxTs) return MAX_OP;
+  const t = (ts - minTs) / (maxTs - minTs);
+  return MIN_OP + t * (MAX_OP - MIN_OP);
 }
 
 function ensureMap(){
@@ -8050,13 +8182,19 @@ function renderMap(shouldFit){
     // geolocation point is the only location data, so this layer ignores the map's Valley filter too.
     // It does respect the Individual ID filter (birdIdFilterSet, set via the "Individuals" multi-check
     // dropdown that appears next to the Layers controls while this layer is active — empty = show all).
-    for (const r of birdObservations){
-      if (birdIdFilterSet.size && !birdIdFilterSet.has(r.bird_id)) continue;
+    const filteredBirdRows = birdObservations.filter(r => !(birdIdFilterSet.size && !birdIdFilterSet.has(r.bird_id)));
+    // Recency fade is scaled across whatever's currently visible (post ID-filter), not a fixed cutoff —
+    // see birdObsRecencyOpacity()'s comment for why.
+    const birdTs = filteredBirdRows.map(r => new Date(r.date).getTime()).filter(isFinite);
+    const birdMinTs = birdTs.length ? Math.min(...birdTs) : null;
+    const birdMaxTs = birdTs.length ? Math.max(...birdTs) : null;
+    for (const r of filteredBirdRows){
       const lat = +r.lat, lon = +r.lon;
       if (!isFinite(lat) || !isFinite(lon)) continue;
       const species = r.species || [];
       const isNest = r.observation_type === 'nest';
       const color = birdObsAgeColor(species, isNest);
+      const recencyOpacity = birdObsRecencyOpacity(r.date, birdMinTs, birdMaxTs);
       const ageClassSet = new Set();
       for (const s of species) for (const a of (s.ageClasses||[])) ageClassSet.add(a);
       const ageSummary = isNest ? null
@@ -8074,8 +8212,8 @@ function renderMap(shouldFit){
       // Nests get a square marker (birdNestIcon) instead of the round circleMarker dot used for a
       // plain sighting — same idea/at-a-glance distinction requested for this map layer.
       const marker = isNest
-        ? L.marker([lat, lon], { icon: birdNestIcon(color) })
-        : L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 });
+        ? L.marker([lat, lon], { icon: birdNestIcon(color, recencyOpacity) })
+        : L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: recencyOpacity, opacity: recencyOpacity });
       marker.bindTooltip(html, { sticky: true, direction: 'top', opacity: 0.95 });
       marker.bindPopup(html);
       marker.addTo(pointLayerGroup);
@@ -8275,7 +8413,8 @@ function renderMap(shouldFit){
       <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.mixed}"></span>Mixed ages (more than one age class in the same observation)</span>
       <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.unspecified}"></span>Unspecified / nest (age class not recorded)</span>
       <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = age class of the individuals logged (conservation status is still shown per species in the popup). Use the "Show individual" dropdown above to filter to one Individual ID/nickname.</span>
-      <span class="legend-item">● round dot = sighting &nbsp; ▪ square = nest</span>`;
+      <span class="legend-item">● round dot = sighting &nbsp; ▪ square = nest</span>
+      <span class="legend-item">full color = most recent sighting currently shown, fading toward transparent = older ones</span>`;
   }
   if (mapLayers.has('ibs')){
     legend += sep() + `
