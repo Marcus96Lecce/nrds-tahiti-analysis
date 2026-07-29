@@ -1251,7 +1251,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div id="hrSpeciesSection" style="margin-bottom:10px;display:none;">
         <div class="muted" style="margin-bottom:4px;" id="hrSpeciesLabel">Species planted:</div>
+        <div class="muted" style="margin-bottom:4px;font-size:12px;">Type a species name — pick an existing one from the suggestions, or type a new one (it's added to the catalog as Native by default).</div>
         <div id="hrSpeciesRows"></div>
+        <datalist id="hrSpeciesOptions"></datalist>
         <button type="button" class="secondary" onclick="addHrSpeciesRow()" style="padding:5px 10px;font-size:12.5px;">+ Add species</button>
       </div>
       <div id="hrPepFields" style="margin-bottom:10px;display:none;">
@@ -2735,6 +2737,7 @@ function populateFormReferenceOptions(){
   if (hrZonePickerEntry) renderHrZonePicker(true);
   if (pffPickerEntry) renderPffPickerContext(true);
   refreshPepZoneList();
+  refreshHrSpeciesOptions();
   if (ibsPickerEntry) renderIbsZones(true);
   if (birdObsPickerEntry) renderBirdObsZones(true);
 }
@@ -2783,6 +2786,10 @@ function onHrActionChange(){
     ['pepName','pepPlants','pepZone','pepNotes'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
     const othersToggle = document.getElementById('hrPepOthersToggle');
     if (othersToggle && othersToggle.checked){ othersToggle.checked = false; pepShowOthers = false; renderPepPickerOthers(); }
+  } else {
+    // Species rows survive an action switch (shared UI, see comment above) — if some were already
+    // filled in while on Plantation, reflect their total the moment Pépinière becomes active.
+    updatePepPlantsFromSpecies();
   }
 }
 
@@ -2790,17 +2797,51 @@ let hrSpeciesRowCount = 0;
 function addHrSpeciesRow(){
   const wrap = document.getElementById('hrSpeciesRows');
   const idx = hrSpeciesRowCount++;
-  const speciesOptions = [...new Set((tables.espece||[]).map(e => e.Name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const div = document.createElement('div');
   div.className = 'row'; div.style.marginBottom = '6px'; div.id = `hrSpeciesRow${idx}`;
   div.innerHTML = `
-    <select class="hr-species-name">
-      <option value="">Choose a species…</option>
-      ${speciesOptions.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
-    </select>
-    <input type="number" class="hr-species-number" min="0" step="1" placeholder="number" style="width:90px;">
-    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('hrSpeciesRow${idx}').remove()">×</button>`;
+    <input type="text" class="hr-species-name" list="hrSpeciesOptions" placeholder="Species name…" style="width:220px;" onchange="onHrSpeciesNameChange(this)">
+    <input type="number" class="hr-species-number" min="0" step="1" placeholder="number" style="width:90px;" oninput="updatePepPlantsFromSpecies()">
+    <button type="button" class="secondary" style="padding:4px 9px;font-size:12px;" onclick="document.getElementById('hrSpeciesRow${idx}').remove(); updatePepPlantsFromSpecies();">×</button>`;
   wrap.appendChild(div);
+  updatePepPlantsFromSpecies();
+}
+// The species name field is free text (with a datalist of existing catalog names) rather than a
+// locked dropdown, so typing a name that isn't in the catalog yet registers it there — defaulting
+// to Native (restoration planting is native-species-first; Introduced entries are the small,
+// deliberately curated invasive list) — instead of silently submitting a species with no type/common
+// name metadata. Registered in-memory only: available immediately in every species picker for the
+// rest of this session, but doesn't persist for other users/after reload — ask to add it to
+// data/espece.json permanently (same as how "Farà" was added) if it should stick around.
+function onHrSpeciesNameChange(inputEl){
+  const name = inputEl.value.trim();
+  if (!name) return;
+  const exists = (tables.espece||[]).some(e => e.Name === name);
+  if (!exists){
+    tables.espece = tables.espece || [];
+    tables.espece.push({ Identifier: `custom-${Date.now()}`, Name: name, 'Common Name': name, Type: 'Native' });
+    refreshHrSpeciesOptions();
+  }
+  updatePepPlantsFromSpecies();
+}
+function refreshHrSpeciesOptions(){
+  const names = [...new Set((tables.espece||[]).map(e => e.Name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const el = document.getElementById('hrSpeciesOptions');
+  if (el) el.innerHTML = names.map(s => `<option value="${escapeHtml(s)}">`).join('');
+}
+// Sums the species rows' numbers into the Pépinière "Number of plants" field — a convenience default
+// only: the field stays a normal editable input, so the user can still overwrite the total by hand
+// at any point afterward. Only acts while Action=Pépinière (that's the only place #pepPlants exists
+// in the form) and only when at least one species row exists (an empty species list shouldn't force
+// a manually-entered total back to zero).
+function updatePepPlantsFromSpecies(){
+  if (document.getElementById('hrAction').value !== 'Pépinière') return;
+  const rows = document.querySelectorAll('#hrSpeciesRows > div');
+  if (!rows.length) return;
+  let sum = 0;
+  rows.forEach(row => { sum += parseInt(row.querySelector('.hr-species-number').value, 10) || 0; });
+  const plantsEl = document.getElementById('pepPlants');
+  if (plantsEl) plantsEl.value = sum;
 }
 
 async function submitHabitatForm(evt){
