@@ -1590,6 +1590,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
             <option value="nest">Nest</option>
           </select>
         </label>
+        <label class="muted">Individual ID / nickname (optional): <input type="text" id="boIndividualId" list="boIndividualIdList" placeholder="e.g. Monarch-07 — reuse an existing one to log a re-sighting" style="width:260px;"></label>
+        <datalist id="boIndividualIdList"></datalist>
       </div>
 
       <div style="margin-bottom:10px;">
@@ -1841,6 +1843,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
         Planting density: <input type="number" id="nrdsDensityInput" value="1111" min="100" max="9999" step="1" style="width:68px;padding:2px 5px;" onchange="onNrdsDensityChange(this.value)"> trees/ha
         <span style="font-size:11px;">(3×3 m = 1111)</span>
       </label>
+    </div>
+    <div class="row" id="birdIdRow" style="margin-bottom:12px;display:none;">
+      <label class="muted">🐦 Show individual:
+        <select id="birdIdFilter" onchange="onBirdIdFilterChange(this.value)">
+          <option value="all">All individuals</option>
+        </select>
+      </label>
+      <span class="muted">Filters the Bird observations layer to one Individual ID/nickname at a time.</span>
     </div>
     <span id="mapStatus" class="muted">Generate the enriched datasets first.</span>
     <div class="map-flex-row">
@@ -4392,6 +4402,21 @@ function birdObsTopColor(species){
   if (species && species.length) return species[0].color || '#666';
   return '#666';
 }
+// Map-layer marker color, by age class rather than conservation status (birdObsTopColor above is
+// still used for the chart tab's species/status breakdown, untouched). Age class is recorded per
+// species entry (ageClasses[], suppressed for a Nest or a flock/group estimate — see
+// renderBirdObsPendingSpecies) — this takes the UNION across every species entry in the observation:
+// one distinct class present = that class's color, more than one = "mixed" (the observation logged,
+// say, an adult and a juvenile together), none recorded = "unspecified".
+const BIRD_AGE_COLORS = { chick: '#f4c744', juvenile: '#f2812e', adult: '#2f9e44', mixed: '#7048e8', unspecified: '#9aa69a' };
+function birdObsAgeColor(species, isNest){
+  if (isNest) return BIRD_AGE_COLORS.unspecified;
+  const classes = new Set();
+  for (const s of species||[]) for (const a of (s.ageClasses||[])) classes.add(a);
+  if (classes.size === 0) return BIRD_AGE_COLORS.unspecified;
+  if (classes.size > 1) return BIRD_AGE_COLORS.mixed;
+  return BIRD_AGE_COLORS[[...classes][0]] || BIRD_AGE_COLORS.unspecified;
+}
 // Formats a species' age-class picks (Chick/Juvenile/Adult, only meaningful for an exact count —
 // see the conditional checkboxes in renderBirdObsPendingSpecies) for display in map/chart popups.
 function birdAgeClassesLabel(s){
@@ -4412,8 +4437,23 @@ function birdObsPhotoThumbsHtml(r){
     `</div>`;
 }
 
+// Individual ID / nickname datalist (form) + map filter dropdown, both fed from the same distinct
+// set of bird_id values already used across birdObservations — refreshed on every data load so a
+// re-sighting submitted by someone else shows up as a pickable suggestion without a reload.
+function refreshBirdIdOptions(){
+  const ids = [...new Set((birdObservations||[]).map(r => r.bird_id).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+  const dl = document.getElementById('boIndividualIdList');
+  if (dl) dl.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">`).join('');
+  const sel = document.getElementById('birdIdFilter');
+  if (sel){
+    const current = sel.value;
+    sel.innerHTML = '<option value="all">All individuals</option>' + ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current; else birdIdFilterValue = 'all';
+  }
+}
 function _applyBirdObsData(data){
   birdObservations = data || [];
+  refreshBirdIdOptions();
   if (leafletMap) renderMap(false);
   if (currentChartViews.has('birds')) renderAllCharts();
   if (enriched) onDataUpdated();
@@ -4773,6 +4813,7 @@ async function submitBirdObsForm(evt){
       date: document.getElementById('boDate').value,
       observer: document.getElementById('boObserver').value.trim(),
       observation_type: obsType,
+      bird_id: document.getElementById('boIndividualId').value.trim() || null,
       lat: birdObsPickedLat,
       lon: birdObsPickedLon,
       sky: document.getElementById('boSky').value || null,
@@ -4815,7 +4856,7 @@ function downloadBirdObservations(){
   const rows = birdObservations;
   if (!rows.length){ alert('No Bird Observation records loaded yet.'); return; }
   const flat = rows.map(r => ({ ...r, species: JSON.stringify(r.species||[]), photo_urls: (r.photo_urls||[]).join(' | ') }));
-  const fields = ['id','date','observer','observation_type','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','photo_urls','notes','created_at'];
+  const fields = ['id','date','observer','observation_type','bird_id','lat','lon','sky','canopy_cover','wind_beaufort','rain','species','photo_urls','notes','created_at'];
   downloadCSV('bird_observations.csv', flat, fields);
 }
 
@@ -7532,7 +7573,13 @@ function toggleMapLayer(key, checked){
   }
   document.getElementById('cleaningHistRow').style.display = mapLayers.has('cleaning') ? '' : 'none';
   document.getElementById('plantingHistRow').style.display = mapLayers.has('species') ? '' : 'none';
+  document.getElementById('birdIdRow').style.display = mapLayers.has('birds') ? '' : 'none';
   document.getElementById('mapLayersCount').textContent = `(${mapLayers.size})`;
+  renderMap(false);
+}
+let birdIdFilterValue = 'all';
+function onBirdIdFilterChange(value){
+  birdIdFilterValue = value;
   renderMap(false);
 }
 function toggleMapLayersDropdown(){
@@ -7953,15 +8000,25 @@ function renderMap(shouldFit){
   if (mapLayers.has('birds')){
     // Bird observations have no Valley field of their own (same reasoning as PFF above) — the
     // geolocation point is the only location data, so this layer ignores the map's Valley filter too.
+    // It does respect the Individual ID filter (birdIdFilterValue, set via the "Show individual"
+    // dropdown that appears next to the Layers controls while this layer is active).
     for (const r of birdObservations){
+      if (birdIdFilterValue !== 'all' && r.bird_id !== birdIdFilterValue) continue;
       const lat = +r.lat, lon = +r.lon;
       if (!isFinite(lat) || !isFinite(lon)) continue;
       const species = r.species || [];
-      const color = birdObsTopColor(species);
       const isNest = r.observation_type === 'nest';
+      const color = birdObsAgeColor(species, isNest);
+      const ageClassSet = new Set();
+      for (const s of species) for (const a of (s.ageClasses||[])) ageClassSet.add(a);
+      const ageSummary = isNest ? null
+        : ageClassSet.size === 0 ? 'Unspecified'
+        : ageClassSet.size > 1 ? `Mixed (${[...ageClassSet].map(a=>a.charAt(0).toUpperCase()+a.slice(1)).join(' + ')})`
+        : [...ageClassSet][0].charAt(0).toUpperCase()+[...ageClassSet][0].slice(1);
       const speciesTxt = species.map(s => `${escapeHtml(s.name)} (${s.quantity}${s.quantityType==='group'?' est.':''}${s.detectionType?', '+(s.detectionType==='heard'?'Heard':'Seen'):''}${birdAgeClassesLabel(s)}${birdBehavioursLabel(s)})`).join(', ') || '—';
-      const html = `<b>${isNest ? '🪺 Nest' : '🐦 Bird observation'}</b><br>` +
+      const html = `<b>${isNest ? '🪺 Nest' : '🐦 Bird observation'}</b>${r.bird_id ? ` — <span style="font-weight:600;">${escapeHtml(r.bird_id)}</span>` : ''}<br>` +
         `Date: ${escapeHtml(r.date || '—')}<br>Observer: ${escapeHtml(r.observer || '—')}<br>` +
+        (ageSummary ? `Age class: <b>${escapeHtml(ageSummary)}</b><br>` : '') +
         `Species: ${speciesTxt}<br>` +
         `Sky: ${escapeHtml(r.sky || '—')} · Wind: ${r.wind_beaufort ?? '—'} · Rain: ${escapeHtml(r.rain || '—')} · Canopy: ${escapeHtml(r.canopy_cover || '—')}` +
         (r.notes ? `<br>Notes: ${escapeHtml(r.notes)}` : '') +
@@ -8164,12 +8221,12 @@ function renderMap(shouldFit){
   }
   if (mapLayers.has('birds')){
     legend += sep() + `
-      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic-CR']}"></span>Endemic (Critically Endangered)</span>
-      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Endemic']}"></span>Endemic</span>
-      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Native']}"></span>Native</span>
-      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Migrant']}"></span>Migrant</span>
-      <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
-      <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = the most conservation-significant species present, using its own color as picked when submitted (defaults to the status color above, editable per detection)</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.chick}"></span>Chick</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.juvenile}"></span>Juvenile</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.adult}"></span>Adult</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.mixed}"></span>Mixed ages (more than one age class in the same observation)</span>
+      <span class="legend-item"><span class="swatch" style="background:${BIRD_AGE_COLORS.unspecified}"></span>Unspecified / nest (age class not recorded)</span>
+      <span class="legend-item">🐦 Bird observations — no valley scoping; dot color = age class of the individuals logged (conservation status is still shown per species in the popup). Use the "Show individual" dropdown above to filter to one Individual ID/nickname.</span>
       <span class="legend-item">● round dot = sighting &nbsp; ▪ square = nest</span>`;
   }
   if (mapLayers.has('ibs')){
