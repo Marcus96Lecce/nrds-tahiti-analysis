@@ -200,7 +200,7 @@
   table.preview th,table.preview td{border:1px solid var(--border);padding:5px 8px;text-align:left;}
   table.preview th{background:linear-gradient(135deg,#eef6ee,#e4f0e4);position:sticky;top:0;font-weight:600;color:var(--green-dark);}
   table.preview tr:nth-child(even) td{background:#f8fbf8;}
-  .table-scroll{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);}
+  .table-scroll{max-height:320px;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--r);}
 
   /* ── Chart tabs (pill style) ── */
   .tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;padding:4px;background:#eaf2ea;border-radius:var(--r);}
@@ -290,6 +290,15 @@
     .row select{width:100%;}
     .row input[type=date]{width:100%;}
     .date-label,.date-reset-btn{flex:1 1 100% !important;}
+    /* These dropdown panels (Layers, Charts, bird Individual ID filter) are position:absolute;left:0
+       relative to their trigger button, which can sit anywhere in a wrapped row — their own inline
+       white-space:nowrap let a single long checkbox label push the panel wider than the screen, with
+       nothing cut off ever reachable since the panel itself isn't what scrolls. Capping width and
+       letting labels wrap keeps the whole panel on-screen instead. */
+    #mapLayersPanel,#chartChartsPanel,#birdIdFilterPanel{
+      max-width:calc(100vw - 24px);
+      white-space:normal !important;
+    }
     .grid3{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
     .stat:hover{transform:none;box-shadow:0 1px 4px rgba(0,40,0,.05);}
     .stat .num{font-size:22px;}
