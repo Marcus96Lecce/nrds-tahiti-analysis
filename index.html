@@ -6591,22 +6591,15 @@ function renderBirdObsChart(container){
   hideChartPopup();
   const area = container || document.getElementById('chartArea');
 
-  const chartValley = document.getElementById('chartValley').value;
+  // Bird Observations doesn't use Valley anywhere — no filter, no per-sighting valley lookup/display,
+  // consistent across the map layer (which already ignored it), this chart, and the submission form
+  // (which never had a Valley field to begin with).
   const rows = (birdObservations||[])
-    .filter(r => {
-      if (!r.date) return false;
-      if (!inDateRange(r.date, chartDateFrom, chartDateTo)) return false;
-      if (chartValley !== 'all'){
-        const v = inferPffValley(+r.lat, +r.lon);
-        if (v !== chartValley) return false;
-      }
-      return true;
-    })
+    .filter(r => r.date && inDateRange(r.date, chartDateFrom, chartDateTo))
     .map(r => ({ ...r, ts: new Date(r.date).getTime() }))
     .sort((a,b) => a.ts - b.ts);
 
-  const valleyLabel = chartValley === 'all' ? 'all valleys' : chartValley;
-  if (!rows.length){ area.innerHTML = `<span class="muted">No bird observations for ${escapeHtml(valleyLabel)} in this date range.</span>`; return; }
+  if (!rows.length){ area.innerHTML = `<span class="muted">No bird observations in this date range.</span>`; return; }
 
   // ── Species frequency (horizontal bars, most-observed first) ──
   const agg = new Map();
@@ -6686,13 +6679,12 @@ function renderBirdObsChart(container){
     <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Native']}"></span>Native</span>
     <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Migrant']}"></span>Migrant</span>
     <span class="legend-item"><span class="swatch" style="background:${BIRD_STATUS_COLORS['Introduced']}"></span>Introduced</span>
-    <br><span class="muted">Top chart: total individuals/groups observed per species, click a bar for recent dates. Bottom chart: one bar per observation in chronological order, colored by the most conservation-significant species present (its own picked color) — click for the full record. Valley filter is applied via GPS point-in-polygon lookup${chartValley !== 'all' ? ` — showing <b>${escapeHtml(valleyLabel)}</b> only` : ''}. Zone and Station filters do not apply to this data.</span>
+    <br><span class="muted">Top chart: total individuals/groups observed per species, click a bar for recent dates. Bottom chart: one bar per observation in chronological order, colored by the most conservation-significant species present (its own picked color) — click for the full record. Valley, Zone and Station filters do not apply to this data.</span>
   </div>`;
   // ── Individual sighting history: one row per Individual ID/nickname, real calendar time-axis ──
-  // Answers "where has each tracked individual been seen, over time" — dot position = date, dot
-  // color = valley (resolved per sighting via GPS point-in-polygon, same method as the rest of this
-  // chart). Sightings with no Individual ID set can't be grouped into a bird's history, so they're
-  // simply excluded here (still fully present in the two charts above).
+  // Answers "when has each tracked individual been seen" — dot position = date. Sightings with no
+  // Individual ID set can't be grouped into a bird's history, so they're simply excluded here (still
+  // fully present in the two charts above).
   const byBird = new Map();
   for (const r of rows){
     if (!r.bird_id) continue;
@@ -6721,52 +6713,45 @@ function renderBirdObsChart(container){
       const sightings = [...byBird.get(id)].sort((a,b) => a.ts-b.ts);
       individualSvg += svgEl('text',{x:iML-8,y:y+4,'text-anchor':'end','font-size':11,fill:'#23291f'}, id);
       individualSvg += svgEl('line',{x1:iML,x2:iW-iMR,y1:y,y2:y,stroke:'#eef1ec'});
+      const rowColor = categoricalColor(hashStringToInt(id));
       if (sightings.length > 1){
         const d = sightings.map((s,j)=>`${j===0?'M':'L'}${ixScale(s.ts).toFixed(1)},${y.toFixed(1)}`).join(' ');
         individualSvg += svgEl('path',{d, fill:'none', stroke:'#9aa69a', 'stroke-width':1.5, opacity:0.6});
       }
       sightings.forEach(s => {
         const x = ixScale(s.ts);
-        const valley = inferPffValley(+s.lat, +s.lon);
-        const dotColor = VALLEY_HEX[valley] || '#7f7f7f';
         const speciesTxt = (s.species||[]).map(sp => sp.name).join(', ') || '—';
         const popupIdx = chartPopupData.push(`<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(id)} — ${escapeHtml(s.date)}</div>
-          <div><b>Valley:</b> ${escapeHtml(valley || 'not resolved')}</div>
           <div><b>Species:</b> ${escapeHtml(speciesTxt)}</div>
           <div><b>Coordinates:</b> ${(+s.lat).toFixed(5)}, ${(+s.lon).toFixed(5)}</div>
           ${s.notes ? `<div><b>Notes:</b> ${escapeHtml(s.notes)}</div>` : ''}`) - 1;
-        individualSvg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${id} — ${s.date} (${valley || 'valley not resolved'})\nClick for details`)}` +
-          svgEl('circle',{cx:x,cy:y,r:5,fill:dotColor,stroke:'#fff','stroke-width':1.3}) + `</g>`;
+        individualSvg += `<g onclick="pinPopup(event, ${popupIdx})" style="cursor:pointer;">${svgEl('title',{},`${id} — ${s.date}\nClick for details`)}` +
+          svgEl('circle',{cx:x,cy:y,r:5,fill:rowColor,stroke:'#fff','stroke-width':1.3}) + `</g>`;
       });
     });
     individualSvg += `</svg>`;
     const individualLegend = `<div style="margin-top:8px;">
-      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Papehue}"></span>Papehue</span>
-      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Maruapo}"></span>Maruapo</span>
-      <span class="legend-item"><span class="swatch" style="background:${VALLEY_HEX.Hopa}"></span>Hopa</span>
-      <span class="legend-item"><span class="swatch" style="background:#7f7f7f"></span>Valley not resolved</span>
-      <br><span class="muted">One row per Individual ID, dots on their real sighting dates, connecting line shows the gaps between sightings. Click a dot for the full record.</span>
+      <span class="muted">One row per Individual ID, dots on their real sighting dates, connecting line shows the gaps between sightings. Click a dot for the full record.</span>
     </div>`;
 
     const summaryRows = birdIds.map(id => {
       const s = [...byBird.get(id)].sort((a,b) => a.ts-b.ts);
-      const valleys = [...new Set(s.map(x => inferPffValley(+x.lat,+x.lon) || 'not resolved'))];
       const lastSpecies = (s[s.length-1].species||[]).map(sp => sp.name).join(', ') || '—';
-      return { id, count: s.length, first: s[0].date, last: s[s.length-1].date, valleys: valleys.join(', '), lastSpecies };
+      return { id, count: s.length, first: s[0].date, last: s[s.length-1].date, lastSpecies };
     }).sort((a,b) => b.count - a.count);
     const summaryTableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
-        <th>Individual ID</th><th>Sightings</th><th>First seen</th><th>Last seen</th><th>Valleys visited</th><th>Species (latest)</th>
+        <th>Individual ID</th><th>Sightings</th><th>First seen</th><th>Last seen</th><th>Species (latest)</th>
       </tr></thead><tbody>` +
-      summaryRows.map(r => `<tr><td>${escapeHtml(r.id)}</td><td>${r.count}</td><td>${escapeHtml(r.first)}</td><td>${escapeHtml(r.last)}</td><td>${escapeHtml(r.valleys)}</td><td>${escapeHtml(r.lastSpecies)}</td></tr>`).join('')
+      summaryRows.map(r => `<tr><td>${escapeHtml(r.id)}</td><td>${r.count}</td><td>${escapeHtml(r.first)}</td><td>${escapeHtml(r.last)}</td><td>${escapeHtml(r.lastSpecies)}</td></tr>`).join('')
       + '</tbody></table></div>';
 
     // birdId assigned AFTER the spread — r's own numeric `id` (the DB row id) must not silently
     // overwrite the nickname we're grouping by, which a plain `{ id, ...r }` would do.
     const logRows = birdIds.flatMap(id => byBird.get(id).map(r => ({ ...r, birdId: id }))).sort((a,b) => a.ts - b.ts);
     const logTableHtml = `<div class="table-scroll"><table class="preview"><thead><tr>
-        <th>Date</th><th>Individual ID</th><th>Valley</th><th>Species</th><th>Notes</th>
+        <th>Date</th><th>Individual ID</th><th>Species</th><th>Notes</th>
       </tr></thead><tbody>` +
-      logRows.map(r => `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.birdId)}</td><td>${escapeHtml(inferPffValley(+r.lat,+r.lon) || '—')}</td><td>${escapeHtml((r.species||[]).map(sp=>sp.name).join(', ')||'—')}</td><td>${escapeHtml(r.notes||'—')}</td></tr>`).join('')
+      logRows.map(r => `<tr><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.birdId)}</td><td>${escapeHtml((r.species||[]).map(sp=>sp.name).join(', ')||'—')}</td><td>${escapeHtml(r.notes||'—')}</td></tr>`).join('')
       + '</tbody></table></div>';
 
     individualSection = individualSvg + individualLegend
@@ -6776,7 +6761,7 @@ function renderBirdObsChart(container){
       + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Full sighting log</div>' + logTableHtml;
   }
 
-  const hint = `<div class="hint" style="margin-bottom:6px;">Bird sightings over time${chartValley !== 'all' ? ` in <b>${escapeHtml(valleyLabel)}</b>` : ' across the LIFE STOP EXTINCTION work area'} — pair with the map's "🐦 Bird observations" layer for the spatial view.</div>`;
+  const hint = `<div class="hint" style="margin-bottom:6px;">Bird sightings over time across the LIFE STOP EXTINCTION work area — pair with the map's "🐦 Bird observations" layer for the spatial view.</div>`;
   area.innerHTML = hint + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Most-observed species</div>' + specSvg
     + '<hr style="margin:14px 0;border-color:var(--border);">'
     + '<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Observations over time</div>' + summary + chronoSvg + legend
