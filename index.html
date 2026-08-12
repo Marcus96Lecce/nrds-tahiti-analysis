@@ -8975,16 +8975,14 @@ function cleaningCategoryStats(action){
   const avgProgress = withProgress.length
     ? withProgress.reduce((s,r) => s + (+r.Pct_cleaned_end_of_day - +r.Pct_cleaned_arrival), 0) / withProgress.length
     : null;
-  const withPeople = rows.filter(r => r.Number_of_Person && isFinite(+r.Number_of_Person) && +r.Number_of_Person > 0);
-  const avgPeople = withPeople.length
-    ? withPeople.reduce((s,r) => s + +r.Number_of_Person, 0) / withPeople.length
-    : null;
-  const perPersonVals = rows
-    .filter(r => r.Pct_cleaned_arrival !== '' && r.Pct_cleaned_end_of_day !== '' && r.Number_of_Person && +r.Number_of_Person > 0)
-    .map(r => (+r.Pct_cleaned_end_of_day - +r.Pct_cleaned_arrival) / +r.Number_of_Person);
-  const avgProgressPerPerson = perPersonVals.length ? perPersonVals.reduce((s,v) => s+v, 0) / perPersonVals.length : null;
   const dated = rows.filter(r => r.Date).sort((a,b) => new Date(b.Date) - new Date(a.Date));
-  return { count: rows.length, avgPeople, avgProgress, avgProgressPerPerson, lastDate: dated.length ? dated[0].Date : null };
+  const last = dated.length ? dated[0] : null;
+  return {
+    count: rows.length, avgProgress,
+    lastDate: last ? last.Date : null,
+    lastZone: last ? (last.Unit_Name || null) : null,
+    lastRatStation: last && last.Rat_Stations ? last.Rat_Stations.split(';').filter(Boolean).join(', ') : null,
+  };
 }
 function cleaningCategoryMonthlySeries(){
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -9012,9 +9010,9 @@ function renderCleaningVsMaintenanceDropdown(){
 
   const compareRows = [
     ['Sessions recorded', s => s.count],
-    ['Avg people / session', s => s.avgPeople != null ? s.avgPeople.toFixed(1) : '—'],
     ['Avg % progress / session', s => s.avgProgress != null ? s.avgProgress.toFixed(1)+'%' : '—'],
-    ['Avg % progress / person', s => s.avgProgressPerPerson != null ? s.avgProgressPerPerson.toFixed(1)+'%' : '—'],
+    ['Last zone', s => escapeHtml(s.lastZone || '—')],
+    ['Last rat station', s => escapeHtml(s.lastRatStation || '—')],
     ['Most recent session', s => s.lastDate || '—'],
   ];
   const compareTable = `<div class="table-scroll"><table class="preview"><thead><tr><th></th>` +
