@@ -6009,6 +6009,7 @@ function onDataUpdated(){
   html += renderLastPlantingDropdown(mainRows);
   html += renderLastCleaningDropdown(mainRows);
   html += renderLastRatLineCleaningDropdown(mainRows);
+  html += renderCleaningVsMaintenanceDropdown();
   document.getElementById('buildSummary').innerHTML = html;
   document.getElementById('enrichedDownloadButtons').innerHTML = `
     <button class="secondary" onclick="downloadCSV('habitat_restoration_enriched.csv', enriched.mainRows, Object.keys(enriched.mainRows[0]))">⬇ habitat_restoration_enriched.csv</button>
@@ -7170,10 +7171,16 @@ function plantingProjColor(dom, pct){
 // dateFrom/dateTo are optional — omitted (as zoneNrdsAggregate()/combinedCleaningEstimate() do
 // internally) they mean "latest reading overall", unaffected by the map's own date-range filter;
 // the map's plain (non-historical) cleaning/derat layers pass mapDateFrom/mapDateTo explicitly.
+// "Cleaning %" throughout this app (map layer, TO CLEAN priority score, understory trend chart) means
+// specifically undergrowth cutting — "Entretien des plantations (cleaning around plantation)" rows are
+// deliberately excluded here even though they also carry a Pct_cleaned_end_of_day value, so the two
+// action types never get silently averaged into one number. See renderCleaningVsMaintenanceDropdown()
+// for a side-by-side view of both categories.
+const CUTTING_ACTION = 'Coupe du sous-bois (cutting undergrowth)';
 function latestUnitStatus(dateFrom, dateTo){
   const map = new Map();
   for (const r of enriched.mainRows){
-    if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
+    if (r.Action !== CUTTING_ACTION || r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     const cur = map.get(r.Unit_Name);
     if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date, name:r.Name, comment:r.Comment});
   }
@@ -7183,7 +7190,7 @@ function latestUnitStatus(dateFrom, dateTo){
 function latestStationStatus(dateFrom, dateTo){
   const map = new Map(); // key: Valley+'||'+Station
   for (const r of enriched.mainRows){
-    if (r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations || !inDateRange(r.Date, dateFrom, dateTo)) continue;
+    if (r.Action !== CUTTING_ACTION || r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     for (const code of r.Rat_Stations.split(';').filter(Boolean)){
       const key = r.Valley + '||' + code;
       const cur = map.get(key);
@@ -8950,6 +8957,109 @@ function renderLastRatLineCleaningDropdown(mainRows){
   </details>`;
 }
 
+// Both action types log a "% cleaned" per session but target different work — undergrowth cutting
+// along a rat line/zone vs. maintenance immediately around a specific plantation. Kept visually and
+// numerically distinct here (same reason the zone cutting estimate above only counts CUTTING_ACTION).
+const CLEANING_CATEGORY_HEX = {
+  [CUTTING_ACTION]: '#1f77b4',
+  'Entretien des plantations (cleaning around plantation)': '#e67e22'
+};
+const CLEANING_CATEGORY_SHORT = {
+  [CUTTING_ACTION]: 'Cutting undergrowth',
+  'Entretien des plantations (cleaning around plantation)': 'Plantation maintenance'
+};
+function cleaningCategoryStats(action){
+  const rows = enriched.mainRows.filter(r => r.Action === action);
+  const withProgress = rows.filter(r => r.Pct_cleaned_arrival !== '' && r.Pct_cleaned_end_of_day !== ''
+    && isFinite(+r.Pct_cleaned_arrival) && isFinite(+r.Pct_cleaned_end_of_day));
+  const avgProgress = withProgress.length
+    ? withProgress.reduce((s,r) => s + (+r.Pct_cleaned_end_of_day - +r.Pct_cleaned_arrival), 0) / withProgress.length
+    : null;
+  const withPeople = rows.filter(r => r.Number_of_Person && isFinite(+r.Number_of_Person) && +r.Number_of_Person > 0);
+  const avgPeople = withPeople.length
+    ? withPeople.reduce((s,r) => s + +r.Number_of_Person, 0) / withPeople.length
+    : null;
+  const perPersonVals = rows
+    .filter(r => r.Pct_cleaned_arrival !== '' && r.Pct_cleaned_end_of_day !== '' && r.Number_of_Person && +r.Number_of_Person > 0)
+    .map(r => (+r.Pct_cleaned_end_of_day - +r.Pct_cleaned_arrival) / +r.Number_of_Person);
+  const avgProgressPerPerson = perPersonVals.length ? perPersonVals.reduce((s,v) => s+v, 0) / perPersonVals.length : null;
+  const dated = rows.filter(r => r.Date).sort((a,b) => new Date(b.Date) - new Date(a.Date));
+  return { count: rows.length, avgPeople, avgProgress, avgProgressPerPerson, lastDate: dated.length ? dated[0].Date : null };
+}
+function cleaningCategoryMonthlySeries(){
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mLabel = m => { const [yr,mo] = m.split('-'); return MONTH_ABBR[+mo-1]+' '+yr.slice(2); };
+  const actions = Object.keys(CLEANING_CATEGORY_HEX);
+  const monthsSet = new Set();
+  const counts = {}; actions.forEach(a => counts[a] = {});
+  for (const r of enriched.mainRows){
+    if (!counts[r.Action] || !r.Date) continue;
+    const month = r.Date.substring(0,7);
+    monthsSet.add(month);
+    counts[r.Action][month] = (counts[r.Action][month]||0) + 1;
+  }
+  const months = [...monthsSet].sort();
+  const monthLabels = months.map(mLabel);
+  const series = actions.map(a => ({
+    label: CLEANING_CATEGORY_SHORT[a], color: CLEANING_CATEGORY_HEX[a],
+    values: months.map(m => counts[a][m] || 0)
+  }));
+  return { monthLabels, series };
+}
+function renderCleaningVsMaintenanceDropdown(){
+  const actions = Object.keys(CLEANING_CATEGORY_HEX);
+  const stats = actions.map(a => ({ action:a, short:CLEANING_CATEGORY_SHORT[a], color:CLEANING_CATEGORY_HEX[a], ...cleaningCategoryStats(a) }));
+
+  const compareRows = [
+    ['Sessions recorded', s => s.count],
+    ['Avg people / session', s => s.avgPeople != null ? s.avgPeople.toFixed(1) : '—'],
+    ['Avg % progress / session', s => s.avgProgress != null ? s.avgProgress.toFixed(1)+'%' : '—'],
+    ['Avg % progress / person', s => s.avgProgressPerPerson != null ? s.avgProgressPerPerson.toFixed(1)+'%' : '—'],
+    ['Most recent session', s => s.lastDate || '—'],
+  ];
+  const compareTable = `<div class="table-scroll"><table class="preview"><thead><tr><th></th>` +
+    stats.map(s => `<th style="color:${s.color};">${escapeHtml(s.short)}</th>`).join('') + `</tr></thead><tbody>` +
+    compareRows.map(([label,fn]) => `<tr><td>${label}</td>` + stats.map(s => `<td>${fn(s)}</td>`).join('') + `</tr>`).join('') +
+    `</tbody></table></div>`;
+
+  const { monthLabels, series } = cleaningCategoryMonthlySeries();
+  const maxCount = Math.max(1, ...series.flatMap(s => s.values));
+  const freqChart = monthLabels.length
+    ? drawTrendChart(series, monthLabels, { maxVal: maxCount, unit: '' })
+    : `<div class="muted">Not enough dated records yet.</div>`;
+  const legend = stats.map(s => `<span class="legend-item"><span class="swatch" style="background:${s.color}"></span>${escapeHtml(s.short)}</span>`).join('');
+
+  const recentTables = stats.map(s => {
+    const rows = enriched.mainRows.filter(r => r.Action === s.action && r.Date)
+      .sort((a,b) => new Date(b.Date) - new Date(a.Date)).slice(0, 8);
+    const inner = rows.length ? rows.map(r => {
+      const pct = (r.Pct_cleaned_arrival || r.Pct_cleaned_end_of_day)
+        ? `${escapeHtml(r.Pct_cleaned_arrival||'—')}% → ${escapeHtml(r.Pct_cleaned_end_of_day||'—')}%` : '—';
+      return `<div style="display:flex;flex-wrap:wrap;row-gap:4px;align-items:flex-start;gap:8px;padding:6px 9px;margin-bottom:3px;background:#f7faf6;border-left:4px solid ${s.color};border-radius:0 6px 6px 0;font-size:12px;max-width:100%;">
+        <span style="min-width:75px;color:#555;">${escapeHtml(r.Date)}</span>
+        <span style="min-width:80px;font-weight:600;">${escapeHtml(r.Unit_Name||'—')} <span class="muted" style="font-weight:400;">(${escapeHtml(r.Valley||'—')})</span></span>
+        <span class="muted">${pct}</span>
+        <span class="muted" style="white-space:nowrap;">${escapeHtml(r.Number_of_Person ? r.Number_of_Person+' ppl' : '')}</span>
+        <span class="muted" style="white-space:nowrap;">${escapeHtml(r.Name||'')}</span>
+      </div>`;
+    }).join('') : `<div class="muted" style="padding:6px 9px;">No sessions recorded yet.</div>`;
+    return `<div style="flex:1;min-width:240px;"><b style="color:${s.color};font-size:12.5px;">${escapeHtml(s.short)}</b><div style="margin-top:4px;">${inner}</div></div>`;
+  }).join('');
+
+  return `<details style="margin-top:8px;">
+    <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🌿 Cutting vs plantation maintenance — compared</summary>
+    <div style="margin-top:8px;">
+      <div class="muted" style="margin-bottom:8px;">Both log a "% cleaned" per session but target different work — kept separate here (and in the zone cutting estimate) instead of blended into one number.</div>
+      ${compareTable}
+      <h3 style="font-size:13px;margin:12px 0 4px;">Sessions per month</h3>
+      ${freqChart}
+      <div style="margin-top:6px;">${legend}</div>
+      <h3 style="font-size:13px;margin:14px 0 4px;">Most recent sessions</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;">${recentTables}</div>
+    </div>
+  </details>`;
+}
+
 function renderPriorityCalcBox(ranked){
   var plant = ranked.plant || [], clean = ranked.clean || [];
   var html = '<b>Priority zones — two independent rankings</b><br><br>' +
@@ -9387,15 +9497,21 @@ function totalIndividualsPlantedByValley(valley){
   return enriched.mainRows.filter(r => r.Valley === valley).reduce((s,r) => s + (r.Total_Individuals||0), 0);
 }
 
-function drawTrendChart(series, categories){
+// opts.maxVal/opts.unit let this draw a plain-count trend (e.g. sessions/month) instead of the default
+// 0-100% scale — every existing caller omits opts and gets the exact original 0-100%-by-25 behavior.
+function drawTrendChart(series, categories, opts){
+  const o = opts || {};
+  const maxVal = o.maxVal != null ? o.maxVal : 100;
+  const unit = o.unit != null ? o.unit : '%';
+  const step = unit === '%' ? 25 : niceStep(maxVal);
   const W = 480, H = 280, mL = 45, mR = 20, mT = 20, mB = 36;
   const xScale = i => categories.length===1 ? mL+(W-mL-mR)/2 : mL + i/(categories.length-1)*(W-mL-mR);
-  const yScale = v => H-mB - v/100*(H-mT-mB);
+  const yScale = v => H-mB - v/maxVal*(H-mT-mB);
   let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  for (let p=0;p<=100;p+=25){
+  for (let p=0;p<=maxVal;p+=step){
     const y = yScale(p);
     svg += svgEl('line',{x1:mL,x2:W-mR,y1:y,y2:y,stroke:'#e3e8e2','stroke-width':1});
-    svg += svgEl('text',{x:mL-6,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, p+'%');
+    svg += svgEl('text',{x:mL-6,y:y+4,'text-anchor':'end','font-size':10,fill:'#6b7569'}, p+unit);
   }
   categories.forEach((c,i) => {
     svg += svgEl('text',{x:xScale(i),y:H-mB+16,'text-anchor':'middle','font-size':10,fill:'#6b7569'}, c);
@@ -9411,7 +9527,7 @@ function drawTrendChart(series, categories){
     }
     pts.forEach((p,i) => {
       if (!p) return;
-      svg += `<g>${svgEl('title',{},`${s.label} — ${categories[i]}: ${s.values[i].toFixed(1)}%`)}` +
+      svg += `<g>${svgEl('title',{},`${s.label} — ${categories[i]}: ${s.values[i].toFixed(1)}${unit}`)}` +
         svgEl('circle',{cx:p[0],cy:p[1],r:4,fill:s.color}) + `</g>`;
     });
   });
