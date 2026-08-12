@@ -7926,13 +7926,26 @@ function renderMap(shouldFit){
       pts.sort((a,b) => naturalStationCompare(a.code, b.code));
       const latlngs = pts.map(p => [p.lat, p.lon]);
       const [valley, ligneStat] = key.split('||');
-      // hash the name (not a positional index) so a given line keeps the same color regardless of
-      // which other lines are currently in view (valley filter, new lines added later, etc.)
-      const color = categoricalColor(hashStringToInt(key));
+      // color by cleaning recency (per NRDS "Rat line" + "Cleaned"=YES records, joined by Ligne_stat
+      // name) rather than a per-line identity hash: grey = never recorded, green/orange/red = last
+      // cleaning </=45 / 45-90 / >90 days ago
+      const cleaningDates = enriched.mainRows
+        .filter(r => r.Rat_Line === ligneStat && r.Cleaned === 'YES' && r.Date)
+        .map(r => new Date(r.Date).getTime())
+        .filter(isFinite);
+      let color, cleanedTxt;
+      if (!cleaningDates.length){
+        color = '#9e9e9e'; cleanedTxt = 'No cleaning recorded';
+      } else {
+        const lastCleaned = Math.max(...cleaningDates);
+        const daysSince = Math.floor((Date.now() - lastCleaned) / 86400000);
+        color = daysSince <= 45 ? '#2ca02c' : daysSince <= 90 ? '#ff7f0e' : '#d62728';
+        cleanedTxt = `Last cleaned ${daysSince}d ago (${new Date(lastCleaned).toISOString().slice(0,10)})`;
+      }
       let lengthKm = 0;
       for (let j=0;j<pts.length-1;j++) lengthKm += haversineKm(pts[j].lat, pts[j].lon, pts[j+1].lat, pts[j+1].lon);
       const lengthTxt = lengthKm < 1 ? `${Math.round(lengthKm*1000)} m` : `${lengthKm.toFixed(2)} km`;
-      const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
+      const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${cleanedTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
       const poly = L.polyline(latlngs, { color, weight:2.5, dashArray:'4,4', opacity:0.9 });
       poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
       poly.bindPopup(html);
