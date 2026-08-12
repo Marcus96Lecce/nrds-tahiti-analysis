@@ -2398,7 +2398,7 @@ function dbRowToHabitatRow(r){
     'Précision Localisation (rat station name)': r.precision_localisation||'',
     '% cleaned at the end of the day': r.pct_cleaned_end_of_day||'',
     '% cleaned at arrival': r.pct_cleaned_arrival||'', '% evaluation': r.pct_evaluation||'',
-    Comment: r.comment||''
+    Comment: r.comment||'', 'Rat line': r.rat_line||'', Cleaned: r.cleaned||''
   };
 }
 
@@ -5725,7 +5725,8 @@ function buildEnriched(){
       Pct_cleaned_end_of_day: r['% cleaned at the end of the day'], Pct_evaluation: r['% evaluation'],
       Rat_Stations: (resolved.length ? resolved.map(x=>x.code) : codes).join(';'),
       Location_Precision: locPrecision, Centroid_Latitude: centroidLat, Centroid_Longitude: centroidLon,
-      Species_Planted: speciesList.join(';'), Total_Individuals: totalIndividuals, Comment: r['Comment']
+      Species_Planted: speciesList.join(';'), Total_Individuals: totalIndividuals, Comment: r['Comment'],
+      Rat_Line: r['Rat line'] || '', Cleaned: r['Cleaned'] || ''
     });
   }
 
@@ -6007,6 +6008,7 @@ function onDataUpdated(){
   html += priorityHtml;
   html += renderLastPlantingDropdown(mainRows);
   html += renderLastCleaningDropdown(mainRows);
+  html += renderLastRatLineCleaningDropdown(mainRows);
   document.getElementById('buildSummary').innerHTML = html;
   document.getElementById('enrichedDownloadButtons').innerHTML = `
     <button class="secondary" onclick="downloadCSV('habitat_restoration_enriched.csv', enriched.mainRows, Object.keys(enriched.mainRows[0]))">⬇ habitat_restoration_enriched.csv</button>
@@ -8831,8 +8833,10 @@ function renderPriorityZonesDropdown(ranked){
 
 let lastPlantingValleyFilter = 'all';
 let lastCleaningValleyFilter = 'all';
+let lastRatLineCleaningValleyFilter = 'all';
 function setLastPlantingValley(v){ lastPlantingValleyFilter = v; onDataUpdated(); }
 function setLastCleaningValley(v){ lastCleaningValleyFilter = v; onDataUpdated(); }
+function setLastRatLineCleaningValley(v){ lastRatLineCleaningValleyFilter = v; onDataUpdated(); }
 
 function valleyFilterSelect(selected, onchangeFn){
   const valleyOpts = ['all'].concat(getAllValleys()).map(v => {
@@ -8899,6 +8903,36 @@ function renderLastCleaningDropdown(mainRows){
     : `<div class="muted" style="padding:8px 10px;">No cleaning actions recorded yet.</div>`;
   return `<details style="margin-top:8px;">
     <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🧹 Last cleaning actions (${countLabel})</summary>
+    <div style="margin-top:8px;">${valleySelect}${inner}</div>
+  </details>`;
+}
+
+// Rat line cleaning is recorded on NRDS as a per-line YES/NO ("Cleaned"), separate from the
+// per-zone cleaning actions above (which target management units, not rat-patrol lines).
+// Valley isn't always filled in on these records — Ligne_stat/"Rat line" values are always
+// "Valley-Letter" (e.g. "Papehue-E"), so fall back to the prefix when Valley is blank.
+function ratLineValley(r){
+  return r.Valley || (r.Rat_Line || '').split('-')[0] || '';
+}
+function renderLastRatLineCleaningDropdown(mainRows){
+  const rows = mainRows
+    .filter(r => r.Rat_Line && r.Cleaned === 'YES' && r.Date && (lastRatLineCleaningValleyFilter==='all' || ratLineValley(r)===lastRatLineCleaningValleyFilter))
+    .sort((a,b) => new Date(b.Date) - new Date(a.Date))
+    .slice(0, 15);
+  const countLabel = rows.length ? `${rows.length} most recent` : 'no records yet';
+  const valleySelect = valleyFilterSelect(lastRatLineCleaningValleyFilter, 'setLastRatLineCleaningValley');
+  const inner = rows.length
+    ? rows.map(r => {
+        return `<div style="display:flex;flex-wrap:wrap;row-gap:4px;align-items:flex-start;gap:10px;padding:7px 10px;margin-bottom:4px;background:#f7faf6;border-left:4px solid #6b8e6b;border-radius:0 6px 6px 0;max-width:100%;">
+          <span style="min-width:82px;font-size:12px;color:#555;">${escapeHtml(r.Date)}</span>
+          <span style="min-width:90px;font-weight:600;font-size:13px;">${escapeHtml(r.Rat_Line)} <span class="muted" style="font-weight:400;">(${escapeHtml(ratLineValley(r)||'—')})</span></span>
+          <span class="muted" style="font-size:11.5px;white-space:nowrap;">${escapeHtml(r.Type_of_day_work||'')}</span>
+          <span class="muted" style="font-size:11px;white-space:nowrap;">${escapeHtml(r.Name||'')}</span>
+        </div>`;
+      }).join('')
+    : `<div class="muted" style="padding:8px 10px;">No rat line cleaning recorded yet.</div>`;
+  return `<details style="margin-top:8px;">
+    <summary style="cursor:pointer;font-size:13px;color:var(--green-dark);">🧹✨ Last rat line cleaning (${countLabel})</summary>
     <div style="margin-top:8px;">${valleySelect}${inner}</div>
   </details>`;
 }
