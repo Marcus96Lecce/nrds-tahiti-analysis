@@ -2860,6 +2860,9 @@ function onHrActionChange(){
 
   document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
   document.getElementById('hrCuttingRow').style.display = isCutting ? '' : 'none';
+  // A rat line isn't tied to one management unit (it can run through/along several), so don't force
+  // a Zone pick for this action — the rat line itself is the location.
+  document.getElementById('hrUnit').required = !isCutting;
   if (isCutting){
     // Rat lines are what this action is actually about — turn the overlay on automatically so the
     // map-click path (the whole point of this field) works without an extra manual step.
