@@ -1258,6 +1258,20 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="muted">Rat station(s), comma-separated: <input type="text" id="hrStations" list="hrStationList" placeholder="e.g. A5,A6"></label>
         <datalist id="hrStationList"></datalist>
       </div>
+      <div id="hrCuttingRow" class="row" style="margin-bottom:10px;display:none;">
+        <label class="muted">Rat line (Ligne_stat) — pick here or click a line on the map above:
+          <select id="hrRatLine" onchange="onHrRatLineChange()">
+            <option value="">Choose a valley first</option>
+          </select>
+        </label>
+        <label class="muted">Cleaned:
+          <select id="hrCleaned">
+            <option value="">Choose…</option>
+            <option value="YES">YES</option>
+            <option value="NO">NO</option>
+          </select>
+        </label>
+      </div>
       <div class="row" id="hrCleaningPctRow" style="margin-bottom:10px;display:none;">
         <label class="muted">% cleaned at arrival: <input type="number" id="hrPctArrival" min="0" max="100" style="width:70px;"></label>
         <label class="muted">% cleaned at end of day: <input type="number" id="hrPctEnd" min="0" max="100" style="width:70px;"></label>
@@ -2811,27 +2825,52 @@ function populateFormReferenceOptions(){
   if (birdObsPickerEntry) renderBirdObsZones(true);
 }
 
+// Shared by onHrValleyChange() and hrZoneClickHandler()/hrRatLineClickHandler() (the latter two need
+// the dropdown lists refreshed on a map click too, without triggering onHrValleyChange()'s map refit).
+function populateHrValleyDependentOptions(valley){
+  const unitSel = document.getElementById('hrUnit');
+  const ratLineSel = document.getElementById('hrRatLine');
+  if (!valley){
+    unitSel.innerHTML = '<option value="">Choose a valley first</option>';
+    document.getElementById('hrStationList').innerHTML = '';
+    ratLineSel.innerHTML = '<option value="">Choose a valley first</option>';
+    return;
+  }
+  const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
+  unitSel.innerHTML = '<option value="">Choose…</option>' + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
+  document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+  const ratLines = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Ligne_stat).filter(Boolean))].sort();
+  ratLineSel.innerHTML = '<option value="">Choose…</option>' + ratLines.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+}
 function onHrValleyChange(){
   const valley = document.getElementById('hrValley').value;
-  const unitSel = document.getElementById('hrUnit');
-  if (!valley){ unitSel.innerHTML = '<option value="">Choose a valley first</option>'; document.getElementById('hrStationList').innerHTML = ''; }
-  else {
-    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
-    unitSel.innerHTML = '<option value="">Choose…</option>' + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-    const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
-    document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
-  }
+  populateHrValleyDependentOptions(valley);
+  hrRatLineSelected = null;
   // Refit the zone picker map to the selected valley's zones (or all zones if none selected)
-  if (hrZonePickerEntry) renderHrZonePicker(true);
+  if (hrZonePickerEntry) { renderHrZonePicker(true); renderHrRatLines(); }
 }
 
 function onHrActionChange(){
   const action = document.getElementById('hrAction').value;
   const isPlantation = action === 'Plantation';
   const isPep = action === 'Pépinière';
-  const isCleaningType = action === 'Entretien des plantations (cleaning around plantation)' || action === 'Coupe du sous-bois (cutting undergrowth)';
+  const isCutting = action === CUTTING_ACTION;
+  const isCleaningType = action === 'Entretien des plantations (cleaning around plantation)' || isCutting;
 
   document.getElementById('hrCleaningPctRow').style.display = isCleaningType ? '' : 'none';
+  document.getElementById('hrCuttingRow').style.display = isCutting ? '' : 'none';
+  if (isCutting){
+    // Rat lines are what this action is actually about — turn the overlay on automatically so the
+    // map-click path (the whole point of this field) works without an extra manual step.
+    const overlayToggle = document.getElementById('hrRatLinesOverlayToggle');
+    if (overlayToggle && !overlayToggle.checked){ overlayToggle.checked = true; hrShowRatLines = true; renderHrRatLines(); }
+  } else {
+    hrRatLineSelected = null;
+    document.getElementById('hrRatLine').value = '';
+    document.getElementById('hrCleaned').value = '';
+    if (hrZonePickerEntry) renderHrRatLines();
+  }
   document.getElementById('hrEvalRow').style.display = isPlantation ? '' : 'none';
   // Species picker is shared between Plantation (species planted in the ground) and Pépinière
   // (species currently growing in the nursery) — same {name, common, type, number} shape either way.
@@ -2995,6 +3034,8 @@ async function submitHabitatForm(evt){
       pct_cleaned_end_of_day: document.getElementById('hrPctEnd').value,
       pct_evaluation: document.getElementById('hrPctEval').value,
       comment: document.getElementById('hrComment').value,
+      rat_line: document.getElementById('hrRatLine').value,
+      cleaned: document.getElementById('hrCleaned').value,
       species,
     };
     const result = await insertOrQueue('habitat_restoration', [newRow]);
@@ -3007,7 +3048,8 @@ async function submitHabitatForm(evt){
     document.getElementById('hrUnit').innerHTML = '<option value="">Choose a valley first</option>';
     document.getElementById('hrDate').value = new Date().toISOString().slice(0,10);
     hrZoneSelectedUnit = null;
-    if (hrZonePickerEntry) renderHrZonePicker(false);
+    hrRatLineSelected = null;
+    if (hrZonePickerEntry) { renderHrZonePicker(false); renderHrRatLines(); }
     onHrActionChange();
   } catch (err) {
     statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
@@ -3022,6 +3064,7 @@ let hrZonePickerEntry = null;
 let hrZoneSelectedUnit = null, hrZoneShowNames = false;
 let hrZoneUserLocWatchId = null, hrZoneUserLocFirstFix = true;
 let hrShowStations = false, hrShowRatLines = false;
+let hrRatLineSelected = null; // "Valley||Ligne_stat" key, set by the Rat line dropdown or a map click (Coupe du sous-bois only)
 
 // Adds a compact Satellite/Streets switcher to a picker map — every picker map used to hard-code a
 // single Esri satellite layer with no way to switch to OSM streets at all (unlike the home map, which
@@ -3127,14 +3170,11 @@ function hrZoneClickHandler(valley, unitName){
   const valSel = document.getElementById('hrValley');
   if (valSel.value !== valley){
     valSel.value = valley;
-    // Replicate the dropdown-population part of onHrValleyChange() without triggering a map
-    // refit — the valley just changed because the user clicked a zone on the map, not because
-    // they want the view to jump somewhere else.
-    const units = [...new Set((tables.managementUnit||[]).filter(u => u.Vallee === valley).map(u => u.Nom))].sort();
-    document.getElementById('hrUnit').innerHTML = '<option value="">Choose…</option>'
-      + units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-    const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Vallee === valley).map(s => s.Station).filter(Boolean))].sort();
-    document.getElementById('hrStationList').innerHTML = stations.map(s => `<option value="${escapeHtml(s)}">`).join('');
+    // Refresh the dropdown lists without triggering onHrValleyChange()'s map refit — the valley
+    // just changed because the user clicked a zone on the map, not because they want the view to
+    // jump somewhere else.
+    populateHrValleyDependentOptions(valley);
+    hrRatLineSelected = null;
   }
   document.getElementById('hrUnit').value = unitName;
   hrZoneSelectedUnit = unitName;
@@ -3201,18 +3241,40 @@ function renderHrRatLines(){
     pts.sort((a,b) => naturalStationCompare(a.code, b.code));
     const latlngs = pts.map(p => [p.lat, p.lon]);
     const [valley, ligneStat] = key.split('||');
-    const color = categoricalColor(hashStringToInt(key));
+    const isSelected = key === hrRatLineSelected;
+    const color = isSelected ? '#1b5e20' : categoricalColor(hashStringToInt(key));
     let lengthKm = 0;
     for (let j=0;j<pts.length-1;j++) lengthKm += haversineKm(pts[j].lat, pts[j].lon, pts[j+1].lat, pts[j+1].lon);
     const lengthTxt = lengthKm < 1 ? `${Math.round(lengthKm*1000)} m` : `${lengthKm.toFixed(2)} km`;
-    const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}`;
-    const poly = L.polyline(latlngs, { color, weight:2.5, dashArray:'4,4', opacity:0.9 });
+    const html = `<b>${escapeHtml(ligneStat)}</b> (${escapeHtml(valley)})<br>Length: ${lengthTxt}<br>${pts.length} stations: ${escapeHtml(pts.map(p=>p.code).join(', '))}` +
+      `<br><i>Click to select this rat line</i>`;
+    const poly = L.polyline(latlngs, { color, weight: isSelected ? 5 : 2.5, dashArray:'4,4', opacity:0.9 });
     poly.bindTooltip(html, { sticky:true, direction:'top', opacity:0.95 });
     poly.bindPopup(html);
+    poly.on('click', () => hrRatLineClickHandler(valley, ligneStat));
     poly.addTo(entry.linesLayer);
     const midpoint = latlngs[Math.floor(latlngs.length/2)];
     L.marker(midpoint, { icon: smallLabelIcon(ligneStat, color), interactive:false }).addTo(entry.linesLayer);
   }
+}
+// Called when the #hrRatLine dropdown changes — syncs the map highlight (mirrors onHrUnitChange()).
+function onHrRatLineChange(){
+  const valley = document.getElementById('hrValley').value;
+  const ligneStat = document.getElementById('hrRatLine').value;
+  hrRatLineSelected = (valley && ligneStat) ? (valley + '||' + ligneStat) : null;
+  if (hrZonePickerEntry) renderHrRatLines();
+}
+// Called when a rat-line polyline is clicked on the map — mirrors hrZoneClickHandler(), also switching
+// the Valley dropdown (and its dependent Zone/station/rat-line option lists) if it doesn't match yet.
+function hrRatLineClickHandler(valley, ligneStat){
+  const valSel = document.getElementById('hrValley');
+  if (valSel.value !== valley){
+    valSel.value = valley;
+    populateHrValleyDependentOptions(valley); // no map refit — same reasoning as hrZoneClickHandler()
+  }
+  document.getElementById('hrRatLine').value = ligneStat;
+  hrRatLineSelected = valley + '||' + ligneStat;
+  renderHrRatLines();
 }
 function toggleHrZoneUserLoc(checked){
   const statusEl = document.getElementById('hrZoneUserLocStatus');
