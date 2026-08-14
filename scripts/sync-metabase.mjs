@@ -1,0 +1,262 @@
+// Pulls current data from the shared Metabase instance (metabase.nrds.io) and writes it
+// into data/*.json in the same shape the app already expects, plus data/live/*.json for
+// tables the app doesn't consume yet. Run by .github/workflows/sync-metabase.yml on a
+// schedule, or locally with METABASE_API_TOKEN set in the environment.
+//
+// Auth: personal API key from Sam Aruch (NRDS/Metabase admin), scoped to a dedicated
+// "tahiti" API-key user (not a real login), group_ids [1,104], can_create_native_queries:
+// false (no raw SQL). Never commit the token itself — it must only exist as the
+// METABASE_API_TOKEN GitHub Actions secret.
+import { writeFile, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import wkx from 'wkx';
+
+const BASE_URL = 'https://metabase.nrds.io';
+const DATABASE_ID = 2;
+const TOKEN = process.env.METABASE_API_TOKEN;
+if (!TOKEN) {
+  console.error('Missing METABASE_API_TOKEN environment variable.');
+  process.exit(1);
+}
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+
+const REQUEST_TIMEOUT_MS = 30_000;
+
+async function fetchWithRetry(url, options, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (e) {
+      const reason = e.name === 'AbortError' ? `timed out after ${REQUEST_TIMEOUT_MS}ms` : e.message;
+      if (i === attempts) throw new Error(`Fetch failed after ${attempts} attempts: ${reason}`);
+      console.warn(`Fetch failed (attempt ${i}/${attempts}): ${reason}. Retrying...`);
+      await new Promise((r) => setTimeout(r, 1000 * i));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+// This Metabase instance silently ignores the standard MBQL `limit`+`offset` pair on
+// `/api/dataset` for `source-table` queries — every page comes back identical to page 1
+// (confirmed 2026-08-13: offset=0, offset=5, and offset=4067 on a 4072-row table all
+// returned the exact same 5 rows). This caused an infinite pagination loop in production
+// against a shared instance, since `rows.length < pageSize` never became true. The `page:
+// {page, items}` clause works correctly (verified: page 2 returns genuinely different rows)
+// and is used instead. Do not switch back to limit/offset without re-verifying against real
+// data first — this may be instance/version-specific, not a general Metabase behavior.
+async function getFieldId(tableId, fieldName) {
+  const res = await fetchWithRetry(`${BASE_URL}/api/table/${tableId}/query_metadata`, {
+    headers: { 'X-API-Key': TOKEN },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch metadata for table ${tableId}: HTTP ${res.status} ${await res.text()}`);
+  }
+  const json = await res.json();
+  const field = json.fields.find((f) => f.name === fieldName);
+  if (!field) throw new Error(`Field "${fieldName}" not found in table ${tableId}`);
+  return field.id;
+}
+
+const MAX_PAGES = 500; // safety cap (500 * 2000 = 1M rows) so a repeat of the offset bug can't hammer the server forever
+
+// orderByFields: column name(s) to sort by for deterministic pagination. A single column is
+// enough when it's a genuine per-row unique id; child tables where that column repeats per
+// parent (e.g. Dératisation Checks' survey_id is the parent patrol's id, not a unique row id)
+// need a second tiebreaker column passed here too.
+async function queryTable(tableId, label, orderByFields = ['survey_id']) {
+  const start = Date.now();
+  console.log(`Querying ${label} (table ${tableId})...`);
+  const orderBy = await Promise.all(
+    orderByFields.map(async (name) => [['field', await getFieldId(tableId, name), null], 'asc'])
+  );
+  const rows = [];
+  let cols = null;
+  const pageSize = 2000;
+  for (let page = 1; ; page++) {
+    if (page > MAX_PAGES) {
+      throw new Error(`Table ${tableId} (${label}) exceeded ${MAX_PAGES} pages — aborting, likely a pagination bug.`);
+    }
+    const pageStart = Date.now();
+    const res = await fetchWithRetry(`${BASE_URL}/api/dataset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': TOKEN,
+      },
+      body: JSON.stringify({
+        database: DATABASE_ID,
+        type: 'query',
+        query: { 'source-table': tableId, 'order-by': orderBy, page: { page, items: pageSize } },
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Metabase query failed for table ${tableId}: HTTP ${res.status} ${await res.text()}`);
+    }
+    const json = await res.json();
+    if (!cols) cols = json.data.cols.map((c) => c.name);
+    rows.push(...json.data.rows);
+    console.log(`  page ${page}: +${json.data.rows.length} rows (${Date.now() - pageStart}ms)`);
+    if (json.data.rows.length < pageSize) break;
+  }
+  console.log(`Done ${label}: ${rows.length} rows total (${Date.now() - start}ms)`);
+  return { cols, rows };
+}
+
+// mapping: array of [outputKey, sourceColName | (rawObj) => value]
+function mapRows({ cols, rows }, mapping) {
+  return rows.map((row) => {
+    const raw = {};
+    cols.forEach((c, i) => { raw[c] = row[i]; });
+    const out = {};
+    for (const [outKey, source] of mapping) {
+      out[outKey] = typeof source === 'function' ? source(raw) : raw[source] ?? '';
+    }
+    return out;
+  });
+}
+
+function ewkbHexToEwkt(hex) {
+  if (!hex) return '';
+  try {
+    return wkx.Geometry.parse(Buffer.from(hex, 'hex')).toEwkt();
+  } catch (e) {
+    console.warn('Failed to parse geometry hex, leaving blank:', e.message);
+    return '';
+  }
+}
+
+function pointEwkt(lon, lat) {
+  if (lon == null || lat == null) return '';
+  return `SRID=4326;POINT (${lon} ${lat})`;
+}
+
+async function writeJson(relPath, data) {
+  const full = path.join(ROOT, relPath);
+  await mkdir(path.dirname(full), { recursive: true });
+  await writeFile(full, JSON.stringify(data), 'utf-8');
+  console.log(`Wrote ${relPath} (${data.length} rows)`);
+}
+
+// ---- Tables already consumed by the app (data/*.json) — mapped to match the existing shape ----
+
+const MANAGEMENT_UNIT_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Nom', 'nom'],
+  ['Vallee', 'vallee'],
+  ['Site', 'site'],
+  ['Nom_prov', 'nom_prov'],
+  ['Veg_2023', 'veg_2023'],
+  ['Veg_2024', 'veg_2024'],
+  ['SB_2023', 'sb_2023'],
+  ['SB_2024', 'sb_2024'],
+  ['Plant_2023', 'plant_2023'],
+  ['Plant_2024', 'plant_2024'],
+  ['Surface', 'surface'],
+  ['Geometry', (r) => ewkbHexToEwkt(r.geometry)],
+];
+
+const DERAT_TAHITI_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Station', 'station'],
+  ['Ligne_stat', 'ligne_stat'],
+  ['Zone', 'zone'],
+  ['Vallee', 'vallee'],
+  ['Waypoint', 'waypoint'],
+  ['X', 'x'],
+  ['Y', 'y'],
+  ['Altitude', 'altitude'],
+  ['Date', 'date'],
+  ['Heure 1', 'heure_1'],
+  ['Heure 2', 'heure_2'],
+  ['Vegetation', 'vegetation'],
+  ['Sous bois', 'sous_bois'],
+  ['Plantation', 'plantation'],
+  ['Pente', 'pente'],
+  ['Situation', 'situation'],
+  ['Flore', 'flore'],
+  ['Nombre', 'nombre'],
+  ['Type', 'type'],
+  ['Autre', 'autre'],
+  ['Num_Stat', 'num_sta1'],
+  ['Num_stat2', 'num_stat2'],
+  ['Geometry', (r) => pointEwkt(r.geometry_long, r.geometry_lat)],
+  ['Latitude', 'geometry_lat'],
+  ['Longitude', 'geometry_long'],
+  ['Last Check', 'last_chec1'],
+];
+
+// Verified against known-good values in the app's existing espece.json (e.g. Identifier
+// 3952716 = Pandanus/Native): Metabase's own sync mislabels these three columns — the real
+// "Common Name" lands in "common_nam1" (truncated) and the real "Type" lands in
+// "common_name". Do not "fix" this mapping without re-verifying against real data first.
+const ESPECE_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Name', 'name'],
+  ['Common Name', 'common_nam1'],
+  ['Type', 'common_name'],
+];
+
+// ---- Tables not yet used by the app UI (data/live/*.json) — plain pass-through ----
+
+const DERATISATION_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Date', 'date'],
+  ['Observer', 'observer'],
+  ['Zone', 'zone'],
+  ['Passage', 'passage'],
+];
+
+const DERATISATION_CHECKS_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Date', 'date'],
+  ['Observer', 'observer'],
+  ['Zone', 'zone'],
+  ['Passage', 'passage'],
+  ['Derat', 'derat'],
+  ['Conso', 'conso'],
+];
+
+const HISTORICAL_MANAGEMENT_UNITS_MAP = [
+  ['Identifier', 'survey_id'],
+  ['Nom', 'nom'],
+  ['Valley', 'valley'],
+  ['Site', 'site'],
+  ['Date', 'date'],
+  ['Superficie_2D', 'superficie_2d'],
+  ['Superficie_3D', 'superficie_3d'],
+  ['Vegetation', 'vegetation'],
+  ['Gestion_Sous_Bois', 'gestion_sous_bois'],
+  ['Plantations', 'plantations'],
+];
+
+async function main() {
+  const mu = await queryTable(6980, 'Management Unit');
+  const dt = await queryTable(6982, 'Derat Tahiti');
+  const es = await queryTable(6997, 'Espece');
+  const dr = await queryTable(6981, 'Deratisation');
+  const dc = await queryTable(8446, 'Dératisation Checks', ['survey_id', 'derat']);
+  const hist = await queryTable(9447, 'Historical Management Units');
+  const hr = await queryTable(6995, 'Habitat Restoration');
+
+  await writeJson('data/management_unit.json', mapRows(mu, MANAGEMENT_UNIT_MAP));
+  await writeJson('data/derat_tahiti.json', mapRows(dt, DERAT_TAHITI_MAP));
+  await writeJson('data/espece.json', mapRows(es, ESPECE_MAP));
+
+  await writeJson('data/live/deratisation.json', mapRows(dr, DERATISATION_MAP));
+  await writeJson('data/live/deratisation_checks.json', mapRows(dc, DERATISATION_CHECKS_MAP));
+  await writeJson('data/live/historical_management_units.json', mapRows(hist, HISTORICAL_MANAGEMENT_UNITS_MAP));
+
+  // Habitat Restoration's Metabase columns are known to be truncated/mangled by NRDS's own
+  // sync (e.g. esp_ce_esp_ce_name, pr_cision_localisation_rat_st, _cleaned_at_arrival) — see
+  // data/live/README.md. Passed through with raw column names rather than guessed renames.
+  await writeJson('data/live/habitat_restoration.json', mapRows(hr, hr.cols.map((c) => [c, c])));
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
