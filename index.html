@@ -7326,12 +7326,23 @@ function plantingProjColor(dom, pct){
 // CUTTING_ACTION itself is kept only for renderCleaningVsMaintenanceDropdown()'s side-by-side
 // cutting-vs-maintenance comparison, which is a separate, still-valid feature this revert doesn't touch.
 const CUTTING_ACTION = 'Coupe du sous-bois (cutting undergrowth)';
+// NRDS's Date field is day-granularity only (no time-of-day), so two different actions on the same
+// zone/station on the same day are a real, common case (e.g. a Coupe du sous-bois and an Entretien
+// des plantations logged the same day) — a plain "date > cur.date" comparison can never break that
+// tie, so whichever row happened to come first in array order (effectively arbitrary, driven by
+// survey_id) silently won forever. Marco chose (2026-08-15): on a same-day tie, the higher % wins.
+function isNewerReading(r, cur){
+  if (!cur) return true;
+  const rTime = new Date(r.Date).getTime(), curTime = new Date(cur.date).getTime();
+  if (rTime !== curTime) return rTime > curTime;
+  return +r.Pct_cleaned_end_of_day > cur.pct;
+}
 function latestUnitStatus(dateFrom, dateTo){
   const map = new Map();
   for (const r of enriched.mainRows){
     if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     const cur = map.get(r.Unit_Name);
-    if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date, name:r.Name, comment:r.Comment});
+    if (isNewerReading(r, cur)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date, name:r.Name, comment:r.Comment});
   }
   return map;
 }
@@ -7343,7 +7354,7 @@ function latestStationStatus(dateFrom, dateTo){
     for (const code of r.Rat_Stations.split(';').filter(Boolean)){
       const key = r.Valley + '||' + code;
       const cur = map.get(key);
-      if (!cur || new Date(r.Date) > new Date(cur.date)){
+      if (isNewerReading(r, cur)){
         map.set(key, { pct:+r.Pct_cleaned_end_of_day, date:r.Date, valley:r.Valley, station:code, name:r.Name });
       }
     }
