@@ -2533,16 +2533,45 @@ function _applyDeratData(data) {
   dataLoaded.derat = true;
   if (enriched) onDataUpdated();
 }
+// data/live/deratisation.json / deratisation_checks.json are already mapped to clean
+// Identifier/Date/Observer/Zone/Passage/Derat/Conso keys by sync-metabase.mjs (unlike
+// habitat_restoration.json, which is a raw passthrough — see nrdsRowToHabitatRow above), so this
+// is mostly a type-normalize pass. Both files share the same Identifier (the NRDS patrol's
+// survey_id) for a patrol and its child station-checks, same join shape Supabase's nested
+// r.checks[] produced.
+function nrdsDeratRowToRow(r){
+  return { Identifier: String(r.Identifier), Date: (r.Date||'').slice(0,10), Observer: r.Observer||'', Zone: r.Zone||'', Passage: r.Passage||'' };
+}
+function nrdsChecksRowToRow(r){
+  return { Identifier: String(r.Identifier), Derat: r.Derat||'', Conso: r.Conso||'' };
+}
+function _applyDeratDataFromNrds(deratRows, checksRows) {
+  tables.deratisation = deratRows.map(nrdsDeratRowToRow);
+  tables.sectionChecks = checksRows.map(nrdsChecksRowToRow);
+  dataLoaded.derat = true;
+  if (enriched) onDataUpdated();
+}
+// Dératisation is now displayed straight from NRDS, same switch and same reasoning as
+// Habitat Restoration above (2026-08-14) — the in-app "Log a Dératisation patrol" form still
+// writes to Supabase unchanged (kept for Bird Observation/Invasive Bird/PFF's sake, see
+// fetchHabitatRestoration), its rows just aren't read/displayed anymore.
 async function fetchDeratisation(){
   try {
-    const data = await fetchAllRows('deratisation');
-    _applyDeratData(data);
-    _dbSave('derat', data);
+    const [deratResp, checksResp] = await Promise.all([
+      fetch('data/live/deratisation.json'),
+      fetch('data/live/deratisation_checks.json'),
+    ]);
+    if (!deratResp.ok) throw new Error(deratResp.status);
+    if (!checksResp.ok) throw new Error(checksResp.status);
+    const deratRows = await deratResp.json();
+    const checksRows = await checksResp.json();
+    _applyDeratDataFromNrds(deratRows, checksRows);
+    _dbSave('derat', { deratRows, checksRows });
     document.getElementById('deratDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
   } catch(e) {
     var cached = _dbLoad('derat');
     if (cached) {
-      _applyDeratData(cached.payload);
+      _applyDeratDataFromNrds(cached.payload.deratRows, cached.payload.checksRows);
       document.getElementById('deratDataStatus').innerHTML = '<span class="muted">📵 Offline — dératisation data from cache (' + cached.ts.slice(0,10) + ')</span>';
     } else {
       document.getElementById('deratDataStatus').innerHTML = '<span class="err">Offline — no cached dératisation data</span>';
