@@ -2416,6 +2416,27 @@ function dbRowToHabitatRow(r){
   };
 }
 
+// data/live/habitat_restoration.json is a straight passthrough of Metabase's raw, truncated/mangled
+// NRDS column names (see data/live/README.md) — this maps them onto the exact same row shape
+// dbRowToHabitatRow produces from Supabase, so every downstream consumer (map, charts, tables,
+// buildEnriched) works unmodified regardless of which source loaded the data.
+// surface_that_has_been_cleaned_ / _cleaned_at_arrival / _evaluation identified by their data shape
+// (2026-08-13: real values are always 0-100 and only populated for cleaning-type Actions, never
+// Plantation; surface_that_has_been_cleaned_ >= _cleaned_at_arrival in ~14/15 sampled rows, consistent
+// with "cleaned by end of day" >= "cleaned at arrival") — Metabase's own column-name truncation lost
+// the actual NRDS field labels, there is no more direct way to confirm this without admin access.
+function nrdsRowToHabitatRow(r){
+  return {
+    Identifier: String(r.survey_id), Date: (r.date||'').slice(0,10), Name: r.name||'', Valley: r.valle1_vallee||'',
+    'Unit Name': r.unit_name_nom||'', Action: r.action||'', 'Type of day work': r.type_of_day_work||'',
+    'Number of Person': r.number_of_person||'',
+    'Précision Localisation (rat station name)': r.pr_cision_localisation_rat_st||'',
+    '% cleaned at the end of the day': r.surface_that_has_been_cleaned_ ?? '',
+    '% cleaned at arrival': r._cleaned_at_arrival ?? '', '% evaluation': r._evaluation ?? '',
+    Comment: r.comment||'', 'Rat line': r.rat_line_ligne_stat||'', Cleaned: r.cleaned||''
+  };
+}
+
 function _applyHabitatData(data) {
   var habitat = [], sectionEspece = [];
   for (var _i = 0; _i < data.length; _i++) {
@@ -2425,6 +2446,28 @@ function _applyHabitatData(data) {
     for (var _j = 0; _j < sps.length; _j++) {
       var sp = sps[_j];
       sectionEspece.push({ Identifier: String(r.id), 'Espèce': [sp.name,sp.common,sp.type].join(' | '), Number: sp.number });
+    }
+  }
+  tables.habitat = habitat; tables.sectionEspece = sectionEspece;
+  dataLoaded.habitat = true;
+  maybeBuildEnriched();
+}
+// Habitat Restoration Espèce (the NRDS child table joining species to actions) is empty at the
+// source — a known upstream NRDS->Metabase replication gap, not a bug here (see
+// project memory / data/live/README.md) — so esp_ce_* on the main row is the only species signal
+// available via this pipeline, and it's at most one species per row (unlike Supabase's r.species
+// array). Still wired up the same way so it starts working for free if NRDS ever fixes the join.
+function _applyHabitatDataFromNrds(data) {
+  var habitat = [], sectionEspece = [];
+  for (var _i = 0; _i < data.length; _i++) {
+    var r = data[_i];
+    habitat.push(nrdsRowToHabitatRow(r));
+    if (r.esp_ce_esp_ce_name) {
+      sectionEspece.push({
+        Identifier: String(r.survey_id),
+        'Espèce': [r.esp_ce_esp_ce_name, r.esp_ce_esp_ce_common_name, r.esp_ce_esp_ce_type].join(' | '),
+        Number: r.esp_ce_number
+      });
     }
   }
   tables.habitat = habitat; tables.sectionEspece = sectionEspece;
@@ -2449,16 +2492,26 @@ async function fetchAllRows(table, orderCol){
   }
   return all;
 }
+// Habitat Restoration is now displayed straight from NRDS (via the Metabase sync into
+// data/live/habitat_restoration.json, refreshed every 6h by .github/workflows/sync-metabase.yml) —
+// Marco decided app.nrds.io should be the single source of truth for this activity type (2026-08-14).
+// The in-app "Add a new Habitat Restoration action" form still writes to Supabase's habitat_restoration
+// table unchanged (kept deliberately, see insertOrQueue below) since other activity types (Bird
+// Observation, Invasive Bird, PFF) have no NRDS.io equivalent and still depend on the same
+// Supabase/offline-queue machinery — but those Supabase habitat_restoration rows are no longer read or
+// displayed anywhere.
 async function fetchHabitatRestoration(){
   try {
-    const data = await fetchAllRows('habitat_restoration');
-    _applyHabitatData(data);
+    const resp = await fetch('data/live/habitat_restoration.json');
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+    _applyHabitatDataFromNrds(data);
     _dbSave('habitat', data);
     document.getElementById('liveDataStatus').textContent = ''; // no longer shown once connected — the "total actions" stat card above already covers this
   } catch(e) {
     var cached = _dbLoad('habitat');
     if (cached) {
-      _applyHabitatData(cached.payload);
+      _applyHabitatDataFromNrds(cached.payload);
       document.getElementById('liveDataStatus').innerHTML = '<span class="muted">📵 Offline — habitat data from cache (' + cached.ts.slice(0,10) + ')</span>';
     } else {
       document.getElementById('liveDataStatus').innerHTML = '<span class="err">Offline — no cached habitat data</span>';
