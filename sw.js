@@ -1,9 +1,9 @@
-/* NRDS Tahiti — Service Worker v3
+/* NRDS Tahiti — Service Worker v4
  * Intercepts only: same-origin app shell + map tiles.
  * Does NOT touch esm.sh, supabase.co, or any other cross-origin request
  * (intercepting esm.sh ES-module imports breaks Supabase on mobile). */
 
-var CACHE = 'nrds-v3';
+var CACHE = 'nrds-v4';
 var TILE_CACHE = 'nrds-tiles-v1';
 var BASE = new URL(self.location.href).pathname.replace('sw.js', '');
 
@@ -15,6 +15,9 @@ var PRECACHE = [
   BASE + 'data/derat_tahiti.json',
   BASE + 'data/espece.json',
   BASE + 'data/bird_species.json',
+  BASE + 'data/live/habitat_restoration.json',
+  BASE + 'data/live/deratisation.json',
+  BASE + 'data/live/deratisation_checks.json',
 ];
 
 /* Install: pre-cache app shell. Each URL cached independently so one
@@ -83,7 +86,14 @@ self.addEventListener('fetch', function(e) {
    * back to the last-known-good cached copy when there's truly no connection (in the
    * valleys). */
   var isAppShell = req.mode === 'navigate' || url.pathname === BASE || url.pathname === BASE + 'index.html';
-  if (url.origin === self.location.origin && isAppShell) {
+  /* ── data/*.json: network-first, same reasoning as the app shell ──
+   * All of data/*.json (including data/live/*) is now refreshed automatically every 6h by
+   * .github/workflows/sync-metabase.yml — cache-first here meant a phone that had ever loaded
+   * the app would keep showing the exact data snapshot from its first visit forever, silently
+   * never picking up new NRDS entries (2026-08-15: this is why Marco's new Hopa observation
+   * never appeared on the map even though the sync itself was working correctly). */
+  var isDataJson = url.pathname.indexOf(BASE + 'data/') === 0;
+  if (url.origin === self.location.origin && (isAppShell || isDataJson)) {
     e.respondWith(
       fetch(req).then(function(resp) {
         if (resp && resp.ok) caches.open(CACHE).then(function(c) { c.put(req, resp.clone()); });
@@ -95,9 +105,10 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  /* ── Everything else same-origin: static JSON reference data, manifest, icons — cache-first ──
-   * These only change when Marco reruns the migration script, not on every code deploy, so
-   * cache-first (instant, works offline) is still the right tradeoff for them.
+  /* ── Everything else same-origin: manifest, icons — cache-first ──
+   * These only change on a code deploy (rare, and always alongside index.html which is
+   * network-first anyway), so cache-first (instant, works offline) is still the right
+   * tradeoff for them.
    * On miss: fetch from network and add to cache.
    * On network error with cache hit: return stale cache. */
   if (url.origin === self.location.origin) {
