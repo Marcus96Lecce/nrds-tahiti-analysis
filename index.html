@@ -7318,16 +7318,18 @@ function plantingProjColor(dom, pct){
 // dateFrom/dateTo are optional — omitted (as zoneNrdsAggregate()/combinedCleaningEstimate() do
 // internally) they mean "latest reading overall", unaffected by the map's own date-range filter;
 // the map's plain (non-historical) cleaning/derat layers pass mapDateFrom/mapDateTo explicitly.
-// "Cleaning %" throughout this app (map layer, TO CLEAN priority score, understory trend chart) means
-// specifically undergrowth cutting — "Entretien des plantations (cleaning around plantation)" rows are
-// deliberately excluded here even though they also carry a Pct_cleaned_end_of_day value, so the two
-// action types never get silently averaged into one number. See renderCleaningVsMaintenanceDropdown()
-// for a side-by-side view of both categories.
+// Reverts commit 32d4adc (2026-08-11), which restricted this to CUTTING_ACTION only on the theory
+// that blending "Coupe du sous-bois" and "Entretien des plantations" into one % was a bug. Marco
+// asked to go back to counting every Habitat Restoration action with a Pct_cleaned_end_of_day value,
+// map/priority-score/trend-chart-wide, now that most incoming NRDS data is Entretien-type (2026-08-15)
+// — deliberately overriding that earlier reasoning, not unaware of it (flagged explicitly at the time).
+// CUTTING_ACTION itself is kept only for renderCleaningVsMaintenanceDropdown()'s side-by-side
+// cutting-vs-maintenance comparison, which is a separate, still-valid feature this revert doesn't touch.
 const CUTTING_ACTION = 'Coupe du sous-bois (cutting undergrowth)';
 function latestUnitStatus(dateFrom, dateTo){
   const map = new Map();
   for (const r of enriched.mainRows){
-    if (r.Action !== CUTTING_ACTION || r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
+    if (r.Pct_cleaned_end_of_day === '' || !r.Unit_Name || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     const cur = map.get(r.Unit_Name);
     if (!cur || new Date(r.Date) > new Date(cur.date)) map.set(r.Unit_Name, {pct:+r.Pct_cleaned_end_of_day, date:r.Date, name:r.Name, comment:r.Comment});
   }
@@ -7337,7 +7339,7 @@ function latestUnitStatus(dateFrom, dateTo){
 function latestStationStatus(dateFrom, dateTo){
   const map = new Map(); // key: Valley+'||'+Station
   for (const r of enriched.mainRows){
-    if (r.Action !== CUTTING_ACTION || r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations || !inDateRange(r.Date, dateFrom, dateTo)) continue;
+    if (r.Pct_cleaned_end_of_day === '' || r.Location_Precision !== 'rat_station' || !r.Rat_Stations || !inDateRange(r.Date, dateFrom, dateTo)) continue;
     for (const code of r.Rat_Stations.split(';').filter(Boolean)){
       const key = r.Valley + '||' + code;
       const cur = map.get(key);
