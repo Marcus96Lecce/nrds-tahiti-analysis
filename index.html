@@ -1127,7 +1127,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="nav-tile-icon">🌿</span>
     <span class="nav-tile-text">
       <span class="nav-tile-title">1. Habitat Restoration</span>
-      <span class="nav-tile-sub">Plantation, cutting, entretien — zone, species, cleaning %</span>
+      <span class="nav-tile-sub">Pépinière registration — planting/cutting/entretien now logged on NRDS.io</span>
     </span>
   </button>
 
@@ -1135,7 +1135,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="nav-tile-icon">🐀</span>
     <span class="nav-tile-text">
       <span class="nav-tile-title">2. Dératisation patrol</span>
-      <span class="nav-tile-sub">Bait-consumption readings per rat station</span>
+      <span class="nav-tile-sub">Now logged directly on NRDS.io</span>
     </span>
   </button>
 
@@ -1187,10 +1187,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
 
+  <div class="card" style="margin-bottom:16px;">
+    <div class="hint" style="margin:0;">Planting, cutting, and plantation-maintenance actions are now logged directly on NRDS.io — this app shows them automatically (synced every few hours).</div>
+    <a href="https://app.nrds.io/kilo" target="_blank" rel="noopener" class="secondary"
+       style="display:inline-block;margin-top:10px;padding:8px 16px;text-decoration:none;">
+      🌿 Log a Habitat Restoration action on NRDS.io →
+    </a>
+  </div>
+
   <div class="card">
     <details id="hrDetails" ontoggle="onHrDetailsToggle(this.open)">
     <summary style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;">
-      <h2 style="margin:0;flex:1;">1. Add a new Habitat Restoration action</h2>
+      <h2 style="margin:0;flex:1;">1. Register a Pépinière (nursery)</h2>
       <a href="https://marcus96lecce.github.io/tahiti-field-guide/"
          target="_blank" rel="noopener"
          onclick="event.stopPropagation()"
@@ -1204,7 +1212,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         🌿 Tahiti Plant Guide
       </a>
     </summary>
-    <div class="hint">Same fields as the original NRDS form. Submitting writes directly to the shared database.</div>
+    <div class="hint">Pépinière (nursery) registration has no NRDS.io equivalent, so it stays here. Submitting writes directly to the shared database.</div>
     <form id="hrForm" onsubmit="submitHabitatForm(event)">
       <div class="row" style="margin-bottom:10px;">
         <label class="muted">Date: <input type="date" id="hrDate" required></label>
@@ -1239,9 +1247,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <label class="muted">Action:
           <select id="hrAction" onchange="onHrActionChange()" required>
             <option value="">Choose…</option>
-            <option value="Plantation">Plantation</option>
-            <option value="Entretien des plantations (cleaning around plantation)">Entretien des plantations (cleaning around plantation)</option>
-            <option value="Coupe du sous-bois (cutting undergrowth)">Coupe du sous-bois (cutting undergrowth)</option>
             <option value="Pépinière">Pépinière — nursery registration</option>
           </select>
         </label>
@@ -1327,25 +1332,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button class="secondary" onclick="showSubmitView()" style="margin-bottom:16px;">← Back to submission forms</button>
 
   <div class="card">
-    <details open>
-    <summary><h2 style="display:inline;margin:0;">2. Add a new Dératisation patrol</h2></summary>
-    <div class="hint">Pick the patrol's zone (a line of rat-control stations); every known station in that zone appears below so you can record its bait-consumption reading. Submitting writes directly to the shared database.</div>
-    <form id="drForm" onsubmit="submitDeratisationForm(event)">
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Date/time: <input type="datetime-local" id="drDate" required></label>
-        <label class="muted">Observer: <input type="text" id="drObserver" placeholder="e.g. Maotihau MANA (Tahiti)" required></label>
-        <label class="muted">Passage #: <input type="number" id="drPassage" min="0" step="1" style="width:70px;"></label>
-      </div>
-      <div class="row" style="margin-bottom:10px;">
-        <label class="muted">Zone:
-          <select id="drZone" onchange="onDrZoneChange()" required><option value="">Choose…</option></select>
-        </label>
-      </div>
-      <div id="drChecksWrap" style="margin-bottom:10px;"></div>
-      <button type="submit">Submit patrol</button>
-      <span id="drSubmitStatus" class="muted"></span>
-    </form>
-    </details>
+    <h2 style="margin:0 0 10px;">2. Dératisation patrol</h2>
+    <div class="hint">Dératisation patrols are now logged directly on NRDS.io — this app shows them automatically (synced every few hours).</div>
+    <a href="https://app.nrds.io/kilo" target="_blank" rel="noopener" class="secondary"
+       style="display:inline-block;margin-top:10px;padding:8px 16px;text-decoration:none;">
+      🐀 Log a patrol on NRDS.io →
+    </a>
   </div>
 
 </div>
@@ -2892,8 +2884,6 @@ function maybeBuildEnriched(){
 
 /* ---------------- Habitat Restoration entry form ---------------- */
 function populateFormReferenceOptions(){
-  const zones = [...new Set((tables.deratTahiti||[]).map(s => s.Ligne_stat).filter(Boolean))].sort();
-  document.getElementById('drZone').innerHTML = '<option value="">Choose…</option>' + zones.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join('');
   const units = [...new Set((tables.managementUnit||[]).map(u => u.Nom).filter(Boolean))].sort();
   document.getElementById('aeZoneList').innerHTML = units.map(u => `<option value="${escapeHtml(u)}">`).join('');
   // Covers the race where the PFF picker map was created (e.g. a direct #submit deep link) before
@@ -3538,53 +3528,6 @@ function subscribePepinieres(){
   window.sb.channel('pepinieres_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pepinieres' }, () => fetchPepinieres())
     .subscribe();
-}
-
-/* ---------------- Dératisation entry form ---------------- */
-function onDrZoneChange(){
-  const zone = document.getElementById('drZone').value;
-  const wrap = document.getElementById('drChecksWrap');
-  if (!zone){ wrap.innerHTML = ''; return; }
-  const stations = [...new Set((tables.deratTahiti||[]).filter(s => s.Ligne_stat === zone).map(s => s.Station).filter(Boolean))].sort();
-  if (!stations.length){ wrap.innerHTML = '<span class="muted">No registered station found for this zone.</span>'; return; }
-  const checkOptions = '<option value="">—</option><option value="0">0 — no activity</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4 — fully consumed</option>';
-  wrap.innerHTML = '<div class="muted" style="margin-bottom:4px;">Checks (bait consumption, 0–4) per station:</div>' +
-    '<div class="grid3">' + stations.map(s => `
-      <div class="stat" style="text-align:left;padding:6px 10px;">
-        <label class="muted" style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
-          ${escapeHtml(s)}
-          <select class="dr-conso" data-station="${escapeHtml(s)}">${checkOptions}</select>
-        </label>
-      </div>`).join('') + '</div>';
-}
-
-async function submitDeratisationForm(evt){
-  evt.preventDefault();
-  const statusEl = document.getElementById('drSubmitStatus');
-  statusEl.innerHTML = 'Submitting…';
-  try {
-    const checks = [...document.querySelectorAll('.dr-conso')]
-      .filter(inp => inp.value !== '')
-      .map(inp => ({ station: inp.dataset.station, conso: parseInt(inp.value, 10) }));
-    const newRow = {
-      date: document.getElementById('drDate').value.replace('T', ' '),
-      observer: document.getElementById('drObserver').value,
-      zone: document.getElementById('drZone').value,
-      passage: document.getElementById('drPassage').value,
-      checks,
-    };
-    const result = await insertOrQueue('deratisation', [newRow]);
-    statusEl.innerHTML = result.queued
-      ? '<span class="ok">✓ Saved offline — will upload automatically once you\'re back online.</span>'
-      : '<span class="ok">✓ Submitted.</span>';
-    if (!result.queued) await fetchDeratisation(); // don't wait on the Realtime echo for the submitter's own update
-    document.getElementById('drForm').reset();
-    document.getElementById('drChecksWrap').innerHTML = '';
-    const now = new Date(); const pad = n => String(n).padStart(2,'0');
-    document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  } catch (err) {
-    statusEl.innerHTML = `<span class="err">Error: ${escapeHtml(err.message)}</span>`;
-  }
 }
 
 /* ---------------- Petite fourmi de feu (PFF) entry form ---------------- */
@@ -5688,10 +5631,6 @@ renderBirdObsPendingSpecies();
 (function setDefaultIbsTime(){
   const now = new Date(), pad = n => String(n).padStart(2,'0');
   document.getElementById('ibsTimeStart').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-})();
-(function setDefaultDrDate(){
-  const now = new Date(), pad = n => String(n).padStart(2,'0');
-  document.getElementById('drDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 })();
 
 /* ---------------- WKT geometry -> centroid ---------------- */
